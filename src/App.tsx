@@ -203,7 +203,7 @@ export default function App() {
         <div className="space-y-2 max-w-sm">
           <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Verifikasi Keamanan Sesi</h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Sedang memverifikasi kredensial akun Anda secara aman dengan server SMP Islam Smart...
+            Sedang memverifikasi kredensial akun Anda secara aman dengan server SD Islam Smart Pangkalpinang...
           </p>
         </div>
       </div>
@@ -227,7 +227,7 @@ export default function App() {
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            Demi menjaga keamanan data akademik dan kerahasiaan nilai raport murid SMP Islam Smart, sistem ini otomatis mengunci sesi Anda apabila aplikasi tidak dibuka atau dibiarkan aktif tanpa aktivitas selama lebih dari 10 menit.
+            Demi menjaga keamanan data akademik dan kerahasiaan nilai raport murid SD Islam Smart Pangkalpinang, sistem ini otomatis mengunci sesi Anda apabila aplikasi tidak dibuka atau dibiarkan aktif tanpa aktivitas selama lebih dari 10 menit.
           </p>
 
           <div className="bg-slate-50 dark:bg-slate-900/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 text-[11px] text-slate-550 dark:text-slate-400 text-left leading-relaxed">
@@ -285,11 +285,11 @@ export default function App() {
                   SMART RAPORT
                 </h1>
                 <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[8px] font-black uppercase font-mono">
-                  SMP
+                  SD
                 </span>
               </div>
               <p className="text-[10px] font-semibold text-slate-400 truncate">
-                SMP Islam Smart Pangkalpinang
+                SD Islam Smart Pangkalpinang
               </p>
             </div>
           </div>
@@ -456,10 +456,10 @@ export default function App() {
             {/* Install Desktop App CTA */}
             <PWAInstallButton variant="navbar" />
 
-            {/* Mode SMP Pill Badge */}
+            {/* Mode SD Pill Badge */}
             <div className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#131f38] border border-[#1e3458] text-blue-300 text-xs font-bold font-mono">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-              <span>Mode SMP STS</span>
+              <span>Mode SD STS</span>
             </div>
 
             {/* Theme Toggle Button */}

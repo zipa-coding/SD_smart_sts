@@ -15,9 +15,9 @@ export default defineConfig(() => {
         includeAssets: ["favicon.ico", "apple-touch-icon.png", "icon.svg", "pwa-192x192.png", "pwa-512x512.png"],
         manifest: {
           id: "/",
-          name: "Raport STS SMP Islam Smart",
+          name: "Raport STS SD Islam Smart Pangkalpinang",
           short_name: "SmartRaport",
-          description: "Sistem Pengisian Raport Sumatif Tengah Semester (STS) SMP Islam Smart Terintegrasi",
+          description: "Sistem Pengisian Raport Sumatif Tengah Semester (STS) SD Islam Smart Pangkalpinang Terintegrasi",
           theme_color: "#0a0f1d",
           background_color: "#0a0f1d",
           display: "standalone",

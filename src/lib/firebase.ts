@@ -16,15 +16,15 @@ import dbData from "../data/db.json";
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
 
-// Firebase configuration with smartsts-12f15
+// Firebase configuration with smart-sd-sts
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDHuaZ2ean-ZDP84bDC2lOZxVCEklLvD4o",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "smartsts-12f15.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "smartsts-12f15",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "smartsts-12f15.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "400636927793",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:400636927793:web:52dc8ce6b88a8373085a10",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-3YM825SY0M"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDe3hjTP6AphfSaPY8KJkPPgYFocJ2xTcs",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "smart-sd-sts.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "smart-sd-sts",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "smart-sd-sts.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "132220678784",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:132220678784:web:1187d3dfe1403becedec65",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-L5XBRWBZRQ"
 };
 
 // Check if Firebase is genuinely configured with credentials

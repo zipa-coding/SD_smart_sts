@@ -10,11 +10,11 @@ export default function SmpIslamSmartLogo({ className = "", size = "100%" }: Smp
   return (
     <img
       src={logoUrl}
-      alt="SMP Islam Smart Logo"
+      alt="SD Islam Smart Pangkalpinang Logo"
       className={`select-none object-cover rounded-full w-full h-full ${className}`}
       style={{ width: size, height: size }}
       referrerPolicy="no-referrer"
-      id="smp-islam-smart-logo"
+      id="sd-islam-smart-logo"
     />
   );
 }

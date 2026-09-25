@@ -86,7 +86,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
 
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-950/80 border border-blue-500/30 text-blue-300 text-[11px] font-semibold tracking-wide mb-2.5">
             <School className="w-3.5 h-3.5 text-blue-400" />
-            <span>SMP ISLAM SMART PANGKALPINANG</span>
+            <span>SD ISLAM SMART PANGKALPINANG</span>
           </div>
 
           <h1 className="text-lg font-extrabold tracking-tight text-white uppercase">

@@ -387,7 +387,7 @@ export default function PrintRaportView({
                 </div>
                 <!-- Center: School name and report metadata -->
                 <div style="text-align: center; flex-grow: 1; padding: 0 10px;">
-                  <h2 style="margin: 0; text-transform: uppercase; font-size: 11.5pt; color: #000000; font-weight: bold; line-height: 1.25;">SMP ISLAM SMART PANGKAL PINANG</h2>
+                  <h2 style="margin: 0; text-transform: uppercase; font-size: 11.5pt; color: #000000; font-weight: bold; line-height: 1.25;">SD ISLAM SMART PANGKALPINANG</h2>
                   <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 10pt; color: #000000; font-weight: bold; line-height: 1.25;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
                   <h4 style="margin: 3px 0; font-size: 9.5pt; color: #000000; font-weight: bold; line-height: 1.25;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
                   <p style="margin: 2px 0 0 0; font-size: 8.5pt; font-weight: bold; color: #000000; line-height: 1.25;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
@@ -402,7 +402,7 @@ export default function PrintRaportView({
               `
                 : `
               <div style="text-align: center; margin-bottom: 15px; width: 100%; border-bottom: 3px double #000000; padding-bottom: 12px;">
-                <h2 style="margin: 0; text-transform: uppercase; font-size: 14pt; color: #000000; font-weight: bold;">SMP ISLAM SMART PANGKAL PINANG</h2>
+                <h2 style="margin: 0; text-transform: uppercase; font-size: 14pt; color: #000000; font-weight: bold;">SD ISLAM SMART PANGKALPINANG</h2>
                 <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 12pt; color: #000000; font-weight: bold;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
                 <h4 style="margin: 3px 0; font-size: 11pt; color: #000000; font-weight: bold;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
                 <p style="margin: 2px 0 0 0; font-size: 10.5pt; font-weight: bold; color: #000000;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
@@ -957,7 +957,7 @@ export default function PrintRaportView({
     const htmlHeader = `
       <html xmlns:o='urn:schemas-microsoft-500-col:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head>
-        <title>Raport Sumatif Tengah Semester - SMP Islam Smart Pangkalpinang</title>
+        <title>Raport Sumatif Tengah Semester - SD Islam Smart Pangkalpinang</title>
         <!--[if gte mso 9]>
         <xml>
           <w:WordDocument>
@@ -990,7 +990,7 @@ export default function PrintRaportView({
             </td>
             <!-- Center Title and Info -->
             <td style="width: 50%; text-align: center; vertical-align: middle; border: none; padding-bottom: 12px; font-family: 'Times New Roman', Times, serif;">
-              <h2 style="margin: 0; text-transform: uppercase; font-size: 11.5pt; font-weight: bold; color: #000000; line-height: 1.25;">SMP ISLAM SMART PANGKAL PINANG</h2>
+              <h2 style="margin: 0; text-transform: uppercase; font-size: 11.5pt; font-weight: bold; color: #000000; line-height: 1.25;">SD ISLAM SMART PANGKALPINANG</h2>
               <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 10pt; font-weight: bold; color: #000000; line-height: 1.25;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
               <h4 style="margin: 3px 0; font-size: 9.5pt; font-weight: bold; color: #000000; line-height: 1.25;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
               <p style="margin: 2px 0 0 0; font-size: 8.5pt; font-weight: bold; color: #000000; line-height: 1.25;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
@@ -1006,7 +1006,7 @@ export default function PrintRaportView({
         <table style="width: 100%; border-collapse: collapse; border: none; margin-bottom: 15px; border-bottom: 3.5px double #000000; margin-left: auto; margin-right: auto;">
           <tr>
             <td style="width: 100%; text-align: center; vertical-align: middle; border: none; padding-bottom: 12px; font-family: 'Times New Roman', Times, serif;">
-              <h2 style="margin: 0; text-transform: uppercase; font-size: 13.5pt; font-weight: bold; color: #000000;">SMP ISLAM SMART PANGKAL PINANG</h2>
+              <h2 style="margin: 0; text-transform: uppercase; font-size: 13.5pt; font-weight: bold; color: #000000;">SD ISLAM SMART PANGKALPINANG</h2>
               <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 11.5pt; font-weight: bold; color: #000000;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
               <h4 style="margin: 3px 0; font-size: 10.5pt; font-weight: bold; color: #000000;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
               <p style="margin: 2px 0 0 0; font-size: 9.5pt; font-weight: bold; color: #000000;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
@@ -1730,7 +1730,7 @@ export default function PrintRaportView({
             ) : null}
             <div className="text-center flex-1">
               <h2 className="text-sm md:text-base lg:text-lg font-extrabold uppercase mt-0.5 tracking-wide text-black leading-tight">
-                SMP ISLAM SMART PANGKAL PINANG
+                SD ISLAM SMART PANGKALPINANG
               </h2>
               <h3 className="text-[10px] md:text-xs lg:text-sm font-bold tracking-wider uppercase mt-1 text-gray-800 leading-tight">
                 LAPORAN SUMATIF TENGAH SEMESTER (STS)
