@@ -32,8 +32,8 @@ export default function TeacherPanel({
     "grades",
   );
 
-  // Class selection state (7, 8, 9)
-  const [selectedClass, setSelectedClass] = useState("7");
+  // Class selection state (1, 2, 3, 4, 5, 6)
+  const [selectedClass, setSelectedClass] = useState("1");
   // Student selection state
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
@@ -512,8 +512,8 @@ export default function TeacherPanel({
           <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">
             Pilih Kelas:
           </label>
-          <div className="grid grid-cols-3 gap-1.5" id="class-button-selectors">
-            {["7", "8", "9"].map((cls) => (
+          <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-3 gap-1.5" id="class-button-selectors">
+            {["1", "2", "3", "4", "5", "6"].map((cls) => (
               <button
                 key={cls}
                 onClick={() => setSelectedClass(cls)}

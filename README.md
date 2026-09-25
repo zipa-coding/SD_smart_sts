@@ -1,6 +1,6 @@
-# smart.sts - Sistem Raport STS SMP Islam Smart
+# smart.sts - Sistem Raport STS SD Islam Smart
 
-Sistem Pengisian Raport Sumatif Tengah Semester (STS) terintegrasi untuk **SMP Islam Smart**. Aplikasi dirancang khusus untuk memudahkan koordinasi antara Guru Mata Pelajaran, Wali Kelas, dan Administrator dalam mengelola nilai siswa, menghasilkan deskripsi capaian pembelajaran otomatis (maupun kustom), serta memfasilitasi cetak cetak cetak raport langsung atau ekspor dokumen Microsoft Word (.doc).
+Sistem Pengisian Raport Sumatif Tengah Semester (STS) terintegrasi untuk **SD Islam Smart**. Aplikasi dirancang khusus untuk memudahkan koordinasi antara Guru Mata Pelajaran, Wali Kelas, dan Administrator dalam mengelola nilai siswa, menghasilkan deskripsi capaian pembelajaran otomatis (maupun kustom), serta memfasilitasi cetak cetak cetak raport langsung atau ekspor dokumen Microsoft Word (.doc).
 
 ---
 
@@ -65,4 +65,4 @@ npm run start
 
 ---
 
-*SMP Islam Smart - Menuju Digitalisasi Pendidikan yang Terintegrasi, Mandiri, dan Unggul.*
+*SD Islam Smart - Menuju Digitalisasi Pendidikan yang Terintegrasi, Mandiri, dan Unggul.*

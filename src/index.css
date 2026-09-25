@@ -260,30 +260,121 @@
   border-color: #1a2948 !important;
 }
 
-/* Badges / statuses */
-.dark .bg-amber-50 {
-  background-color: rgba(245, 158, 11, 0.12) !important;
-  border-color: rgba(245, 158, 11, 0.3) !important;
+/* Badges / statuses / pills */
+.dark .bg-amber-50,
+.dark .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
   color: #fbbf24 !important;
 }
 
-.dark .bg-emerald-50 {
-  background-color: rgba(16, 185, 129, 0.12) !important;
-  border-color: rgba(16, 185, 129, 0.3) !important;
+.dark .bg-emerald-50,
+.dark .bg-emerald-100,
+.dark .bg-green-50,
+.dark .bg-green-100 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
   color: #34d399 !important;
 }
 
-.dark .bg-rose-50 {
-  background-color: rgba(244, 63, 94, 0.12) !important;
-  border-color: rgba(244, 63, 94, 0.3) !important;
+.dark .bg-rose-50,
+.dark .bg-rose-100,
+.dark .bg-red-50,
+.dark .bg-red-100,
+.dark .bg-red-150 {
+  background-color: rgba(244, 63, 94, 0.16) !important;
+  border-color: rgba(244, 63, 94, 0.4) !important;
   color: #f87171 !important;
 }
 
 .dark .bg-sky-50,
-.dark .bg-blue-50 {
-  background-color: rgba(56, 189, 248, 0.12) !important;
-  border-color: rgba(56, 189, 248, 0.3) !important;
+.dark .bg-sky-100,
+.dark .bg-blue-50,
+.dark .bg-blue-100 {
+  background-color: rgba(56, 189, 248, 0.16) !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
   color: #38bdf8 !important;
+}
+
+.dark .bg-purple-50,
+.dark .bg-purple-100 {
+  background-color: rgba(168, 85, 247, 0.16) !important;
+  border-color: rgba(168, 85, 247, 0.4) !important;
+  color: #c084fc !important;
+}
+
+/* Purple text overrides */
+.dark .text-purple-950,
+.dark .text-purple-900,
+.dark .text-purple-800,
+.dark .text-purple-700,
+.dark .text-purple-600 {
+  color: #c084fc !important;
+}
+
+/* Semi-transparent tint backgrounds across panels */
+.dark .bg-emerald-50\/70,
+.dark .bg-emerald-50\/60,
+.dark .bg-emerald-50\/40,
+.dark .bg-emerald-50\/30,
+.dark .bg-emerald-50\/20,
+.dark .bg-emerald-100\/80 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.dark .bg-red-50\/30,
+.dark .bg-red-50\/60 {
+  background-color: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+.dark .bg-blue-50\/30,
+.dark .bg-blue-50\/60,
+.dark .bg-sky-50\/30,
+.dark .bg-sky-50\/60 {
+  background-color: rgba(56, 189, 248, 0.12) !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+/* Neutral Gray button & pill backgrounds */
+.dark .bg-gray-100,
+.dark .bg-gray-200 {
+  background-color: #162238 !important;
+  color: #e2e8f0 !important;
+  border-color: #233554 !important;
+}
+
+.dark .hover\:bg-gray-200:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: #1e3152 !important;
+}
+
+/* High contrast border overrides for colored pills */
+.dark .border-emerald-100,
+.dark .border-emerald-150,
+.dark .border-emerald-200,
+.dark .border-green-200 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.dark .border-amber-200 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+.dark .border-sky-200,
+.dark .border-blue-200 {
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+.dark .border-purple-200 {
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
+.dark .border-red-200,
+.dark .border-red-300,
+.dark .border-rose-200 {
+  border-color: rgba(244, 63, 94, 0.35) !important;
 }
 
 /* Table/List Row Hover Effects in Dark Mode */
@@ -424,5 +515,82 @@
 .dark #wali-kelas-panel .text-emerald-950 {
   color: #fbbf24 !important; /* Fallback highlight for critical green markers */
 }
+
+/* ==========================================================================
+   Dark Mode High-Contrast Overrides for Admin Panel
+   - Ensures crystal-clear legibility across tabs, tables, cards, forms, and modals
+   ========================================================================== */
+.dark #admin-panel {
+  color: #f1f5f9;
+}
+
+/* Admin Panel Top Navigation Tabs */
+.dark #admin-nav-tabs {
+  border-color: #1a2948 !important;
+}
+
+.dark #admin-nav-tabs button {
+  color: #94a3b8;
+}
+
+.dark #admin-nav-tabs button:hover {
+  color: #ffffff;
+}
+
+.dark #admin-nav-tabs button.border-emerald-850 {
+  border-color: #34d399 !important;
+  color: #34d399 !important;
+  background-color: rgba(16, 185, 129, 0.14) !important;
+}
+
+/* High contrast badges in Admin Panel */
+.dark #admin-panel .bg-emerald-100 {
+  background-color: rgba(16, 185, 129, 0.18) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #34d399 !important;
+}
+
+.dark #admin-panel .bg-red-150 {
+  background-color: rgba(244, 63, 94, 0.18) !important;
+  border-color: rgba(244, 63, 94, 0.4) !important;
+  color: #f87171 !important;
+}
+
+.dark #admin-panel .text-emerald-950,
+.dark #admin-panel .text-emerald-900 {
+  color: #6ee7b7 !important;
+}
+
+.dark #admin-panel .text-emerald-850,
+.dark #admin-panel .text-emerald-800,
+.dark #admin-panel .text-emerald-700 {
+  color: #34d399 !important;
+}
+
+/* Admin Panel Form Labels & Sections */
+.dark #admin-panel label {
+  color: #cbd5e1;
+}
+
+.dark #admin-panel input,
+.dark #admin-panel select,
+.dark #admin-panel textarea {
+  background-color: #0b1222 !important;
+  color: #f8fafc !important;
+  border-color: #1e2e4a !important;
+}
+
+.dark #admin-panel input::placeholder,
+.dark #admin-panel textarea::placeholder {
+  color: #64748b !important;
+}
+
+.dark #admin-panel input:focus,
+.dark #admin-panel select:focus,
+.dark #admin-panel textarea:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+}
+
 
 

@@ -61,9 +61,21 @@ export default function PrintRaportView({
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isIframe, setIsIframe] = useState(false);
+  const [allSubjects, setAllSubjects] = useState<string[]>([]);
 
   React.useEffect(() => {
     setIsIframe(window.self !== window.top);
+  }, []);
+
+  React.useEffect(() => {
+    fetch("/api/subjects")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setAllSubjects(data);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   React.useEffect(() => {
@@ -151,6 +163,23 @@ export default function PrintRaportView({
     "Wudhu dan Sholat",
   ];
 
+  const activeUmum = React.useMemo(() => {
+    if (allSubjects.length === 0) return umumSubjects;
+    return allSubjects.filter(
+      (s) => !mulokSubjects.includes(s) && !keislamanSubjects.includes(s)
+    );
+  }, [allSubjects]);
+
+  const activeMulok = React.useMemo(() => {
+    if (allSubjects.length === 0) return mulokSubjects;
+    return mulokSubjects.filter((s) => allSubjects.includes(s));
+  }, [allSubjects]);
+
+  const activeKeislaman = React.useMemo(() => {
+    if (allSubjects.length === 0) return keislamanSubjects;
+    return keislamanSubjects.filter((s) => allSubjects.includes(s));
+  }, [allSubjects]);
+
   // Helper with beautiful full human readable subject names
   const getOfficialSubjectName = (sub: string, index: number) => {
     const map: { [key: string]: string } = {
@@ -174,10 +203,17 @@ export default function PrintRaportView({
   };
 
   const formatFaseKelas = (kelas: string) => {
-    if (kelas === "7") return "D / VII (Tujuh)";
-    if (kelas === "8") return "D / VIII (Delapan)";
-    if (kelas === "9") return "D / IX (Sembilan)";
-    return `D / ${kelas}`;
+    const k = String(kelas || "").trim();
+    if (k === "1") return "A / I (Satu)";
+    if (k === "2") return "A / II (Dua)";
+    if (k === "3") return "B / III (Tiga)";
+    if (k === "4") return "B / IV (Empat)";
+    if (k === "5") return "C / V (Lima)";
+    if (k === "6") return "C / VI (Enam)";
+    if (k === "7") return "D / VII (Tujuh)";
+    if (k === "8") return "D / VIII (Delapan)";
+    if (k === "9") return "D / IX (Sembilan)";
+    return `Fase SD / Kelas ${k}`;
   };
 
   const getEkskulGrades = (e: any) => {
@@ -500,7 +536,7 @@ export default function PrintRaportView({
           </table>
 
           <h4 class="pdf-heading">B. Umum</h4>
-          ${umumSubjects
+          ${activeUmum
             .map((sub, idx) => {
               const title = getOfficialSubjectName(sub, idx);
               const usahaGrade = getSubjectUsaha(sub);
@@ -546,7 +582,7 @@ export default function PrintRaportView({
             .join("")}
 
           <h4 class="pdf-heading">C. Muatan Lokal</h4>
-          ${mulokSubjects
+          ${activeMulok
             .map((sub, idx) => {
               const title = getOfficialSubjectName(sub, idx);
               const usahaGrade = getSubjectUsaha(sub);
@@ -592,7 +628,7 @@ export default function PrintRaportView({
             .join("")}
 
           <h4 class="pdf-heading">D. Keislaman</h4>
-          ${keislamanSubjects
+          ${activeKeislaman
             .map((sub, idx) => {
               const title = getOfficialSubjectName(sub, idx);
               const usahaGrade = getSubjectUsaha(sub);
@@ -1108,7 +1144,7 @@ export default function PrintRaportView({
       <h4 style="margin: 15px 0 10px 0; text-transform: uppercase; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; font-weight: bold; color: #000000;">B. Umum</h4>
 
       <!-- Subject specific boxed items -->
-      ${umumSubjects
+      ${activeUmum
         .map((sub, idx) => {
           const title = getOfficialSubjectName(sub, idx);
           const usahaGrade = getSubjectUsaha(sub);
@@ -1155,7 +1191,7 @@ export default function PrintRaportView({
 
       <h4 style="margin: 15px 0 10px 0; text-transform: uppercase; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; font-weight: bold; color: #000000;">C. Muatan Lokal</h4>
 
-      ${mulokSubjects
+      ${activeMulok
         .map((sub, idx) => {
           const title = getOfficialSubjectName(sub, idx);
           const usahaGrade = getSubjectUsaha(sub);
@@ -1202,7 +1238,7 @@ export default function PrintRaportView({
 
       <h4 style="margin: 15px 0 10px 0; text-transform: uppercase; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; font-weight: bold; color: #000000;">D. Keislaman</h4>
 
-      ${keislamanSubjects
+      ${activeKeislaman
         .map((sub, idx) => {
           const title = getOfficialSubjectName(sub, idx);
           const usahaGrade = getSubjectUsaha(sub);
@@ -1921,7 +1957,7 @@ export default function PrintRaportView({
               B. Umum
             </h4>
 
-            {umumSubjects.map((sub, idx) => {
+            {activeUmum.map((sub, idx) => {
               const name = getOfficialSubjectName(sub, idx);
               const usahaGrade = getSubjectUsaha(sub);
               const prosesGrade = getSubjectProses(sub);

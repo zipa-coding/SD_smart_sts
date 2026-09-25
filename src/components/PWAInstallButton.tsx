@@ -113,7 +113,7 @@ export const PWAInstallModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
                 Download & Pasang di Laptop (PWA)
               </h3>
               <p className="text-xs text-slate-400">
-                Aplikasi Raport SMP Islam Smart langsung di desktop Anda
+                Aplikasi Raport SD Islam Smart langsung di desktop Anda
               </p>
             </div>
           </div>
@@ -150,7 +150,7 @@ export const PWAInstallModal: React.FC<{ onClose: () => void }> = ({ onClose }) 
               <div className="flex items-start gap-2.5">
                 <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0">2</span>
                 <span>
-                  Lihat ke <strong>bilah alamat (Address Bar URL)</strong> di kanan atas browser, klik ikon <strong>Install / Download <MonitorDown className="w-3.5 h-3.5 inline mx-1 text-blue-400" /></strong> atau buka menu <strong>titik tiga (⋮)</strong> &gt; pilih <strong>"Install Raport STS SMP Islam Smart..."</strong>
+                  Lihat ke <strong>bilah alamat (Address Bar URL)</strong> di kanan atas browser, klik ikon <strong>Install / Download <MonitorDown className="w-3.5 h-3.5 inline mx-1 text-blue-400" /></strong> atau buka menu <strong>titik tiga (⋮)</strong> &gt; pilih <strong>"Install Raport STS SD Islam Smart..."</strong>
                 </span>
               </div>
               <div className="flex items-start gap-2.5">

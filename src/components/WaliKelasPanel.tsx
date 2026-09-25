@@ -23,14 +23,15 @@ interface WaliKelasPanelProps {
 }
 
 export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPanelProps) {
-  // 15 Mata Pelajaran lists
-  const subjects_list = [
+  // Default Mata Pelajaran lists
+  const defaultSubjects = [
     "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS", "Bahasa Inggris", "PJOK", "Prakarya", "Informatika",
     "Bahasa Arab", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
   ];
+  const [subjectsList, setSubjectsList] = useState<string[]>(defaultSubjects);
 
-  // If user is Wali Kelas, default to their assigned class. Otherwise fall back to a default like "7".
-  const initialClass = user.kelas || "7";
+  // If user is Wali Kelas, default to their assigned class. Otherwise fall back to a default like "1".
+  const initialClass = user.kelas || "1";
   const [selectedClass, setSelectedClass] = useState(initialClass);
 
   const [students, setStudents] = useState<Student[]>([]);
@@ -126,17 +127,19 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
     setLoading(true);
     setError("");
     try {
-      const [resS, resG, resN, resE] = await Promise.all([
+      const [resS, resG, resN, resE, resSub] = await Promise.all([
         fetch("/api/students"),
         fetch("/api/grades"),
         fetch("/api/walikelas/notes"),
-        fetch("/api/ekskul")
+        fetch("/api/ekskul"),
+        fetch("/api/subjects")
       ]);
 
       const sData = await resS.json();
       const gData = await resG.json();
       const nData = await resN.json();
       const eData = await resE.json();
+      const subData = await resSub.json();
 
       const studentsArray = Array.isArray(sData) ? sData : [];
       const gradesArray = Array.isArray(gData) ? gData : [];
@@ -147,6 +150,9 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
       setGrades(gradesArray);
       setAllClassNotes(notesObj);
       setActiveEkskulList(ekskulArray);
+      if (Array.isArray(subData) && subData.length > 0) {
+        setSubjectsList(subData);
+      }
 
       // Auto-select first student in this class
       const classStudents = studentsArray.filter((s: Student) => s.kelas === selectedClass);
@@ -344,9 +350,12 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
                 }}
                 className="text-xs bg-slate-50 border border-slate-200 rounded p-1 font-semibold text-slate-700 focus:outline-none"
               >
-                <option value="7">Kelas 7</option>
-                <option value="8">Kelas 8</option>
-                <option value="9">Kelas 9</option>
+                <option value="1">Kelas 1</option>
+                <option value="2">Kelas 2</option>
+                <option value="3">Kelas 3</option>
+                <option value="4">Kelas 4</option>
+                <option value="5">Kelas 5</option>
+                <option value="6">Kelas 6</option>
               </select>
             )}
           </div>
@@ -401,8 +410,8 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
                     <ChevronRight className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isSelected ? "translate-x-0.5 text-emerald-800" : ""}`} />
                   </div>
                   <div className="flex items-center gap-1.5 text-[9px] font-mono">
-                    <span className={`px-1.5 py-0.5 rounded ${count === 15 ? "bg-green-100 text-green-700 font-bold" : count > 0 ? "bg-amber-100 text-amber-800 font-medium" : "bg-slate-100 text-slate-400"}`}>
-                      Mapel: {count}/15
+                    <span className={`px-1.5 py-0.5 rounded ${count === subjectsList.length ? "bg-green-100 text-green-700 font-bold" : count > 0 ? "bg-amber-100 text-amber-800 font-medium" : "bg-slate-100 text-slate-400"}`}>
+                      Mapel: {count}/{subjectsList.length}
                     </span>
                     {hasNotes && (
                       <span className="bg-sky-50 border border-sky-100 text-sky-750 px-1 py-0.5 rounded font-semibold">
@@ -456,25 +465,25 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
               </div>
             )}
 
-            {/* Sub-grid: 15 Subject completion rate checker */}
+            {/* Sub-grid: Subject completion rate checker */}
             <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3.5 space-y-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <div>
                   <h4 className="font-extrabold text-[10px] uppercase tracking-wider text-slate-600">
-                    Progres Kelengkapan Nilai Siswa (15 Mapel)
+                    Progres Kelengkapan Nilai Siswa ({subjectsList.length} Mapel)
                   </h4>
                   <p className="text-[10px] text-slate-400">
                     Semua mata pelajaran wajib diisi nilainya oleh guru mapel agar rapor diterbitkan lengkap.
                   </p>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded font-extrabold ${gradesCount === 15 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                  {gradesCount}/15 Terisi
+                <span className={`text-[10px] px-2 py-0.5 rounded font-extrabold ${gradesCount >= subjectsList.length ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  {gradesCount}/{subjectsList.length} Terisi
                 </span>
               </div>
 
-              {/* Visual mini circles representing 15 subjects */}
+              {/* Visual mini circles representing subjects */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2" id="subject-matrix-completion">
-                {subjects_list.map((sub) => {
+                {subjectsList.map((sub) => {
                   const xGrade = studentGrades.find((g) => g.subject === sub);
                   const isFilled = !!xGrade;
 
@@ -492,11 +501,11 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
                 })}
               </div>
 
-              {gradesCount < 15 && (
+              {gradesCount < subjectsList.length && (
                 <div className="p-2.5 bg-amber-50 text-amber-900 text-[10px] rounded border border-amber-200 flex items-start gap-2 italic leading-relaxed">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600 mt-0.5" />
                   <span>
-                    Perhatian: Terdapat {15 - gradesCount} mata pelajaran belum diisi oleh guru pengampu. Raport tetap bisa dipratinjau, namun nilai tidak lengkap.
+                    Perhatian: Terdapat {Math.max(0, subjectsList.length - gradesCount)} mata pelajaran belum diisi oleh guru pengampu. Raport tetap bisa dipratinjau, namun nilai tidak lengkap.
                   </span>
                 </div>
               )}

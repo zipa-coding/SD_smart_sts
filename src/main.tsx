@@ -39,22 +39,31 @@ function initializeLocalStorage() {
     if (raw) {
       try {
         clientDbCache = JSON.parse(raw);
-        // Ensure TP templates are strictly separated per class (Kelas 7, 8, 9)
+        // If stored database still has old SMP structure (e.g. teachers or students with kelas 7, 8, 9 and no 1-6), refresh with SD data
+        const hasSmpTeachers = Array.isArray(clientDbCache.teachers) && clientDbCache.teachers.some((t: any) => ["7", "8", "9"].includes(t.kelas));
+        const hasSdClasses = Array.isArray(clientDbCache.students) && clientDbCache.students.some((s: any) => ["1", "2", "3", "4", "5", "6"].includes(s.kelas));
+        
+        if (hasSmpTeachers || !hasSdClasses) {
+          clientDbCache = dbData;
+          localStorage.setItem('smart_sts_db', JSON.stringify(dbData));
+          return;
+        }
+
+        // Ensure TP templates are strictly separated per class (Kelas 1 - 6)
         let needsSave = false;
         if (!clientDbCache.tujuan_pembelajaran_templates || typeof clientDbCache.tujuan_pembelajaran_templates !== 'object') {
           clientDbCache.tujuan_pembelajaran_templates = dbData.tujuan_pembelajaran_templates;
           needsSave = true;
         } else {
-          // Check if any subject has TPs without distinct kelas 7, 8, and 9
           const seedTemplates = dbData.tujuan_pembelajaran_templates as Record<string, any[]>;
           for (const sub of Object.keys(seedTemplates)) {
             const currentList = clientDbCache.tujuan_pembelajaran_templates[sub];
             if (
               !Array.isArray(currentList) ||
               currentList.length === 0 ||
-              currentList.some((t: any) => !t.kelas || t.kelas === "all") ||
-              !currentList.some((t: any) => String(t.kelas).trim() === "8") ||
-              !currentList.some((t: any) => String(t.kelas).trim() === "9")
+              currentList.some((t: any) => !t.kelas || t.kelas === "all" || ["7", "8", "9"].includes(String(t.kelas))) ||
+              !currentList.some((t: any) => String(t.kelas).trim() === "1") ||
+              !currentList.some((t: any) => String(t.kelas).trim() === "6")
             ) {
               clientDbCache.tujuan_pembelajaran_templates[sub] = seedTemplates[sub];
               needsSave = true;
@@ -425,7 +434,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       for (const item of studentsList) {
         const name = String(item.name || "").trim();
         const nisn = String(item.nisn || "").trim().replace(/\D/g, "");
-        const kelas = String(item.kelas || "7").trim();
+        const kelas = String(item.kelas || "1").trim();
 
         if (!name) {
           errors.push(`Baris NISN ${nisn || "?"}: Nama siswa tidak boleh kosong.`);
@@ -589,7 +598,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const db = getDB();
       if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
       if (!db.tujuan_pembelajaran_templates[subject]) db.tujuan_pembelajaran_templates[subject] = [];
-      const newTP = { id: "tp_" + Date.now(), text: tpText, kelas: kelas ? String(kelas).trim() : "7" };
+      const newTP = { id: "tp_" + Date.now(), text: tpText, kelas: kelas ? String(kelas).trim() : "1" };
       db.tujuan_pembelajaran_templates[subject].push(newTP);
       saveDB(db);
       return new Response(JSON.stringify(newTP), { status: 201, headers: { 'Content-Type': 'application/json' } });
@@ -709,13 +718,65 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       return new Response(JSON.stringify({ message: "Ekskul deleted" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
+    const DEFAULT_MAIN_SUBJECTS = [
+      "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS",
+      "Bahasa Inggris", "PJOK", "Prakarya", "Informatika", "Bahasa Arab",
+      "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
+    ];
+
+    // GET /api/subjects
+    if (path === '/api/subjects' && method === 'GET') {
+      const db = getDB();
+      if (!Array.isArray(db.subjects) || db.subjects.length === 0) {
+        db.subjects = [...DEFAULT_MAIN_SUBJECTS];
+        saveDB(db);
+      }
+      return new Response(JSON.stringify(db.subjects), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // POST /api/subjects
+    if (path === '/api/subjects' && method === 'POST') {
+      const { name } = body || {};
+      const trimmedName = String(name || "").trim();
+      if (!trimmedName) {
+        return new Response(JSON.stringify({ error: "Nama mata pelajaran wajib diisi." }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      const db = getDB();
+      if (!Array.isArray(db.subjects) || db.subjects.length === 0) {
+        db.subjects = [...DEFAULT_MAIN_SUBJECTS];
+      }
+      const exists = db.subjects.some((s: string) => s.toLowerCase() === trimmedName.toLowerCase());
+      if (exists) {
+        return new Response(JSON.stringify({ error: `Mata pelajaran "${trimmedName}" sudah terdaftar.` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      db.subjects.push(trimmedName);
+      if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+      if (!db.tujuan_pembelajaran_templates[trimmedName]) {
+        db.tujuan_pembelajaran_templates[trimmedName] = [];
+      }
+      saveDB(db);
+      return new Response(JSON.stringify({ message: "Mata pelajaran berhasil ditambahkan.", subjects: db.subjects }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // DELETE /api/subjects/:name
+    if (path.startsWith('/api/subjects/') && method === 'DELETE') {
+      const name = decodeURIComponent(path.replace('/api/subjects/', '')).trim();
+      const db = getDB();
+      if (!Array.isArray(db.subjects)) db.subjects = [...DEFAULT_MAIN_SUBJECTS];
+      db.subjects = db.subjects.filter((s: string) => s.toLowerCase() !== name.toLowerCase());
+      if (db.tujuan_pembelajaran_templates && db.tujuan_pembelajaran_templates[name]) {
+        delete db.tujuan_pembelajaran_templates[name];
+      }
+      saveDB(db);
+      return new Response(JSON.stringify({ message: `Mata pelajaran "${name}" berhasil dihapus.`, subjects: db.subjects }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
     // 7. GET /api/summary
     if (path === '/api/summary' && method === 'GET') {
       const db = getDB();
-      const subjectsList = [
-        "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS", "Bahasa Inggris", "PJOK", "Prakarya", "Informatika",
-        "Bahasa Arab", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
-      ];
+      const subjectsList = Array.isArray(db.subjects) && db.subjects.length > 0
+        ? db.subjects
+        : DEFAULT_MAIN_SUBJECTS;
       const totalStudents = db.students.length;
       const registeredStudentIds = new Set(db.students.map((s: any) => s.id));
 
@@ -733,7 +794,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         };
       });
 
-      const classSet = new Set(["7", "8", "9"]);
+      const classSet = new Set(["1", "2", "3", "4", "5", "6"]);
       db.students.forEach((s: any) => {
         const k = String(s.kelas || "").trim();
         if (k) classSet.add(k);

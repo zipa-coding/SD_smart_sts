@@ -273,7 +273,7 @@ app.post("/api/students/batch", async (req, res) => {
   for (const item of students) {
     const name = String(item.name || "").trim();
     const nisn = String(item.nisn || "").trim().replace(/\D/g, "");
-    const kelas = String(item.kelas || "7").trim();
+    const kelas = String(item.kelas || "1").trim();
 
     if (!name) {
       errors.push(`Baris NISN ${nisn || "?"}: Nama siswa tidak boleh kosong.`);
@@ -296,7 +296,7 @@ app.post("/api/students/batch", async (req, res) => {
       id: "s_" + Date.now() + "_" + (++counter),
       nisn,
       name,
-      kelas: kelas || "7",
+      kelas: kelas || "1",
     };
 
     db.students.push(newStudent);
@@ -525,7 +525,7 @@ app.post("/api/tps", async (req, res) => {
   const newTP = {
     id: "tp_" + Date.now(),
     text: tpText,
-    kelas: kelas ? String(kelas).trim() : "7",
+    kelas: kelas ? String(kelas).trim() : "1",
   };
 
   db.tujuan_pembelajaran_templates[subject].push(newTP);
@@ -668,27 +668,99 @@ app.delete("/api/ekskul/:id", async (req, res) => {
   res.json({ message: "Ekskul berhasil dihapus." });
 });
 
+// 6.7. Subjects (Mata Pelajaran) API
+const DEFAULT_SUBJECTS = [
+  "PAI",
+  "PPKN",
+  "Bahasa Indonesia",
+  "Matematika",
+  "IPA",
+  "IPS",
+  "Bahasa Inggris",
+  "PJOK",
+  "Prakarya",
+  "Informatika",
+  "Bahasa Arab",
+  "Tahsin ABaTaTsa",
+  "Tahfizh Al-Qur’an",
+  "Do’a Harian dan Hadits",
+  "Wudhu dan Sholat",
+];
+
+app.get("/api/subjects", async (req, res) => {
+  const db = await readDB();
+  if (!Array.isArray(db.subjects) || db.subjects.length === 0) {
+    db.subjects = [...DEFAULT_SUBJECTS];
+    await writeDB(db);
+  }
+  res.json(db.subjects);
+});
+
+app.post("/api/subjects", async (req, res) => {
+  const { name } = req.body;
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName) {
+    return res.status(400).json({ error: "Nama mata pelajaran wajib diisi." });
+  }
+
+  const db = await readDB();
+  if (!Array.isArray(db.subjects) || db.subjects.length === 0) {
+    db.subjects = [...DEFAULT_SUBJECTS];
+  }
+
+  const exists = db.subjects.some(
+    (s: string) => s.toLowerCase() === trimmedName.toLowerCase()
+  );
+  if (exists) {
+    return res.status(400).json({ error: `Mata pelajaran "${trimmedName}" sudah terdaftar.` });
+  }
+
+  db.subjects.push(trimmedName);
+  if (!db.tujuan_pembelajaran_templates) {
+    db.tujuan_pembelajaran_templates = {};
+  }
+  if (!db.tujuan_pembelajaran_templates[trimmedName]) {
+    db.tujuan_pembelajaran_templates[trimmedName] = [];
+  }
+
+  await writeDB(db);
+  res.status(201).json({ message: "Mata pelajaran berhasil ditambahkan.", subjects: db.subjects });
+});
+
+app.delete("/api/subjects/:name", async (req, res) => {
+  const { name } = req.params;
+  const decodedName = decodeURIComponent(name).trim();
+  const db = await readDB();
+
+  if (!Array.isArray(db.subjects)) {
+    db.subjects = [...DEFAULT_SUBJECTS];
+  }
+
+  const initialCount = db.subjects.length;
+  db.subjects = db.subjects.filter(
+    (s: string) => s.toLowerCase() !== decodedName.toLowerCase()
+  );
+
+  if (db.subjects.length === initialCount) {
+    return res.status(404).json({ error: "Mata pelajaran tidak ditemukan." });
+  }
+
+  // Also remove from templates map if empty or desired
+  if (db.tujuan_pembelajaran_templates && db.tujuan_pembelajaran_templates[decodedName]) {
+    delete db.tujuan_pembelajaran_templates[decodedName];
+  }
+
+  await writeDB(db);
+  res.json({ message: `Mata pelajaran "${decodedName}" berhasil dihapus.`, subjects: db.subjects });
+});
+
 // 7. General Progress / Summary APIs
 app.get("/api/summary", async (req, res) => {
   const db = await readDB();
 
-  const subjects = [
-    "PAI",
-    "PPKN",
-    "Bahasa Indonesia",
-    "Matematika",
-    "IPA",
-    "IPS",
-    "Bahasa Inggris",
-    "PJOK",
-    "Prakarya",
-    "Informatika",
-    "Bahasa Arab",
-    "Tahsin ABaTaTsa",
-    "Tahfizh Al-Qur’an",
-    "Do’a Harian dan Hadits",
-    "Wudhu dan Sholat",
-  ];
+  const subjects = Array.isArray(db.subjects) && db.subjects.length > 0
+    ? db.subjects
+    : DEFAULT_SUBJECTS;
 
   const totalStudents = db.students.length;
   const registeredStudentIds = new Set(db.students.map((s: any) => s.id));
@@ -716,8 +788,8 @@ app.get("/api/summary", async (req, res) => {
     };
   });
 
-  // Ensure standard classes (7, 8, 9) and any custom classes are represented
-  const classSet = new Set(["7", "8", "9"]);
+  // Ensure standard SD classes (1 to 6) and any custom classes are represented
+  const classSet = new Set(["1", "2", "3", "4", "5", "6"]);
   db.students.forEach((s: any) => {
     const k = String(s.kelas || "").trim();
     if (k) classSet.add(k);

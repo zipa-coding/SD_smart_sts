@@ -286,7 +286,7 @@ export const firebaseApi = {
                 id: docSnap.id,
                 name: d.name || d.nama || d.namaSiswa || d.nama_lengkap || d.namaLengkap || d.fullname || "Siswa",
                 nisn: d.nisn || d.nis || d.nisnSiswa || d.nis_nisn || d.no_induk || docSnap.id,
-                kelas: String(d.kelas || d.rombel || d.class || d.tingkat || "7").trim(),
+                kelas: String(d.kelas || d.rombel || d.class || d.tingkat || "1").trim(),
                 ...d
               };
             });
@@ -309,7 +309,7 @@ export const firebaseApi = {
     if (!dup.empty) throw new Error("Siswa dengan NISN ini sudah terdaftar.");
 
     const id = "s_" + Date.now();
-    const newStudent = { id, nisn: cleanNisn, name: String(name || "").trim(), kelas: String(kelas || "7").trim() };
+    const newStudent = { id, nisn: cleanNisn, name: String(name || "").trim(), kelas: String(kelas || "1").trim() };
     await withTimeout(setDoc(doc(db, "students", id), newStudent), 5000);
     return newStudent;
   },
@@ -327,7 +327,7 @@ export const firebaseApi = {
     for (const item of studentsList) {
       const name = String(item.name || "").trim();
       const nisn = String(item.nisn || "").trim().replace(/\D/g, "");
-      const kelas = String(item.kelas || "7").trim();
+      const kelas = String(item.kelas || "1").trim();
 
       if (!name) {
         errors.push(`Baris NISN ${nisn || "?"}: Nama siswa tidak boleh kosong.`);
@@ -477,7 +477,7 @@ export const firebaseApi = {
     if (docSnap.exists()) {
       tpsList = docSnap.data().tps || [];
     }
-    const newTP = { id: "tp_" + Date.now(), text: tpText, kelas: kelas ? String(kelas).trim() : "7" };
+    const newTP = { id: "tp_" + Date.now(), text: tpText, kelas: kelas ? String(kelas).trim() : "1" };
     tpsList.push(newTP);
     await withTimeout(setDoc(ref, { tps: tpsList }), 2500);
     return newTP;
@@ -575,7 +575,7 @@ export const firebaseApi = {
       };
     });
 
-    const classSet = new Set(["7", "8", "9"]);
+    const classSet = new Set(["1", "2", "3", "4", "5", "6"]);
     students.forEach((s: any) => {
       const k = String(s.kelas || "").trim();
       if (k) classSet.add(k);

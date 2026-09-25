@@ -206,7 +206,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       
       {/* Footer Info */}
       <div className="mt-6 text-center text-xs text-slate-500 font-medium">
-        SMP Islam Smart Pangkalpinang &bull; Tahun Ajaran 2026/2027
+        SD Islam Smart Pangkalpinang &bull; Tahun Ajaran 2026/2027
       </div>
     </div>
   );

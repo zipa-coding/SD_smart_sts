@@ -238,13 +238,13 @@ export default function DashboardProgress({
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold font-mono">
                 <GraduationCap className="w-3.5 h-3.5" />
-                MODE SMP KURIKULUM MERDEKA
+                MODE SD KURIKULUM MERDEKA
               </span>
             </div>
 
             {/* Main Title */}
             <h1 className="text-xl md:text-2xl font-black text-white tracking-tight">
-              Dashboard Pemantauan Raport STS SMP
+              Dashboard Pemantauan Raport STS SD
             </h1>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
               Pangkalpinang - Visualisasi real-time sebaran nilai 15 mata pelajaran, rasio ketuntasan TP, dan kesiapan cetak raport seluruh kelas.
@@ -662,9 +662,12 @@ export default function DashboardProgress({
               </span>
               {[
                 { id: "all", label: "Semua Tingkat" },
-                { id: "7", label: "Kelas 7" },
-                { id: "8", label: "Kelas 8" },
-                { id: "9", label: "Kelas 9" },
+                { id: "1", label: "Kelas 1" },
+                { id: "2", label: "Kelas 2" },
+                { id: "3", label: "Kelas 3" },
+                { id: "4", label: "Kelas 4" },
+                { id: "5", label: "Kelas 5" },
+                { id: "6", label: "Kelas 6" },
               ].map((c) => (
                 <button
                   key={c.id}

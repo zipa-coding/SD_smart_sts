@@ -9,6 +9,7 @@ import {
   Key,
   Save,
   BookOpen,
+  BookMarked,
   CalendarDays,
   UserCheck,
   X,
@@ -29,18 +30,25 @@ interface AdminPanelProps {
 export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<
-    "teachers" | "students" | "tps" | "settings" | "ekskul"
+    "teachers" | "students" | "subjects" | "tps" | "settings" | "ekskul"
   >("teachers");
 
   // State arrays fetched from API
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [subjectsList, setSubjectsList] = useState<string[]>(SUBJECT_LIST);
   const [tpsTemplates, setTpsTemplates] = useState<{
     [subject: string]: { id: string; text: string }[];
   }>({});
   const [ekskuls, setEkskuls] = useState<
     { id: string; name: string; type: "Wajib" | "Pilihan" }[]
   >([]);
+
+  // Subject management state
+  const [newSubjectName, setNewSubjectName] = useState("");
+  const [subjectLoading, setSubjectLoading] = useState(false);
+  const [deletingSubject, setDeletingSubject] = useState<string | null>(null);
+  const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
 
   // Principal settings state
   const [principalName, setPrincipalName] = useState(
@@ -89,13 +97,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
   const [studentForm, setStudentForm] = useState({
     name: "",
     nisn: "",
-    kelas: "7",
+    kelas: "1",
   });
 
   // Batch student import state
   const [isBatchStudentModalOpen, setIsBatchStudentModalOpen] = useState(false);
   const [batchRawText, setBatchRawText] = useState("");
-  const [batchDefaultClass, setBatchDefaultClass] = useState("7");
+  const [batchDefaultClass, setBatchDefaultClass] = useState("1");
   const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
   const [batchResult, setBatchResult] = useState<{
     success: boolean;
@@ -187,14 +195,14 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
           nisn = tokens[0].replace(/\D/g, "");
           name = tokens[1];
           const k = tokens[2].replace(/\D/g, "");
-          if (["7", "8", "9"].includes(k)) kelas = k;
+          if (["1", "2", "3", "4", "5", "6"].includes(k)) kelas = k;
           else kelas = tokens[2];
         }
       } else if (tokens.length >= 4) {
         nisn = tokens[1].replace(/\D/g, "");
         name = tokens[2];
         const k = tokens[3].replace(/\D/g, "");
-        if (["7", "8", "9"].includes(k)) kelas = k;
+        if (["1", "2", "3", "4", "5", "6"].includes(k)) kelas = k;
         else kelas = tokens[3];
       }
 
@@ -252,12 +260,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
   }, [batchRawText, batchDefaultClass, students]);
 
   const fillSampleBatchData = () => {
-    const sample = `0012984101\tAhmad Fauzi Ramadhan\t7
-0012984102\tAisyah Putri Azzahra\t7
-0012984103\tBilal Al-Ghifari\t7
-0012984104\tFatimah Az-Zahra\t8
-0012984105\tMuhammad Farhan Hakim\t8
-0012984106\tZahra Nurul Izzah\t9`;
+    const sample = `0012984101\tAhmad Fauzi Ramadhan\t1
+0012984102\tAisyah Putri Azzahra\t1
+0012984103\tBilal Al-Ghifari\t2
+0012984104\tFatimah Az-Zahra\t3
+0012984105\tMuhammad Farhan Hakim\t4
+0012984106\tZahra Nurul Izzah\t5`;
     setBatchRawText(sample);
   };
 
@@ -267,7 +275,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       .map((p) => ({
         nisn: p.nisn,
         name: p.name,
-        kelas: p.kelas || batchDefaultClass || "7",
+        kelas: p.kelas || batchDefaultClass || "1",
       }));
 
     if (validStudents.length === 0) {
@@ -330,9 +338,9 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
   const [tpForm, setTpForm] = useState({
     subject: "IPA",
     text: "",
-    kelas: "7",
+    kelas: "1",
   });
-  const [tpFilterClass, setTpFilterClass] = useState<"all" | "7" | "8" | "9">("all");
+  const [tpFilterClass, setTpFilterClass] = useState<string>("all");
 
   const [newEkskulName, setNewEkskulName] = useState("");
   const [newEkskulType, setNewEkskulType] = useState<"Wajib" | "Pilihan">(
@@ -382,16 +390,72 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
     }
   };
 
+  // Subject Management Handlers
+  const handleAddSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newSubjectName.trim();
+    if (!name) return;
+
+    setError("");
+    setSubjectLoading(true);
+    try {
+      const res = await fetch("/api/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal menambahkan mata pelajaran.");
+      }
+
+      setNewSubjectName("");
+      showSuccess(`Mata pelajaran "${name}" berhasil ditambahkan!`);
+      await fetchAllData();
+      onRefreshTrigger();
+    } catch (err: any) {
+      setError(err.message || "Gagal menambah mata pelajaran.");
+    } finally {
+      setSubjectLoading(false);
+    }
+  };
+
+  const handleDeleteSubject = async (subjectName: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${subjectName}"? Seluruh template TP terkait mapel ini akan ikut dihapus.`)) {
+      return;
+    }
+    setError("");
+    setDeletingSubject(subjectName);
+    try {
+      const res = await fetch(`/api/subjects/${encodeURIComponent(subjectName)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Gagal menghapus mata pelajaran.");
+      }
+
+      showSuccess(`Mata pelajaran "${subjectName}" berhasil dihapus.`);
+      await fetchAllData();
+      onRefreshTrigger();
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus mata pelajaran.");
+    } finally {
+      setDeletingSubject(null);
+    }
+  };
+
   // Fetch all starting info
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      const [resT, resS, resTp, resSet, resEks] = await Promise.all([
+      const [resT, resS, resTp, resSet, resEks, resSub] = await Promise.all([
         fetch("/api/teachers"),
         fetch("/api/students"),
         fetch("/api/tps"),
         fetch("/api/settings"),
         fetch("/api/ekskul"),
+        fetch("/api/subjects"),
       ]);
 
       const tData = await resT.json();
@@ -399,9 +463,11 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       const tpData = await resTp.json();
       const setData = await resSet.json();
       const eksData = await resEks.json();
+      const subData = await resSub.json();
 
       if (Array.isArray(tData)) setTeachers(tData);
       if (Array.isArray(sData)) setStudents(sData);
+      if (Array.isArray(subData)) setSubjectsList(subData);
       if (tpData && typeof tpData === "object" && !Array.isArray(tpData)) setTpsTemplates(tpData);
       if (Array.isArray(eksData)) setEkskuls(eksData);
       if (setData && typeof setData === "object") {
@@ -499,7 +565,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       return;
     }
     if (payload.isWaliKelas && !payload.kelas) {
-      setTeacherModalError("Silakan pilih kelas asuhan untuk wali kelas (Kelas 7, 8, atau 9).");
+      setTeacherModalError("Silakan pilih kelas asuhan untuk wali kelas (Kelas 1 s/d 6).");
       return;
     }
 
@@ -600,7 +666,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       return;
     }
     if (!payload.kelas) {
-      setStudentModalError("Kelas siswa wajib dipilih (7, 8, atau 9).");
+      setStudentModalError("Kelas siswa wajib dipilih (1 sampai 6).");
       return;
     }
 
@@ -630,7 +696,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       setStudentForm({
         name: "",
         nisn: "",
-        kelas: "7",
+        kelas: "1",
       });
       showSuccess(
         editingStudent
@@ -691,7 +757,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
         body: JSON.stringify({
           subject: tpForm.subject,
           tpText: tpForm.text,
-          kelas: tpForm.kelas || "7",
+          kelas: tpForm.kelas || "1",
         }),
       });
 
@@ -785,36 +851,46 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
       {/* Admin Tab Headers */}
       <div
-        className="flex border-b border-slate-200 gap-1 overflow-x-auto"
+        className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto"
         id="admin-nav-tabs"
       >
         <button
           onClick={() => setActiveTab("teachers")}
-          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "teachers" ? "border-emerald-850 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-805"}`}
+          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "teachers" ? "border-emerald-600 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`}
         >
           <Users className="w-3.5 h-3.5" /> Manajemen Guru
         </button>
         <button
           onClick={() => setActiveTab("students")}
-          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "students" ? "border-emerald-850 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-805"}`}
+          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeTab === "students" ? "border-emerald-600 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`}
         >
           <GraduationCap className="w-3.5 h-3.5" /> Manajemen Siswa
         </button>
         <button
+          onClick={() => setActiveTab("subjects")}
+          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeTab === "subjects" ? "border-emerald-600 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`}
+        >
+          <BookMarked className="w-3.5 h-3.5" />
+          <span>Kelola Mapel</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+            {subjectsList.length}
+          </span>
+        </button>
+        <button
           onClick={() => setActiveTab("tps")}
-          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "tps" ? "border-emerald-850 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-805"}`}
+          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${activeTab === "tps" ? "border-emerald-600 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`}
         >
           <BookOpen className="w-3.5 h-3.5" /> Template TP (Mata Pelajaran)
         </button>
         <button
           onClick={() => setActiveTab("settings")}
-          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "settings" ? "border-emerald-850 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-805"}`}
+          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "settings" ? "border-emerald-600 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`}
         >
           <UserCheck className="w-3.5 h-3.5" /> Pengaturan Raport
         </button>
         <button
           onClick={() => setActiveTab("ekskul")}
-          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "ekskul" ? "border-emerald-850 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-805"}`}
+          className={`py-1.5 px-3.5 text-xs font-bold tracking-wider uppercase border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeTab === "ekskul" ? "border-emerald-600 dark:border-emerald-400 text-emerald-800 dark:text-emerald-300 bg-emerald-50/60 dark:bg-emerald-950/40" : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"}`}
         >
           <Award className="w-3.5 h-3.5" /> Manajemen Ekskul
         </button>
@@ -823,15 +899,15 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       {/* TEACHERS TAB */}
       {activeTab === "teachers" && (
         <div
-          className="bg-white rounded-lg border border-slate-205 shadow-sm p-4"
+          className="bg-white dark:bg-slate-900 rounded-lg border border-slate-205 dark:border-slate-800 shadow-sm p-4"
           id="teacher-management-panel"
         >
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 Daftar Guru & Hak Akses
               </h2>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 dark:text-slate-400">
                 Kelola akun guru mata pelajaran, hak wali kelas, dan sandi
                 sistem keamanan masuk
               </p>
@@ -844,7 +920,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   name: "",
                   username: "",
                   password: "123",
-                  subject: SUBJECT_LIST[0] || "PAI",
+                  subject: subjectsList[0] || "PAI",
                   isWaliKelas: false,
                   kelas: "",
                 });
@@ -857,72 +933,72 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs md:text-sm border-collapse text-gray-700">
+            <table className="w-full text-left text-xs md:text-sm border-collapse text-gray-700 dark:text-slate-200">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                <tr className="bg-gray-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-800">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Nama Guru
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Login Username
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Keamanan Sandi
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Mata Pelajaran (Mapel)
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Tugas Wali Kelas
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider text-right">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">
                     Tindakan
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {teachers.map((t) => (
-                  <tr key={t.id} className="hover:bg-gray-50/30">
-                    <td className="p-3 font-bold text-gray-850">{t.name}</td>
-                    <td className="p-3 font-mono text-emerald-800">
+                  <tr key={t.id} className="hover:bg-gray-50/30 dark:hover:bg-slate-800/40">
+                    <td className="p-3 font-bold text-gray-850 dark:text-slate-100">{t.name}</td>
+                    <td className="p-3 font-mono text-emerald-800 dark:text-emerald-400 font-bold">
                       {t.username}
                     </td>
-                    <td className="p-3 font-mono text-gray-400 font-bold">
+                    <td className="p-3 font-mono text-gray-400 dark:text-slate-500 font-bold">
                       &#8226;&#8226;&#8226;&#8226;&#8226;&#8226;
                     </td>
                     <td className="p-3">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${t.subject === "Admin" ? "bg-red-150 text-red-800" : "bg-emerald-100 text-emerald-900"}`}
+                        className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${t.subject === "Admin" ? "bg-red-150 dark:bg-rose-950/60 text-red-800 dark:text-rose-300 border-red-200 dark:border-rose-800/60" : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60"}`}
                       >
                         {t.subject}
                       </span>
                     </td>
                     <td className="p-3 text-xs">
                       {t.isWaliKelas ? (
-                        <span className="text-green-700 bg-green-50 border border-green-200 py-0.5 px-2.5 rounded-full font-semibold">
+                        <span className="text-green-700 dark:text-emerald-300 bg-green-50 dark:bg-emerald-950/60 border border-green-200 dark:border-emerald-700/60 py-0.5 px-2.5 rounded-full font-semibold">
                           Wali Kelas {t.kelas}
                         </span>
                       ) : (
-                        <span className="text-gray-400 italic">Bukan Wali</span>
+                        <span className="text-gray-400 dark:text-slate-500 italic">Bukan Wali</span>
                       )}
                     </td>
                     <td className="p-3 text-right">
                       {t.id === "t1" ? (
-                        <span className="text-2xs text-gray-400 italic bg-gray-50 p-1 rounded">
+                        <span className="text-2xs text-gray-400 dark:text-slate-400 italic bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 p-1 rounded">
                           Utama
                         </span>
                       ) : (
                         <div className="inline-flex gap-2">
                           <button
                             onClick={() => startEditTeacher(t)}
-                            className="p-1 text-sky-650 hover:bg-sky-50 rounded transition cursor-pointer"
+                            className="p-1 text-sky-650 hover:bg-sky-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
                             title="Edit Guru"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => deleteTeacher(t.id)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
+                            className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
                             title="Hapus"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -941,20 +1017,20 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       {/* STUDENTS TAB */}
       {activeTab === "students" && (
         <div
-          className="bg-white rounded-lg border border-slate-200 shadow-sm p-4"
+          className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm p-4"
           id="student-management-panel"
         >
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-slate-900">
-                  Daftar & Manajemen Siswa SMP
+                <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Daftar & Manajemen Siswa SD
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold font-mono">
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[10px] font-extrabold font-mono">
                   {students.length} Total Siswa
                 </span>
               </div>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 dark:text-slate-400">
                 Kelola data siswa, NISN, dan pembagian kelas siswa secara individual atau massal
               </p>
             </div>
@@ -974,7 +1050,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   setStudentForm({
                     name: "",
                     nisn: "",
-                    kelas: "7",
+                    kelas: "1",
                   });
                   setIsStudentModalOpen(true);
                 }}
@@ -985,33 +1061,33 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 mb-4">
             {/* Total Siswa Card */}
             <div
               onClick={() => setStudentClassFilter("all")}
               className={`p-2.5 rounded-lg border transition cursor-pointer ${
                 studentClassFilter === "all"
-                  ? "bg-emerald-50 border-emerald-400 ring-2 ring-emerald-200"
-                  : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                  ? "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-200 dark:ring-emerald-700/40"
+                  : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
               }`}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-emerald-900 text-xs font-black block">
+                  <span className="text-emerald-900 dark:text-emerald-300 text-xs font-black block">
                     Semua Siswa
                   </span>
-                  <span className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
+                  <span className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
                     Total Terdaftar
                   </span>
                 </div>
-                <span className="text-base font-black text-emerald-800 font-mono">
+                <span className="text-base font-black text-emerald-800 dark:text-emerald-400 font-mono">
                   {students.length}
                 </span>
               </div>
             </div>
 
-            {/* Quick Filter Info Cards for Classes 7, 8, 9 */}
-            {["7", "8", "9"].map((cls) => {
+            {/* Quick Filter Info Cards for Classes 1 through 6 */}
+            {["1", "2", "3", "4", "5", "6"].map((cls) => {
               const count = students.filter(
                 (s) => String(s.kelas || "").trim() === cls
               ).length;
@@ -1022,20 +1098,20 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   onClick={() => setStudentClassFilter(isSelected ? "all" : cls)}
                   className={`p-2.5 rounded-lg border transition cursor-pointer ${
                     isSelected
-                      ? "bg-blue-50 border-blue-400 ring-2 ring-blue-200"
-                      : "bg-slate-50 border-slate-200 hover:border-slate-300"
+                      ? "bg-blue-50 dark:bg-blue-950/40 border-blue-400 dark:border-blue-500 ring-2 ring-blue-200 dark:ring-blue-700/40"
+                      : "bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="text-blue-900 text-xs font-black block">
+                      <span className="text-blue-900 dark:text-blue-300 text-xs font-black block">
                         Kelas {cls}
                       </span>
-                      <span className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-wider font-semibold">
                         Siswa Terdaftar
                       </span>
                     </div>
-                    <span className="text-base font-black text-slate-800 font-mono">
+                    <span className="text-base font-black text-slate-800 dark:text-slate-100 font-mono">
                       {count}
                     </span>
                   </div>
@@ -1049,17 +1125,20 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
               {[
                 { id: "all", label: `Semua (${students.length})` },
-                { id: "7", label: `Kelas 7 (${students.filter(s => String(s.kelas).trim() === "7").length})` },
-                { id: "8", label: `Kelas 8 (${students.filter(s => String(s.kelas).trim() === "8").length})` },
-                { id: "9", label: `Kelas 9 (${students.filter(s => String(s.kelas).trim() === "9").length})` },
+                { id: "1", label: `Kelas 1 (${students.filter(s => String(s.kelas).trim() === "1").length})` },
+                { id: "2", label: `Kelas 2 (${students.filter(s => String(s.kelas).trim() === "2").length})` },
+                { id: "3", label: `Kelas 3 (${students.filter(s => String(s.kelas).trim() === "3").length})` },
+                { id: "4", label: `Kelas 4 (${students.filter(s => String(s.kelas).trim() === "4").length})` },
+                { id: "5", label: `Kelas 5 (${students.filter(s => String(s.kelas).trim() === "5").length})` },
+                { id: "6", label: `Kelas 6 (${students.filter(s => String(s.kelas).trim() === "6").length})` },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setStudentClassFilter(tab.id)}
                   className={`px-2.5 py-1 text-xs font-bold rounded-md transition cursor-pointer shrink-0 ${
                     studentClassFilter === tab.id
-                      ? "bg-emerald-700 text-white shadow-xs"
-                      : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                      ? "bg-emerald-700 dark:bg-emerald-600 text-white shadow-xs"
+                      : "bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 border border-transparent dark:border-slate-700/60"
                   }`}
                 >
                   {tab.label}
@@ -1068,18 +1147,18 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             </div>
 
             <div className="relative w-full sm:w-64">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={studentSearch}
                 onChange={(e) => setStudentSearch(e.target.value)}
                 placeholder="Cari nama atau NISN..."
-                className="w-full pl-8 pr-3 py-1 text-xs bg-gray-50 border border-gray-200 rounded-md focus:outline-none focus:border-emerald-600 focus:bg-white"
+                className="w-full pl-8 pr-3 py-1 text-xs bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-md focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 text-slate-800 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500"
               />
               {studentSearch && (
                 <button
                   onClick={() => setStudentSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -1088,43 +1167,43 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs md:text-sm border-collapse text-gray-700">
+            <table className="w-full text-left text-xs md:text-sm border-collapse text-gray-700 dark:text-slate-200">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider w-12 text-center">
+                <tr className="bg-gray-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-800">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider w-12 text-center">
                     No
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Nama Siswa
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     NISN Siswa
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Kelas
                   </th>
-                  <th className="p-3 font-semibold text-gray-500 uppercase tracking-wider text-right">
+                  <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider text-right">
                     Tindakan
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-gray-400 text-xs">
+                    <td colSpan={5} className="p-6 text-center text-gray-400 dark:text-slate-500 text-xs">
                       Tidak ada data siswa yang cocok dengan filter atau pencarian.
                     </td>
                   </tr>
                 ) : (
                   filteredStudents.map((s, idx) => (
-                    <tr key={s.id} className="hover:bg-gray-50/50">
-                      <td className="p-3 text-center text-gray-400 font-mono text-xs">
+                    <tr key={s.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
+                      <td className="p-3 text-center text-gray-400 dark:text-slate-500 font-mono text-xs">
                         {idx + 1}
                       </td>
-                      <td className="p-3 font-bold text-gray-800">{s.name}</td>
-                      <td className="p-3 font-mono text-gray-500">{s.nisn}</td>
+                      <td className="p-3 font-bold text-gray-800 dark:text-slate-100">{s.name}</td>
+                      <td className="p-3 font-mono text-gray-500 dark:text-slate-400">{s.nisn}</td>
                       <td className="p-3">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-850 border border-emerald-200 rounded text-xs font-bold font-mono">
+                        <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-850 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 rounded text-xs font-bold font-mono">
                           Kelas {s.kelas}
                         </span>
                       </td>
@@ -1132,14 +1211,14 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                         <div className="inline-flex gap-2">
                           <button
                             onClick={() => startEditStudent(s)}
-                            className="p-1 text-sky-650 hover:bg-sky-50 rounded transition cursor-pointer"
+                            className="p-1 text-sky-650 hover:bg-sky-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
                             title="Edit Siswa"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => deleteStudent(s.id)}
-                            className="p-1 text-red-650 hover:bg-red-50 rounded transition cursor-pointer"
+                            className="p-1 text-red-650 hover:bg-red-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
                             title="Hapus Siswa"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1155,49 +1234,207 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
         </div>
       )}
 
+      {/* SUBJECTS (MATA PELAJARAN) TAB */}
+      {activeTab === "subjects" && (
+        <div
+          className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 space-y-6 animate-fade-in"
+          id="subjects-management-panel"
+        >
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Daftar & Manajemen Mata Pelajaran (Mapel)
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[10px] font-extrabold font-mono">
+                  {subjectsList.length} Mata Pelajaran
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-400 mt-0.5">
+                Kelola mata pelajaran SD Islam Smart Pangkalpinang. Tambahkan mata pelajaran baru atau hapus mata pelajaran yang tidak digunakan.
+              </p>
+            </div>
+
+            {/* Search Input */}
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-gray-400 dark:text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={subjectSearchQuery}
+                onChange={(e) => setSubjectSearchQuery(e.target.value)}
+                placeholder="Cari mata pelajaran..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              />
+              {subjectSearchQuery && (
+                <button
+                  onClick={() => setSubjectSearchQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Form to Add New Subject */}
+          <form
+            onSubmit={handleAddSubject}
+            className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-150 dark:border-emerald-800/50 rounded-xl flex flex-col sm:flex-row gap-3 items-end shadow-3xs"
+          >
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider mb-1.5">
+                Nama Mata Pelajaran Baru
+              </label>
+              <input
+                type="text"
+                value={newSubjectName}
+                onChange={(e) => setNewSubjectName(e.target.value)}
+                placeholder="Contoh: Seni Budaya, Bahasa Daerah, Koding & Robotik..."
+                className="w-full p-2.5 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-700 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={subjectLoading || !newSubjectName.trim()}
+              className="w-full sm:w-auto px-5 py-2.5 bg-emerald-800 hover:bg-emerald-900 active:bg-emerald-950 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center gap-1.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              {subjectLoading ? "Menyimpan..." : "Tambah Mapel"}
+            </button>
+          </form>
+
+          {/* Subject Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {subjectsList
+              .filter((sub) =>
+                sub.toLowerCase().includes(subjectSearchQuery.toLowerCase())
+              )
+              .map((sub, index) => {
+                const assignedTeacher = teachers.find(
+                  (t) => t.subject === sub
+                );
+                const tpsCount = tpsTemplates[sub]?.length || 0;
+                const isDeleting = deletingSubject === sub;
+
+                return (
+                  <div
+                    key={sub}
+                    className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-850 hover:border-emerald-300 dark:hover:border-emerald-600/60 hover:shadow-xs transition flex flex-col justify-between group"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 flex items-center justify-center text-xs font-bold font-mono border border-emerald-200 dark:border-emerald-800/60">
+                            {index + 1}
+                          </span>
+                          <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm">
+                            {sub}
+                          </h3>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteSubject(sub)}
+                          disabled={isDeleting}
+                          title="Hapus Mata Pelajaran"
+                          className="text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-slate-800 p-1.5 rounded-lg transition cursor-pointer shrink-0 disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 pt-2 text-xs">
+                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                          <span className="text-[11px]">Guru Pengampu:</span>
+                          <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[150px]">
+                            {assignedTeacher ? assignedTeacher.name : "Belum Ditugaskan"}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                          <span className="text-[11px]">Template TP:</span>
+                          <span className="font-bold font-mono text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded text-[10px] border border-emerald-100 dark:border-emerald-800/60">
+                            {tpsCount} Capaian
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
+                      <span className="text-slate-400 dark:text-slate-500 font-mono text-[10px]">
+                        ID: {sub.toLowerCase().replace(/[^a-z0-9]/g, "_")}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setTpForm((prev) => ({ ...prev, subject: sub }));
+                          setActiveTab("tps");
+                        }}
+                        className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 font-bold hover:underline cursor-pointer"
+                      >
+                        Lihat TP &rarr;
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          {subjectsList.filter((sub) =>
+            sub.toLowerCase().includes(subjectSearchQuery.toLowerCase())
+          ).length === 0 && (
+            <div className="p-8 text-center bg-slate-50 dark:bg-slate-950 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Tidak ada mata pelajaran yang cocok dengan pencarian "{subjectSearchQuery}".
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* TPS (MATA PELAJARAN / LEARNING OBJECTIVES TEMPLATES) TAB */}
       {activeTab === "tps" && (
         <div
-          className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-6 animate-fade-in"
+          className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 shadow-sm p-6 space-y-6 animate-fade-in"
           id="tp-templates-panel"
         >
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-100 pb-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-gray-100 dark:border-slate-800 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-100 flex items-center gap-2">
                 <span>Template Capaian / Tujuan Pembelajaran (TP)</span>
-                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                   Berdasarkan Kelas
                 </span>
               </h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Setiap tingkat rombel (Kelas 7, 8, dan 9) memiliki Capaian Pembelajaran dan TP spesifik sesuai Kurikulum Merdeka.
+              <p className="text-xs text-gray-400 dark:text-slate-400 mt-0.5">
+                Setiap tingkat rombel (Kelas 1 sampai 6) memiliki Capaian Pembelajaran dan TP spesifik sesuai Kurikulum Merdeka.
               </p>
             </div>
 
             {/* Filter by class buttons */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-2">
+            <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg overflow-x-auto border border-transparent dark:border-slate-700/60">
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider px-2 shrink-0">
                 Filter:
               </span>
               {[
                 { id: "all", label: "Semua Tingkat" },
-                { id: "7", label: "Kelas 7" },
-                { id: "8", label: "Kelas 8" },
-                { id: "9", label: "Kelas 9" },
+                { id: "1", label: "Kelas 1" },
+                { id: "2", label: "Kelas 2" },
+                { id: "3", label: "Kelas 3" },
+                { id: "4", label: "Kelas 4" },
+                { id: "5", label: "Kelas 5" },
+                { id: "6", label: "Kelas 6" },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => {
-                    setTpFilterClass(tab.id as any);
+                    setTpFilterClass(tab.id);
                     if (tab.id !== "all") {
                       setTpForm((prev) => ({ ...prev, kelas: tab.id }));
                     }
                   }}
-                  className={`px-3 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition cursor-pointer shrink-0 ${
                     tpFilterClass === tab.id
-                      ? "bg-white text-emerald-850 shadow-xs"
-                      : "text-slate-600 hover:text-slate-900"
+                      ? "bg-white dark:bg-emerald-900/60 text-emerald-850 dark:text-emerald-300 shadow-xs border dark:border-emerald-500/40"
+                      : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white"
                   }`}
                 >
                   {tab.label}
@@ -1209,20 +1446,30 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
           {/* Form to add new TP with class selector */}
           <form
             onSubmit={addTpObjective}
-            className="p-4 bg-emerald-50/70 border border-emerald-150 rounded-xl grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end shadow-3xs"
+            className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-150 dark:border-emerald-800/50 rounded-xl grid grid-cols-1 md:grid-cols-12 gap-3.5 items-end shadow-3xs"
           >
             <div className="md:col-span-3">
-              <label className="block text-xs font-semibold text-emerald-900 uppercase tracking-wider mb-1.5">
-                Mata Pelajaran
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                  Mata Pelajaran
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("subjects")}
+                  className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
+                  title="Buka panel input dan kelola mata pelajaran"
+                >
+                  <Plus className="w-3 h-3" /> Input/Hapus Mapel
+                </button>
+              </div>
               <select
                 value={tpForm.subject}
                 onChange={(e) =>
                   setTpForm((prev) => ({ ...prev, subject: e.target.value }))
                 }
-                className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 transition"
+                className="w-full p-2 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-700 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
               >
-                {SUBJECT_LIST.map((sub, i) => (
+                {subjectsList.map((sub, i) => (
                   <option key={i} value={sub}>
                     {sub}
                   </option>
@@ -1231,7 +1478,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-emerald-900 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider mb-1.5">
                 Tingkat Kelas
               </label>
               <select
@@ -1239,17 +1486,20 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 onChange={(e) =>
                   setTpForm((prev) => ({ ...prev, kelas: e.target.value }))
                 }
-                className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 font-bold text-slate-800 transition"
+                className="w-full p-2 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-700 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 font-bold text-slate-800 dark:text-slate-100 transition"
               >
-                <option value="7">Kelas 7</option>
-                <option value="8">Kelas 8</option>
-                <option value="9">Kelas 9</option>
+                <option value="1">Kelas 1</option>
+                <option value="2">Kelas 2</option>
+                <option value="3">Kelas 3</option>
+                <option value="4">Kelas 4</option>
+                <option value="5">Kelas 5</option>
+                <option value="6">Kelas 6</option>
                 <option value="all">Semua Kelas</option>
               </select>
             </div>
 
             <div className="md:col-span-5">
-              <label className="block text-xs font-semibold text-emerald-900 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider mb-1.5">
                 Deskripsi Ringkas Tujuan Pembelajaran (TP)
               </label>
               <input
@@ -1259,7 +1509,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   setTpForm((prev) => ({ ...prev, text: e.target.value }))
                 }
                 placeholder="Contoh: Mengidentifikasi rumus kuadratik dan diagram koordinat..."
-                className="w-full p-2 bg-white border border-emerald-200 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 transition"
+                className="w-full p-2 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-slate-700 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </div>
 
@@ -1275,7 +1525,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
           {/* Group display of subject templates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-            {SUBJECT_LIST.map((subject) => {
+            {subjectsList.map((subject) => {
               const allItems = tpsTemplates[subject] || [];
               const items =
                 tpFilterClass === "all"
@@ -1288,42 +1538,48 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
               return (
                 <div
                   key={subject}
-                  className="bg-white rounded-xl border border-gray-150 p-4 shadow-3xs flex flex-col justify-between"
+                  className="bg-white dark:bg-slate-850 rounded-xl border border-gray-150 dark:border-slate-800 p-4 shadow-3xs flex flex-col justify-between"
                 >
                   <div>
-                    <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-2.5 mb-3">
-                      <span className="px-3 py-1 bg-emerald-800 text-white rounded text-2xs uppercase tracking-wider font-bold">
+                    <div className="flex items-center justify-between gap-2 border-b border-gray-100 dark:border-slate-800 pb-2.5 mb-3">
+                      <span className="px-3 py-1 bg-emerald-800 dark:bg-emerald-900 text-white rounded text-2xs uppercase tracking-wider font-bold border dark:border-emerald-700/50">
                         {subject}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500 font-semibold">
+                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-semibold">
                         {items.length} TP {tpFilterClass !== "all" ? `(Kelas ${tpFilterClass})` : "Total"}
                       </span>
                     </div>
 
                     <div className="space-y-2">
                       {items.length === 0 ? (
-                        <p className="text-2xs text-gray-450 italic py-3 text-center bg-gray-50/50 rounded-lg border border-dashed border-gray-200">
+                        <p className="text-2xs text-gray-450 dark:text-slate-500 italic py-3 text-center bg-gray-50/50 dark:bg-slate-900/60 rounded-lg border border-dashed border-gray-200 dark:border-slate-800">
                           Belum ada tujuan pembelajaran {tpFilterClass !== "all" ? `untuk Kelas ${tpFilterClass}` : ""} pada mapel ini.
                         </p>
                       ) : (
                         items.map((item) => {
-                          const itemClass = String(item.kelas || "7").trim();
+                          const itemClass = String(item.kelas || "1").trim();
                           const badgeColor =
-                            itemClass === "7"
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : itemClass === "8"
-                              ? "bg-purple-50 text-purple-700 border-purple-200"
-                              : itemClass === "9"
-                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                              : "bg-slate-50 text-slate-700 border-slate-200";
+                            itemClass === "1"
+                              ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700/60"
+                              : itemClass === "2"
+                              ? "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-700/60"
+                              : itemClass === "3"
+                              ? "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700/60"
+                              : itemClass === "4"
+                              ? "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700/60"
+                              : itemClass === "5"
+                              ? "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/60"
+                              : itemClass === "6"
+                              ? "bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700/60"
+                              : "bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700";
 
                           return (
                             <div
                               key={item.id}
-                              className="p-2.5 bg-gray-50/60 rounded-lg border border-gray-150 flex items-start justify-between gap-3 text-xs hover:bg-emerald-50/20 hover:border-emerald-200 transition"
+                              className="p-2.5 bg-gray-50/60 dark:bg-slate-900/60 rounded-lg border border-gray-150 dark:border-slate-800 flex items-start justify-between gap-3 text-xs hover:bg-emerald-50/20 dark:hover:bg-slate-800/80 transition"
                             >
                               <div className="flex-1 space-y-1">
-                                <p className="text-gray-800 leading-relaxed text-justify">
+                                <p className="text-gray-800 dark:text-slate-200 leading-relaxed text-justify">
                                   {item.text}
                                 </p>
                                 <span
@@ -1334,7 +1590,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                               </div>
                               <button
                                 onClick={() => deleteTpObjective(subject, item.id)}
-                                className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer shrink-0 mt-0.5"
+                                className="text-red-500 hover:text-red-700 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-slate-800 transition cursor-pointer shrink-0 mt-0.5"
                                 title="Hapus TP"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1355,17 +1611,17 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
       {/* SETTINGS (PENGATURAN RAPORT) TAB */}
       {activeTab === "settings" && (
         <div
-          className="bg-white rounded-xl border border-gray-150 shadow-sm p-6 max-w-2xl animate-fade-in"
+          className="bg-white dark:bg-slate-900 rounded-xl border border-gray-150 dark:border-slate-800 shadow-sm p-6 max-w-2xl animate-fade-in"
           id="school-settings-panel"
         >
           <div className="mb-6">
-            <h2 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 border-b border-slate-100 dark:border-slate-800 pb-2 flex items-center gap-2">
               <span>Pengaturan Format & Atribut Raport</span>
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
+              <span className="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
                 Akses Admin
               </span>
             </h2>
-            <p className="text-[10px] text-slate-400 mt-1">
+            <p className="text-[10px] text-slate-400 dark:text-slate-400 mt-1">
               Sesuaikan identitas, tampilan, font, ukuran, serta bagian-bagian
               format yang ingin ditampilkan pada cetak raport siswa.
             </p>
@@ -1373,13 +1629,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
           <form onSubmit={handleSettingsSubmit} className="space-y-6">
             {/* Bagian 1: Identitas Kepala Sekolah */}
-            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1">
+            <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
                 1. Identitas Penandatangan
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Nama Kepala Sekolah & Gelar
                   </label>
                   <input
@@ -1388,12 +1644,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     value={principalName}
                     onChange={(e) => setPrincipalName(e.target.value)}
                     placeholder="Contoh: Ustadz H. Ir. Abdul Muhyi, M.Pd"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs md:text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     NIP Kepala Sekolah
                   </label>
                   <input
@@ -1402,20 +1658,20 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     value={principalNip}
                     onChange={(e) => setPrincipalNip(e.target.value)}
                     placeholder="Contoh: 19780512 200501 1 002"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs md:text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   />
                 </div>
               </div>
             </div>
 
             {/* Bagian 2: Kustomisasi Teks & Sesi */}
-            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1">
+            <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
                 2. Informasi Semester, Tahun Pelajaran & Tanggal Rapor
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Nama Semester
                   </label>
                   <input
@@ -1424,12 +1680,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     value={semesterName}
                     onChange={(e) => setSemesterName(e.target.value)}
                     placeholder="Contoh: Ganjil"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs md:text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Tahun Pelajaran
                   </label>
                   <input
@@ -1438,12 +1694,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     value={tahunPelajaran}
                     onChange={(e) => setTahunPelajaran(e.target.value)}
                     placeholder="Contoh: 2026/2027"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs md:text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Tanggal Pembagian Raport
                   </label>
                   <input
@@ -1452,26 +1708,26 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     value={tanggalRaport}
                     onChange={(e) => setTanggalRaport(e.target.value)}
                     placeholder="Contoh: 17 Juni 2026"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-lg text-xs md:text-sm bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   />
                 </div>
               </div>
             </div>
 
             {/* Bagian 3: Tata Letak & Gaya */}
-            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1">
+            <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
                 3. Gaya & Desain Cetak
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Jenis Font Word/Cetak
                   </label>
                   <select
                     value={fontFamily}
                     onChange={(e) => setFontFamily(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   >
                     <option value="Times New Roman">
                       Times New Roman (Formal)
@@ -1483,13 +1739,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Ukuran Font Dasar
                   </label>
                   <select
                     value={fontSize}
                     onChange={(e) => setFontSize(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   >
                     <option value="10pt">Sangat Kecil (10pt)</option>
                     <option value="11pt">Standar (11pt)</option>
@@ -1498,13 +1754,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Ukuran Kertas Raport
                   </label>
                   <select
                     value={paperSize}
                     onChange={(e) => setPaperSize(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white transition"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 transition"
                   >
                     <option value="A4">A4 (Standard 21.0 x 29.7 cm)</option>
                     <option value="F4">
@@ -1522,12 +1778,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             </div>
 
             {/* Bagian 4: Visibilitas Komponen */}
-            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1">
+            <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
                 4. Visibilitas Elemen Raport
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-700">
-                <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-gray-700 dark:text-slate-300">
+                <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                   <input
                     type="checkbox"
                     checked={showLogo}
@@ -1537,7 +1793,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   <span>Tampilkan Logo Kop Sekolah</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                   <input
                     type="checkbox"
                     checked={showSpiritual}
@@ -1547,7 +1803,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   <span>Tampilkan Aspek Sikap Spiritual</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                   <input
                     type="checkbox"
                     checked={showSosial}
@@ -1557,7 +1813,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   <span>Tampilkan Aspek Sikap Sosial</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition">
+                <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition">
                   <input
                     type="checkbox"
                     checked={showAttendance}
@@ -1567,7 +1823,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   <span>Tampilkan Presensi Kehadiran</span>
                 </label>
 
-                <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 transition text-nowrap">
+                <label className="flex items-center gap-2 p-2 bg-white dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition text-nowrap">
                   <input
                     type="checkbox"
                     checked={showCatatan}
@@ -1580,19 +1836,19 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             </div>
 
             {/* Bagian 5: Pengaturan Watermark */}
-            <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 space-y-4">
-              <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-1">
+            <div className="bg-slate-50/50 dark:bg-slate-950/50 p-4 rounded-xl border border-slate-100 dark:border-slate-800 space-y-4">
+              <h3 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 pb-1">
                 5. Pengaturan Watermark
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Ukuran Watermark Raport
                   </label>
                   <select
                     value={watermarkSize}
                     onChange={(e) => setWatermarkSize(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-slate-300 bg-white rounded-lg text-xs focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg text-xs focus:outline-none focus:border-emerald-600"
                   >
                     <option value={300}>Kecil (300px)</option>
                     <option value={380}>Sedang (380px)</option>
@@ -1603,7 +1859,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1.5">
+                  <label className="block text-[10px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
                     Transparansi Watermark
                   </label>
                   <select
@@ -1611,7 +1867,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     onChange={(e) =>
                       setWatermarkOpacity(Number(e.target.value))
                     }
-                    className="w-full px-3 py-2 border border-slate-300 bg-white rounded-lg text-xs focus:outline-none focus:border-emerald-600"
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-lg text-xs focus:outline-none focus:border-emerald-600"
                   >
                     <option value={0.03}>Sangat Tipis (3%)</option>
                     <option value={0.05}>Tipis (5%)</option>
@@ -1644,19 +1900,19 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
           id="ekskul-management-panel"
         >
           {/* Form to add new Ekskul */}
-          <div className="lg:col-span-4 bg-white rounded-xl border border-slate-200 shadow-sm p-5 h-fit">
-            <h2 className="text-sm font-bold text-slate-900 mb-1 flex items-center gap-2">
-              <Award className="w-4 h-4 text-emerald-800" />
+          <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5 h-fit">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
+              <Award className="w-4 h-4 text-emerald-800 dark:text-emerald-400" />
               <span>Tambah Ekskul Baru</span>
             </h2>
-            <p className="text-[10px] text-slate-400 mb-4">
+            <p className="text-[10px] text-slate-400 dark:text-slate-400 mb-4">
               Tambahkan nama dan tentukan tipe kegiatan ekstrakurikuler baru ke
               dalam daftar sekolah.
             </p>
 
             <form onSubmit={handleAddEkskul} className="space-y-4">
               <div>
-                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
                   Nama Kegiatan
                 </label>
                 <input
@@ -1665,12 +1921,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   value={newEkskulName}
                   onChange={(e) => setNewEkskulName(e.target.value)}
                   placeholder="Contoh: Futsal, Voli, Pramuka"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg text-xs focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase mb-1">
                   Tipe Ekstrakurikuler
                 </label>
                 <select
@@ -1678,7 +1934,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   onChange={(e) =>
                     setNewEkskulType(e.target.value as "Wajib" | "Pilihan")
                   }
-                  className="w-full px-3 py-2 border border-slate-300 bg-white rounded-lg text-xs focus:outline-none focus:border-emerald-600"
+                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-100 rounded-lg text-xs focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500"
                 >
                   <option value="Wajib">Wajib (Compulsory)</option>
                   <option value="Pilihan">Pilihan (Elective)</option>
@@ -1697,21 +1953,21 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
           </div>
 
           {/* List of existing Ekskuls */}
-          <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-5">
             <div className="mb-4">
-              <h2 className="text-sm font-bold text-slate-900">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                 Daftar Kegiatan Ekstrakurikuler ({ekskuls.length})
               </h2>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-slate-400 dark:text-slate-400">
                 Daftar kegiatan ekstrakurikuler yang aktif dan dapat dinilai
                 oleh Wali Kelas pada rapor siswa.
               </p>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-slate-100">
-              <table className="w-full text-left text-xs border-collapse">
+            <div className="overflow-x-auto rounded-lg border border-slate-100 dark:border-slate-800">
+              <table className="w-full text-left text-xs border-collapse text-slate-800 dark:text-slate-200">
                 <thead>
-                  <tr className="bg-slate-50 text-slate-550 font-bold uppercase tracking-wider border-b border-slate-200">
+                  <tr className="bg-slate-50 dark:bg-slate-950 text-slate-550 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
                     <th className="py-2.5 px-3 text-[10px]">No</th>
                     <th className="py-2.5 px-3 text-[10px]">
                       Nama Ekstrakurikuler
@@ -1722,12 +1978,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {ekskuls.length === 0 ? (
                     <tr>
                       <td
                         colSpan={4}
-                        className="py-8 text-center text-slate-400 italic"
+                        className="py-8 text-center text-slate-400 dark:text-slate-500 italic"
                       >
                         Belum ada kegiatan ekstrakurikuler. Silakan tambahkan di
                         form sebelah kiri.
@@ -1737,17 +1993,17 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     ekskuls.map((e, idx) => (
                       <tr
                         key={e.id}
-                        className="hover:bg-slate-50/50 transition"
+                        className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition"
                       >
-                        <td className="py-2.5 px-3 font-mono font-bold text-slate-405">
+                        <td className="py-2.5 px-3 font-mono font-bold text-slate-405 dark:text-slate-400">
                           {idx + 1}
                         </td>
-                        <td className="py-2.5 px-3 font-semibold text-slate-800">
+                        <td className="py-2.5 px-3 font-semibold text-slate-800 dark:text-slate-100">
                           {e.name}
                         </td>
                         <td className="py-2.5 px-3">
                           <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${e.type === "Wajib" ? "bg-amber-100 text-amber-800 border border-amber-200" : "bg-sky-100 text-sky-800 border border-sky-200"}`}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${e.type === "Wajib" ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-700/60" : "bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-200 dark:border-sky-700/60"}`}
                           >
                             {e.type}
                           </span>
@@ -1755,7 +2011,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                         <td className="py-2.5 px-3 text-center">
                           <button
                             onClick={() => handleDeleteEkskul(e.id)}
-                            className="p-1 hover:bg-red-50 text-red-500 rounded transition cursor-pointer"
+                            className="p-1 hover:bg-red-50 dark:hover:bg-slate-800 text-red-500 dark:text-red-400 rounded transition cursor-pointer"
                             title="Hapus Ekstrakurikuler"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -1773,9 +2029,9 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
       {/* TEACHER MODAL FORM */}
       {isTeacherModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-up">
-            <div className="bg-emerald-800 px-6 py-4 text-white flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-up border border-slate-200 dark:border-slate-800">
+            <div className="bg-emerald-800 dark:bg-emerald-950 px-6 py-4 text-white flex items-center justify-between border-b dark:border-emerald-800/40">
               <h3 className="font-bold text-sm uppercase tracking-wide">
                 {editingTeacher ? "Edit Akun Guru" : "Tambah Guru Baru"}
               </h3>
@@ -1789,14 +2045,14 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
             <form onSubmit={handleTeacherSubmit} className="p-6 space-y-4">
               {teacherModalError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex gap-2 items-start animate-fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-lg text-xs text-red-700 dark:text-red-300 flex gap-2 items-start animate-fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
                   <span className="font-semibold">{teacherModalError}</span>
                 </div>
               )}
 
               {/* Petunjuk Guru Multi-Mapel */}
-              <div className="bg-emerald-50 border-l-4 border-emerald-600 p-3 rounded-r-lg text-2xs md:text-xs text-emerald-800 leading-relaxed space-y-1">
+              <div className="bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-600 dark:border-emerald-500 p-3 rounded-r-lg text-2xs md:text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed space-y-1">
                 <p className="font-bold uppercase tracking-wider text-[10px]">
                   Panduan Guru Multi-Mapel:
                 </p>
@@ -1805,11 +2061,11 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   beberapa mata pelajaran sekaligus, silakan buat akun tambahan
                   untuk tiap mapel dengan{" "}
                   <strong>Login Username yang berbeda</strong> (contoh:{" "}
-                  <code className="bg-emerald-100/80 px-1 rounded">
+                  <code className="bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 px-1 rounded">
                     budi_ipa
                   </code>{" "}
                   dan{" "}
-                  <code className="bg-emerald-100/80 px-1 rounded">
+                  <code className="bg-emerald-100/80 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 px-1 rounded">
                     budi_ips
                   </code>
                   ).
@@ -1817,7 +2073,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-750 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300 mb-1.5">
                   Nama Lengkap & Gelar
                 </label>
                 <input
@@ -1840,14 +2096,14 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     });
                   }}
                   placeholder="Contoh: Dr. H. Slamet, M.Pd"
-                  className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   id="teacher-name-input"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-750 mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300 mb-1.5">
                     Login Username
                   </label>
                   <input
@@ -1861,12 +2117,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                       }))
                     }
                     placeholder="nama_panggil"
-                    className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white font-mono text-xs"
+                    className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 font-mono text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     id="teacher-username-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-750 mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300 mb-1.5">
                     Masuk/PIN Sandi
                   </label>
                   <input
@@ -1880,16 +2136,29 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                       }))
                     }
                     placeholder="Sandi Akun"
-                    className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
+                    className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     id="teacher-password-input"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-750 mb-1.5">
-                  Mata Pelajaran yang Diampu
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300">
+                    Mata Pelajaran yang Diampu
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsTeacherModalOpen(false);
+                      setActiveTab("subjects");
+                    }}
+                    className="text-[10px] text-emerald-700 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-200 font-bold hover:underline cursor-pointer flex items-center gap-0.5"
+                    title="Buka panel untuk menambah atau menghapus mata pelajaran"
+                  >
+                    + Input Mapel Baru
+                  </button>
+                </div>
                 <select
                   value={teacherForm.subject}
                   onChange={(e) =>
@@ -1898,10 +2167,10 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                       subject: e.target.value,
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500"
                   id="teacher-subject-select"
                 >
-                  {SUBJECT_LIST.map((sub, i) => (
+                  {subjectsList.map((sub, i) => (
                     <option key={i} value={sub}>
                       {sub}
                     </option>
@@ -1910,8 +2179,8 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 </select>
               </div>
 
-              <div className="pt-2 border-t border-gray-100">
-                <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-gray-800">
+              <div className="pt-2 border-t border-gray-100 dark:border-slate-800">
+                <label className="flex items-center gap-2 cursor-pointer text-xs md:text-sm text-gray-800 dark:text-slate-200">
                   <input
                     type="checkbox"
                     checked={teacherForm.isWaliKelas}
@@ -1928,8 +2197,8 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
               </div>
 
               {teacherForm.isWaliKelas && (
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-150 animate-fade-in">
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <div className="bg-gray-50 dark:bg-slate-800/60 p-3 rounded-lg border border-gray-150 dark:border-slate-700 animate-fade-in">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1">
                     Kelas yang Diajar & Asuh
                   </label>
                   <select
@@ -1940,12 +2209,15 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                         kelas: e.target.value,
                       }))
                     }
-                    className="w-full p-2 bg-white border border-gray-250 rounded text-xs focus:outline-none focus:border-emerald-600"
+                    className="w-full p-2 bg-white dark:bg-slate-950 border border-gray-250 dark:border-slate-700 rounded text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
                   >
                     <option value="">-- Pilih Kelas --</option>
-                    <option value="7">Kelas 7</option>
-                    <option value="8">Kelas 8</option>
-                    <option value="9">Kelas 9</option>
+                    <option value="1">Kelas 1</option>
+                    <option value="2">Kelas 2</option>
+                    <option value="3">Kelas 3</option>
+                    <option value="4">Kelas 4</option>
+                    <option value="5">Kelas 5</option>
+                    <option value="6">Kelas 6</option>
                   </select>
                 </div>
               )}
@@ -1955,7 +2227,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   type="button"
                   disabled={isSubmittingTeacher}
                   onClick={() => setIsTeacherModalOpen(false)}
-                  className="w-1/2 py-2.5 border border-gray-250 text-gray-650 hover:bg-gray-50 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
+                  className="w-1/2 py-2.5 border border-gray-250 dark:border-slate-700 text-gray-650 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
@@ -1984,9 +2256,9 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
       {/* STUDENT MODAL FORM */}
       {isStudentModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-up">
-            <div className="bg-emerald-800 px-6 py-4 text-white flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-scale-up border border-slate-200 dark:border-slate-800">
+            <div className="bg-emerald-800 dark:bg-emerald-950 px-6 py-4 text-white flex items-center justify-between border-b dark:border-emerald-800/40">
               <h3 className="font-bold text-sm uppercase tracking-wide">
                 {editingStudent ? "Edit Identitas Siswa" : "Tambah Siswa Baru"}
               </h3>
@@ -2000,14 +2272,14 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
             <form onSubmit={handleStudentSubmit} className="p-6 space-y-4">
               {studentModalError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex gap-2 items-start animate-fade-in">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-lg text-xs text-red-700 dark:text-red-300 flex gap-2 items-start animate-fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
                   <span className="font-semibold">{studentModalError}</span>
                 </div>
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-750 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300 mb-1.5">
                   Nama Lengkap Siswa
                 </label>
                 <input
@@ -2021,13 +2293,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     }))
                   }
                   placeholder="Contoh: Muhammad Al-Farabi"
-                  className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   id="student-name-input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-750 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300 mb-1.5">
                   NISN Siswa (Nomor Induk Nasional)
                 </label>
                 <input
@@ -2041,13 +2313,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     }))
                   }
                   placeholder="Contoh: 0134988712"
-                  className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   id="student-nisn-input"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-750 mb-1.5">
+                <label className="block text-xs font-semibold text-gray-750 dark:text-slate-300 mb-1.5">
                   Kelas / Rombongan Belajar
                 </label>
                 <select
@@ -2058,12 +2330,15 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                       kelas: e.target.value,
                     }))
                   }
-                  className="w-full px-3 py-2 border border-gray-250 rounded-lg text-xs md:text-sm focus:outline-none focus:border-emerald-600 focus:bg-white"
+                  className="w-full px-3 py-2 border border-gray-250 dark:border-slate-700 bg-white dark:bg-slate-950 rounded-lg text-xs md:text-sm text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500"
                   id="student-class-select"
                 >
-                  <option value="7">Kelas 7</option>
-                  <option value="8">Kelas 8</option>
-                  <option value="9">Kelas 9</option>
+                  <option value="1">Kelas 1</option>
+                  <option value="2">Kelas 2</option>
+                  <option value="3">Kelas 3</option>
+                  <option value="4">Kelas 4</option>
+                  <option value="5">Kelas 5</option>
+                  <option value="6">Kelas 6</option>
                 </select>
               </div>
 
@@ -2072,7 +2347,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   type="button"
                   disabled={isSubmittingStudent}
                   onClick={() => setIsStudentModalOpen(false)}
-                  className="w-1/2 py-2.5 border border-gray-250 text-gray-650 hover:bg-gray-50 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
+                  className="w-1/2 py-2.5 border border-gray-250 dark:border-slate-700 text-gray-650 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
                 >
                   Batal
                 </button>
@@ -2101,12 +2376,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
       {/* BATCH STUDENT IMPORT MODAL */}
       {isBatchStudentModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-scale-up my-6">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-scale-up my-6 border border-slate-200 dark:border-slate-800">
             {/* Modal Header */}
-            <div className="bg-emerald-850 px-6 py-4 text-white flex items-center justify-between">
+            <div className="bg-emerald-850 dark:bg-emerald-950 px-6 py-4 text-white flex items-center justify-between border-b dark:border-emerald-800/40">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-emerald-700/60 border border-emerald-500/40 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-emerald-700/60 dark:bg-emerald-900/60 border border-emerald-500/40 flex items-center justify-center">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-200" />
                 </div>
                 <div>
@@ -2135,14 +2410,14 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 <div
                   className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
                     batchResult.success
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-900"
-                      : "bg-red-50 border-red-300 text-red-900"
+                      ? "bg-emerald-50 dark:bg-emerald-950/60 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-200"
+                      : "bg-red-50 dark:bg-red-950/60 border-red-300 dark:border-red-700 text-red-900 dark:text-red-200"
                   }`}
                 >
                   {batchResult.success ? (
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                   ) : (
-                    <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
                   )}
                   <div className="space-y-1">
                     <p className="font-bold">
@@ -2151,12 +2426,12 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                         : "Gagal menyimpan data siswa massal."}
                     </p>
                     {batchResult.duplicatesCount > 0 && (
-                      <p className="text-[11px] text-amber-800 font-medium">
+                      <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
                         Catatan: {batchResult.duplicatesCount} siswa dilewati karena NISN sudah terdaftar.
                       </p>
                     )}
                     {batchResult.errors.length > 0 && (
-                      <div className="text-[11px] text-red-700">
+                      <div className="text-[11px] text-red-700 dark:text-red-300">
                         {batchResult.errors.map((err, i) => (
                           <div key={i}>• {err}</div>
                         ))}
@@ -2167,22 +2442,25 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
               )}
 
               {/* Guide and Controls Toolbar */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-3">
+              <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2">
-                    <label className="text-xs font-bold text-slate-700">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
                       Kelas Default:
                     </label>
                     <select
                       value={batchDefaultClass}
                       onChange={(e) => setBatchDefaultClass(e.target.value)}
-                      className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white font-bold text-slate-800 focus:outline-none focus:border-emerald-600"
+                      className="px-2.5 py-1 text-xs border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-950 font-bold text-slate-800 dark:text-slate-100 focus:outline-none focus:border-emerald-600"
                     >
-                      <option value="7">Kelas 7</option>
-                      <option value="8">Kelas 8</option>
-                      <option value="9">Kelas 9</option>
+                      <option value="1">Kelas 1</option>
+                      <option value="2">Kelas 2</option>
+                      <option value="3">Kelas 3</option>
+                      <option value="4">Kelas 4</option>
+                      <option value="5">Kelas 5</option>
+                      <option value="6">Kelas 6</option>
                     </select>
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-slate-400 dark:text-slate-400">
                       (Digunakan bila kolom kelas tidak diisi di teks)
                     </span>
                   </div>
@@ -2191,9 +2469,9 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     <button
                       type="button"
                       onClick={fillSampleBatchData}
-                      className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-[11px] font-bold rounded-md flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                      className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-md flex items-center gap-1 cursor-pointer transition shadow-2xs"
                     >
-                      <Copy className="w-3.5 h-3.5 text-slate-500" /> Isi Contoh Format
+                      <Copy className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" /> Isi Contoh Format
                     </button>
                     {batchRawText && (
                       <button
@@ -2202,28 +2480,28 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                           setBatchRawText("");
                           setBatchResult(null);
                         }}
-                        className="px-2.5 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-600 text-[11px] font-bold rounded-md flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                        className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900/60 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 dark:text-red-400 text-[11px] font-bold rounded-md flex items-center gap-1 cursor-pointer transition shadow-2xs"
                       >
-                        <Trash2 className="w-3.5 h-3.5 text-red-500" /> Bersihkan
+                        <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400" /> Bersihkan
                       </button>
                     )}
                   </div>
                 </div>
 
-                <div className="text-[11px] text-slate-500 leading-relaxed bg-white p-2.5 rounded-lg border border-slate-200">
-                  <span className="font-bold text-slate-700 block mb-0.5">
+                <div className="text-[11px] text-slate-500 dark:text-slate-300 leading-relaxed bg-white dark:bg-slate-850 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                  <span className="font-bold text-slate-700 dark:text-slate-200 block mb-0.5">
                     Format yang Didukung (Bisa langsung blok & copy dari Excel / Spreadsheet):
                   </span>
-                  <div className="font-mono text-[10px] text-slate-600 space-y-0.5">
-                    <div>Format 1: <strong className="text-emerald-700">NISN [Tab/Koma] Nama Lengkap Siswa [Tab/Koma] Kelas</strong></div>
-                    <div>Format 2: <strong className="text-emerald-700">NISN [Tab/Koma] Nama Lengkap Siswa</strong> (Kelas otomatis ikut Kelas Default)</div>
+                  <div className="font-mono text-[10px] text-slate-600 dark:text-slate-400 space-y-0.5">
+                    <div>Format 1: <strong className="text-emerald-700 dark:text-emerald-400">NISN [Tab/Koma] Nama Lengkap Siswa [Tab/Koma] Kelas</strong></div>
+                    <div>Format 2: <strong className="text-emerald-700 dark:text-emerald-400">NISN [Tab/Koma] Nama Lengkap Siswa</strong> (Kelas otomatis ikut Kelas Default)</div>
                   </div>
                 </div>
               </div>
 
               {/* Textarea Input */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Tempelkan (Paste) Teks Data Siswa Di Bawah Ini:
                 </label>
                 <textarea
@@ -2233,8 +2511,8 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     if (batchResult) setBatchResult(null);
                   }}
                   rows={6}
-                  placeholder={`Contoh tempel (paste):&#10;0012984101\tAhmad Fauzi Ramadhan\t7&#10;0012984102\tAisyah Putri Azzahra\t7&#10;0012984103\tBilal Al-Ghifari\t8`}
-                  className="w-full p-3 border border-slate-300 rounded-xl text-xs font-mono focus:outline-none focus:border-emerald-600 focus:bg-white resize-y shadow-inner bg-slate-50/50"
+                  placeholder={`Contoh tempel (paste):&#10;0012984101\tAhmad Fauzi Ramadhan\t1&#10;0012984102\tAisyah Putri Azzahra\t1&#10;0012984103\tBilal Al-Ghifari\t2`}
+                  className="w-full p-3 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:border-emerald-600 dark:focus:border-emerald-500 resize-y shadow-inner bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600"
                 ></textarea>
               </div>
 
@@ -2243,67 +2521,67 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                 <div className="space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 font-mono">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border dark:border-slate-700 font-bold text-[11px]">
                         Total Baris: {parsedBatchStudents.length}
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold text-[11px]">
                         Siap Disimpan: {parsedBatchStudents.filter((p) => p.status === "valid").length}
                       </span>
                       {parsedBatchStudents.some((p) => p.status !== "valid") && (
-                        <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[11px]">
+                        <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-bold text-[11px]">
                           Bermasalah / Duplikat: {parsedBatchStudents.filter((p) => p.status !== "valid").length}
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-slate-400">
+                    <span className="text-[11px] text-slate-400 dark:text-slate-400">
                       Pratinjau Data Sebelum Disimpan
                     </span>
                   </div>
 
                   {/* Preview Table */}
-                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                  <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
                     <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-slate-100 sticky top-0 border-b border-slate-200">
+                      <thead className="bg-slate-100 dark:bg-slate-950 sticky top-0 border-b border-slate-200 dark:border-slate-800">
                         <tr>
-                          <th className="p-2 font-bold text-slate-600 w-10 text-center">No</th>
-                          <th className="p-2 font-bold text-slate-600">NISN</th>
-                          <th className="p-2 font-bold text-slate-600">Nama Siswa</th>
-                          <th className="p-2 font-bold text-slate-600">Kelas</th>
-                          <th className="p-2 font-bold text-slate-600 text-right">Status Validasi</th>
+                          <th className="p-2 font-bold text-slate-600 dark:text-slate-300 w-10 text-center">No</th>
+                          <th className="p-2 font-bold text-slate-600 dark:text-slate-300">NISN</th>
+                          <th className="p-2 font-bold text-slate-600 dark:text-slate-300">Nama Siswa</th>
+                          <th className="p-2 font-bold text-slate-600 dark:text-slate-300">Kelas</th>
+                          <th className="p-2 font-bold text-slate-600 dark:text-slate-300 text-right">Status Validasi</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-150">
+                      <tbody className="divide-y divide-slate-150 dark:divide-slate-800">
                         {parsedBatchStudents.map((item, idx) => (
                           <tr
                             key={idx}
                             className={
                               item.status === "valid"
-                                ? "bg-emerald-50/30 hover:bg-emerald-50/60"
-                                : "bg-red-50/30 hover:bg-red-50/60"
+                                ? "bg-emerald-50/30 dark:bg-emerald-950/20 hover:bg-emerald-50/60 dark:hover:bg-emerald-950/40"
+                                : "bg-red-50/30 dark:bg-red-950/20 hover:bg-red-50/60 dark:hover:bg-red-950/40"
                             }
                           >
-                            <td className="p-2 text-center text-slate-400 font-mono text-[11px]">
+                            <td className="p-2 text-center text-slate-400 dark:text-slate-500 font-mono text-[11px]">
                               {idx + 1}
                             </td>
-                            <td className="p-2 font-mono font-bold text-slate-700">
+                            <td className="p-2 font-mono font-bold text-slate-700 dark:text-slate-300">
                               {item.nisn || "-"}
                             </td>
-                            <td className="p-2 font-semibold text-slate-800 truncate max-w-[200px]">
+                            <td className="p-2 font-semibold text-slate-800 dark:text-slate-100 truncate max-w-[200px]">
                               {item.name}
                             </td>
                             <td className="p-2 font-mono">
-                              <span className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-bold text-[10px]">
+                              <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60 font-bold text-[10px]">
                                 Kelas {item.kelas}
                               </span>
                             </td>
                             <td className="p-2 text-right">
                               {item.status === "valid" ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Siap Disimpan
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 text-[10px] font-bold">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> Siap Disimpan
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
-                                  <AlertCircle className="w-3 h-3 text-amber-600" /> {item.message}
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 text-[10px] font-bold">
+                                  <AlertCircle className="w-3 h-3 text-amber-600 dark:text-amber-400" /> {item.message}
                                 </span>
                               )}
                             </td>
@@ -2316,7 +2594,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-3 border-t border-slate-200">
+              <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   disabled={isSubmittingBatch}
@@ -2324,7 +2602,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     setIsBatchStudentModalOpen(false);
                     setBatchResult(null);
                   }}
-                  className="w-full sm:w-auto px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
+                  className="w-full sm:w-auto px-4 py-2 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold rounded-lg cursor-pointer disabled:opacity-50"
                 >
                   Tutup
                 </button>
