@@ -18,17 +18,47 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: 'npm'
+
+      - name: Check Firebase Secrets Configuration
+        run: |
+          SA_SECRET="${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}"
+          FB_TOKEN="${{ secrets.FIREBASE_TOKEN }}"
+          if [ -z "$SA_SECRET" ] && [ -z "$FB_TOKEN" ]; then
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT belum dikonfigurasi di GitHub Secrets!"
+            echo "======================================================================================"
+            echo "PETUNJUK PERBAIKAN:"
+            echo "1. Buka Firebase Console: https://console.firebase.google.com/"
+            echo "2. Pilih project Anda (smart-sd-sts)"
+            echo "3. Masuk ke Project Settings (ikon gerigi) -> Tab 'Service accounts'"
+            echo "4. Klik 'Generate new private key' (akan mengunduh file .json)"
+            echo "5. Buka repository GitHub ini di browser -> Settings -> Secrets and variables -> Actions"
+            echo "6. Klik 'New repository secret'"
+            echo "   - Name: FIREBASE_SERVICE_ACCOUNT"
+            echo "   - Secret: (Paste seluruh isi file .json yang tadi diunduh)"
+            echo "7. Simpan, lalu jalankan ulang workflow ini (Re-run jobs)."
+            echo "======================================================================================"
+            exit 1
+          else
+            echo "✅ Kredensial Firebase terdeteksi."
+          fi
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci || npm install
 
       - name: Build Web App
         run: npm run build
 
-      - name: Deploy to Firebase Hosting
+      - name: Deploy to Firebase Hosting via Service Account
+        if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS != '' || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
           channelId: live
-          projectId: smartsts-12f15
+          projectId: smart-sd-sts
+
+      - name: Deploy to Firebase Hosting via Token (Fallback)
+        if: ${{ (secrets.FIREBASE_SERVICE_ACCOUNT == '' && secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS == '' && secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 == '') && secrets.FIREBASE_TOKEN != '' }}
+        run: npx firebase-tools deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}" --project smart-sd-sts
+

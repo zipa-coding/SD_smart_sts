@@ -65,4 +65,29 @@ npm run start
 
 ---
 
+## 🌐 Panduan Deploy ke Firebase Hosting (CI/CD GitHub Actions)
+
+Jika Anda menggunakan GitHub Actions untuk otomatis deploy ke Firebase Hosting:
+
+1. **Unduh Service Account Key dari Firebase Console**:
+   - Masuk ke [Firebase Console](https://console.firebase.google.com/) dan pilih project Anda (`smart-sd-sts`).
+   - Masuk ke **Project Settings** (ikon roda gigi) > Tab **Service accounts**.
+   - Klik tombol **Generate new private key** (Buat kunci privat baru) dan unduh file `.json`.
+   - Buka file JSON tersebut dan salin seluruh isinya.
+
+2. **Tambahkan Secret di GitHub Repository**:
+   - Buka repository Anda di GitHub.
+   - Pergi ke menu **Settings** > **Secrets and variables** > **Actions**.
+   - Klik **New repository secret**.
+   - Berikan nama secret: `FIREBASE_SERVICE_ACCOUNT` (atau `FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS`).
+   - Tempelkan isi file JSON tadi ke kolom Secret.
+   - Klik **Add secret**.
+
+3. **Deploy Otomatis**:
+   - Setiap kali melakukan `git push` ke branch `main` atau `master`, workflow GitHub Actions akan otomatis melakukan build dan deploy ke Firebase Hosting.
+   - Anda juga dapat memicunya secara manual dari tab **Actions** di GitHub (Run workflow).
+
+---
+
 *SD Islam Smart - Menuju Digitalisasi Pendidikan yang Terintegrasi, Mandiri, dan Unggul.*
+
