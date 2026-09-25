@@ -1,0 +1,6 @@
+{
+  "name": "Raport STS SMP Islam Smart",
+  "description": "Sistem Pengisian Raport Sumatif Tengah Semester (STS) SMP Islam Smart Terintegrasi dengan sinkronisasi multi-guru, deskripsi tujuan pembelajaran otomatis, serta ekspor cetak dan dokumen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

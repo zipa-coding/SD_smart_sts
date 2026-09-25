@@ -1,0 +1,165 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ==========================================
+    // 🛡️ HELPER & VALIDATION FUNCTIONS
+    // ==========================================
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isOptionalNumber(data, field, minVal, maxVal) {
+      return !(field in data) || (data[field] is number && data[field] >= minVal && data[field] <= maxVal);
+    }
+
+    function isOptionalList(data, field) {
+      return !(field in data) || data[field] is list;
+    }
+
+    // ==========================================
+    // 1. GURU & ADMIN (teachers / guru)
+    // ==========================================
+    function isValidTeacherDoc(data) {
+      return (
+        ( ('name' in data && isNonEmptyString(data.name, 200)) || ('nama' in data && isNonEmptyString(data.nama, 200)) )
+        && ( ('username' in data && isNonEmptyString(data.username, 100)) || ('user' in data && isNonEmptyString(data.user, 100)) )
+        && isOptionalString(data, 'password', 100)
+        && isOptionalString(data, 'pass', 100)
+        && isOptionalString(data, 'subject', 100)
+        && isOptionalString(data, 'mapel', 100)
+        && isOptionalString(data, 'kelas', 50)
+      );
+    }
+
+    match /teachers/{teacherId} {
+      allow read: if true;
+      allow create, update: if isValidId(teacherId) && isValidTeacherDoc(request.resource.data);
+      // Protect default primary admin from being accidentally deleted
+      allow delete: if isValidId(teacherId) && teacherId != 't1' && teacherId != 'admin';
+    }
+
+    match /guru/{guruId} {
+      allow read: if true;
+      allow create, update: if isValidId(guruId) && isValidTeacherDoc(request.resource.data);
+      allow delete: if isValidId(guruId) && guruId != 't1' && guruId != 'admin';
+    }
+
+    // ==========================================
+    // 2. DATA SISWA (students / siswa)
+    // ==========================================
+    function isValidStudentDoc(data) {
+      return (
+        ( ('name' in data && isNonEmptyString(data.name, 200)) || ('nama' in data && isNonEmptyString(data.nama, 200)) )
+        && ( ('nisn' in data && isNonEmptyString(data.nisn, 50)) || ('nis' in data && isNonEmptyString(data.nis, 50)) )
+        && isOptionalString(data, 'kelas', 50)
+        && isOptionalString(data, 'rombel', 50)
+      );
+    }
+
+    match /students/{studentId} {
+      allow read: if true;
+      allow create, update: if isValidId(studentId) && isValidStudentDoc(request.resource.data);
+      allow delete: if isValidId(studentId);
+    }
+
+    match /siswa/{siswaId} {
+      allow read: if true;
+      allow create, update: if isValidId(siswaId) && isValidStudentDoc(request.resource.data);
+      allow delete: if isValidId(siswaId);
+    }
+
+    // ==========================================
+    // 3. NILAI & TUJUAN PEMBELAJARAN (grades)
+    // ==========================================
+    function isValidGradeDoc(data) {
+      return (
+        'studentId' in data && isNonEmptyString(data.studentId, 128)
+        && 'subject' in data && isNonEmptyString(data.subject, 100)
+        && 'score' in data && data.score is number && data.score >= 0 && data.score <= 100
+        && isOptionalList(data, 'tps')
+        && isOptionalString(data, 'teacherName', 200)
+        && isOptionalString(data, 'usaha', 1000)
+        && isOptionalString(data, 'proses', 1000)
+        && isOptionalString(data, 'capaian', 1000)
+        && isOptionalString(data, 'deskripsi', 3000)
+        && isOptionalString(data, 'lastUpdatedAt', 100)
+      );
+    }
+
+    match /grades/{gradeId} {
+      allow read: if true;
+      allow create, update: if isValidId(gradeId) && isValidGradeDoc(request.resource.data);
+      allow delete: if isValidId(gradeId);
+    }
+
+    // ==========================================
+    // 4. CATATAN WALI KELAS & SIKAP (walikelas_notes)
+    // ==========================================
+    function isValidWaliNotes(data) {
+      return (
+        isOptionalNumber(data, 'sakit', 0, 365)
+        && isOptionalNumber(data, 'izin', 0, 365)
+        && isOptionalNumber(data, 'alpa', 0, 365)
+        && isOptionalString(data, 'catatan', 3000)
+        && isOptionalString(data, 'spiritualDeskripsi', 3000)
+        && isOptionalString(data, 'sosialDeskripsi', 3000)
+        && isOptionalList(data, 'ekskul')
+      );
+    }
+
+    match /walikelas_notes/{studentId} {
+      allow read: if true;
+      allow create, update: if isValidId(studentId) && isValidWaliNotes(request.resource.data);
+      allow delete: if isValidId(studentId);
+    }
+
+    // ==========================================
+    // 5. TEMPLATE TUJUAN PEMBELAJARAN (TP)
+    // ==========================================
+    match /tujuan_pembelajaran_templates/{subjectId} {
+      allow read: if true;
+      allow create, update: if isValidId(subjectId) && isOptionalList(request.resource.data, 'tps');
+      allow delete: if isValidId(subjectId);
+    }
+
+    // ==========================================
+    // 6. PENGATURAN & FORMAT RAPORT (settings)
+    // ==========================================
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update: if isValidId(settingId)
+        && isOptionalString(request.resource.data, 'principalName', 200)
+        && isOptionalString(request.resource.data, 'principalNip', 100);
+      // Deny deletion of configuration to prevent system lockout
+      allow delete: if false;
+    }
+
+    // ==========================================
+    // 7. EKSTRAKURIKULER (ekskul)
+    // ==========================================
+    match /ekskul/{ekskulId} {
+      allow read: if true;
+      allow create, update: if isValidId(ekskulId)
+        && isNonEmptyString(request.resource.data.name, 200);
+      allow delete: if isValidId(ekskulId);
+    }
+
+    // ==========================================
+    // ⛔ DEFAULT DENY: Tolak akses dokumen lain di luar skema
+    // ==========================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

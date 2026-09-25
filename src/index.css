@@ -1,0 +1,428 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,650;0,700;1,400&family=JetBrains+Mono:wght@450;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-brand-emerald: #0b6642;
+  --color-brand-mint: #eefaf4;
+}
+
+/* Custom Styles for Printing A4 Raport Grid */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+    font-family: 'Times New Roman', serif !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+
+  .print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+
+  /* Make sure background colors print correctly */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-page-break {
+    page-break-before: always;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid black !important;
+    padding: 6px 8px !important;
+  }
+}
+
+/* Scrollbar customizations */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(11, 102, 66, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(11, 102, 66, 0.4);
+}
+
+/* ==========================================================================
+   Universal High-Contrast, Professional Dark Mode Theme System
+   Inspired by Deep Midnight Navy (#080d1a / #0c1322 / #101c34)
+   ========================================================================== */
+.dark #applet-viewport {
+  background-color: #080d1a !important;
+  color: #f1f5f9 !important;
+}
+
+.dark #app-navbar {
+  background-color: #0c1322 !important;
+  border-color: #1a2948 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark #app-workspace {
+  background-color: #080d1a !important;
+}
+
+.dark #app-sidebar {
+  background-color: #0a0f1d !important;
+  border-right: 1px solid #1a2948 !important;
+}
+
+/* Card components */
+.dark .bg-white {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+  border-color: #1e2e4a !important;
+}
+
+/* Containers & subcards */
+.dark .bg-slate-50,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-100,
+.dark .bg-slate-50\/50,
+.dark .bg-gray-50,
+.dark .bg-gray-50\/50,
+.dark .bg-gray-50\/70 {
+  background-color: #0b1222 !important;
+  color: #e2e8f0 !important;
+  border-color: #1a2948 !important;
+}
+
+/* Borders */
+.dark .border-gray-100,
+.dark .border-gray-150,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark .border-slate-100,
+.dark .border-slate-150,
+.dark .border-slate-200,
+.dark .border-slate-250,
+.dark .border-slate-300 {
+  border-color: #1a2948 !important;
+}
+
+/* Text elements */
+.dark .text-slate-950,
+.dark .text-slate-900,
+.dark .text-slate-850,
+.dark .text-slate-805,
+.dark .text-slate-800,
+.dark .text-slate-750,
+.dark .text-slate-700,
+.dark .text-slate-650,
+.dark .text-slate-600,
+.dark .text-gray-950,
+.dark .text-gray-900,
+.dark .text-gray-850,
+.dark .text-gray-800,
+.dark .text-gray-750,
+.dark .text-gray-700,
+.dark .text-gray-650,
+.dark .text-gray-600,
+.dark .text-black {
+  color: #f8fafc !important;
+}
+
+.dark .text-slate-550,
+.dark .text-slate-500,
+.dark .text-slate-450,
+.dark .text-slate-400,
+.dark .text-gray-550,
+.dark .text-gray-500,
+.dark .text-gray-450,
+.dark .text-gray-400 {
+  color: #94a3b8 !important;
+}
+
+/* Green & Emerald text overrides (important for links, success messages, scores, grades) */
+.dark .text-emerald-950,
+.dark .text-emerald-900,
+.dark .text-emerald-850,
+.dark .text-emerald-800,
+.dark .text-emerald-700,
+.dark .text-emerald-600,
+.dark .text-emerald-500,
+.dark .text-green-950,
+.dark .text-green-900,
+.dark .text-green-800,
+.dark .text-green-700,
+.dark .text-green-600,
+.dark .text-green-500 {
+  color: #10b981 !important;
+}
+
+/* Warning & Amber text overrides */
+.dark .text-amber-955,
+.dark .text-amber-950,
+.dark .text-amber-900,
+.dark .text-amber-850,
+.dark .text-amber-805,
+.dark .text-amber-800,
+.dark .text-amber-700,
+.dark .text-amber-600,
+.dark .text-orange-955,
+.dark .text-orange-950,
+.dark .text-orange-900,
+.dark .text-orange-850,
+.dark .text-orange-800,
+.dark .text-orange-700 {
+  color: #f59e0b !important;
+}
+
+/* Info & Blue/Sky text overrides */
+.dark .text-sky-950,
+.dark .text-sky-900,
+.dark .text-sky-800,
+.dark .text-sky-750,
+.dark .text-sky-700,
+.dark .text-sky-650,
+.dark .text-blue-950,
+.dark .text-blue-900,
+.dark .text-blue-800,
+.dark .text-blue-700 {
+  color: #38bdf8 !important;
+}
+
+/* Danger & Red/Rose text overrides */
+.dark .text-red-950,
+.dark .text-red-900,
+.dark .text-red-800,
+.dark .text-red-700,
+.dark .text-red-650,
+.dark .text-red-600,
+.dark .text-red-500,
+.dark .text-rose-950,
+.dark .text-rose-900,
+.dark .text-rose-800,
+.dark .text-rose-700,
+.dark .text-rose-600 {
+  color: #f87171 !important;
+}
+
+/* Dynamic Forms & Controls */
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0b1222 !important;
+  color: #ffffff !important;
+  border-color: #1e2e4a !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25) !important;
+  outline: none;
+}
+
+/* Dynamic Table cells and text colors */
+.dark th {
+  background-color: #0e172a !important;
+  color: #ffffff !important;
+  border-color: #1a2948 !important;
+}
+
+.dark td {
+  border-color: #1a2948 !important;
+  color: #e2e8f0 !important;
+}
+
+.dark .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1a2948 !important;
+}
+
+/* Badges / statuses */
+.dark .bg-amber-50 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #fbbf24 !important;
+}
+
+.dark .bg-emerald-50 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #34d399 !important;
+}
+
+.dark .bg-rose-50 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(244, 63, 94, 0.3) !important;
+  color: #f87171 !important;
+}
+
+.dark .bg-sky-50,
+.dark .bg-blue-50 {
+  background-color: rgba(56, 189, 248, 0.12) !important;
+  border-color: rgba(56, 189, 248, 0.3) !important;
+  color: #38bdf8 !important;
+}
+
+/* Table/List Row Hover Effects in Dark Mode */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-slate-100:hover {
+  background-color: #131f38 !important;
+}
+
+/* ==========================================================================
+   Statically White Raport Sheet Preview Container - Even in Dark Mode
+   ========================================================================== */
+.dark #raport-sheet-print,
+.dark #raport-sheet-print * {
+  background-color: #ffffff !important;
+  color: #0d121f !important; /* Rich static slate-900 / slate-950 equivalent for text-black/slate-950 */
+}
+
+/* Specific border colors for elements within white raport card in dark mode */
+.dark #raport-sheet-print {
+  border-color: #d1d5db !important; /* border-gray-300 */
+}
+
+.dark #raport-sheet-print table,
+.dark #raport-sheet-print th,
+.dark #raport-sheet-print td,
+.dark #raport-sheet-print div {
+  border-color: #d1d5db !important; /* border-gray-300 */
+}
+
+/* Maintain proper custom font colors in the white sheet */
+.dark #raport-sheet-print .text-emerald-800 {
+  color: #065f46 !important; /* text-emerald-800 */
+}
+
+.dark #raport-sheet-print .text-gray-800 {
+  color: #1f2937 !important; /* text-gray-800 */
+}
+
+.dark #raport-sheet-print .text-gray-500 {
+  color: #6b7280 !important; /* text-gray-500 */
+}
+
+.dark #raport-sheet-print .text-gray-450 {
+  color: #9ca3af !important; /* text-gray-400 */
+}
+
+.dark #raport-sheet-print .text-gray-650 {
+  color: #4b5563 !important; /* text-gray-600 */
+}
+
+.dark #raport-sheet-print .bg-slate-50,
+.dark #raport-sheet-print th {
+  background-color: #f8fafc !important; /* bg-slate-50 style */
+}
+
+/* ==========================================================================
+   Dark Mode High-Contrast Overrides for Teacher & Wali Kelas Panels
+   - Changes green/emerald text to white (#ffffff) or bright yellow (#fbbf24) for perfect readability
+   ========================================================================== */
+.dark #teacher-panel .text-emerald-950,
+.dark #teacher-panel .text-emerald-900,
+.dark #teacher-panel .text-emerald-850,
+.dark #teacher-panel .text-emerald-800,
+.dark #teacher-panel .text-emerald-700,
+.dark #teacher-panel .text-emerald-600,
+.dark #teacher-panel .text-emerald-500,
+.dark #teacher-panel .text-green-950,
+.dark #teacher-panel .text-green-900,
+.dark #teacher-panel .text-green-800,
+.dark #teacher-panel .text-green-700,
+.dark #teacher-panel .text-green-600,
+.dark #teacher-panel .text-green-500,
+.dark #wali-kelas-panel .text-emerald-950,
+.dark #wali-kelas-panel .text-emerald-900,
+.dark #wali-kelas-panel .text-emerald-850,
+.dark #wali-kelas-panel .text-emerald-800,
+.dark #wali-kelas-panel .text-emerald-700,
+.dark #wali-kelas-panel .text-emerald-600,
+.dark #wali-kelas-panel .text-emerald-500,
+.dark #wali-kelas-panel .text-green-950,
+.dark #wali-kelas-panel .text-green-900,
+.dark #wali-kelas-panel .text-green-800,
+.dark #wali-kelas-panel .text-green-700,
+.dark #wali-kelas-panel .text-green-600,
+.dark #wali-kelas-panel .text-green-500 {
+  color: #ffffff !important; /* Extremely readable white text by default */
+}
+
+/* Specific yellow highlights for badges, selected list indicators, and success states */
+.dark #teacher-panel .bg-emerald-100,
+.dark #wali-kelas-panel .bg-emerald-100 {
+  background-color: rgba(251, 191, 36, 0.1) !important; /* Light amber/yellow background */
+  border-color: rgba(251, 191, 36, 0.35) !important;
+}
+
+.dark #teacher-panel .bg-emerald-100 *,
+.dark #wali-kelas-panel .bg-emerald-100 *,
+.dark #teacher-panel .bg-emerald-100,
+.dark #wali-kelas-panel .bg-emerald-100,
+.dark #teacher-panel .text-emerald-400,
+.dark #wali-kelas-panel .text-emerald-400 {
+  color: #fbbf24 !important; /* Bright high-contrast yellow */
+}
+
+/* Yellow status override for filled student cards in list */
+.dark #teacher-panel .bg-emerald-50\/70,
+.dark #wali-kelas-panel .bg-emerald-50\/70,
+.dark #teacher-panel .bg-emerald-50,
+.dark #wali-kelas-panel .bg-emerald-50,
+.dark #teacher-panel .bg-emerald-50\/40,
+.dark #wali-kelas-panel .bg-emerald-50\/40 {
+  background-color: rgba(251, 191, 36, 0.08) !important;
+  border-color: rgba(251, 191, 36, 0.3) !important;
+  color: #fbbf24 !important;
+}
+
+/* Ensure selected items' text/chevron/borders show in brilliant yellow/white */
+.dark #teacher-panel .border-emerald-450,
+.dark #teacher-panel .border-emerald-400,
+.dark #wali-kelas-panel .border-emerald-400 {
+  border-color: #fbbf24 !important;
+}
+
+.dark #teacher-panel .border-emerald-800,
+.dark #wali-kelas-panel .border-emerald-800 {
+  border-color: #fbbf24 !important;
+  color: #fbbf24 !important;
+}
+
+/* Match icons and active states, like Chevron, checkmarks or selesai status badge text */
+.dark #teacher-panel .text-emerald-800,
+.dark #wali-kelas-panel .text-emerald-800,
+.dark #teacher-panel .text-emerald-900,
+.dark #wali-kelas-panel .text-emerald-900,
+.dark #teacher-panel .text-emerald-950,
+.dark #wali-kelas-panel .text-emerald-950 {
+  color: #fbbf24 !important; /* Fallback highlight for critical green markers */
+}
+
+

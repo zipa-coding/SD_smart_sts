@@ -1,0 +1,128 @@
+{
+  "entities": {
+    "Teacher": {
+      "title": "Teacher",
+      "description": "Teacher and administrator accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "username": { "type": "string", "maxLength": 100 },
+        "password": { "type": "string", "maxLength": 100 },
+        "subject": { "type": "string", "maxLength": 100 },
+        "isWaliKelas": { "type": "boolean" },
+        "kelas": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["name", "username", "password", "subject"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Registered students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "nisn": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 200 },
+        "kelas": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["nisn", "name", "kelas"]
+    },
+    "Grade": {
+      "title": "Grade",
+      "description": "Subject grades and learning goal assessments for a student",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string", "maxLength": 128 },
+        "subject": { "type": "string", "maxLength": 100 },
+        "score": { "type": "number" },
+        "tps": { "type": "array" },
+        "teacherName": { "type": "string", "maxLength": 200 },
+        "usaha": { "type": "string", "maxLength": 500 },
+        "proses": { "type": "string", "maxLength": 500 },
+        "capaian": { "type": "string", "maxLength": 500 },
+        "deskripsi": { "type": "string", "maxLength": 2000 },
+        "lastUpdatedAt": { "type": "string", "maxLength": 100 }
+      },
+      "required": ["studentId", "subject", "score"]
+    },
+    "WaliKelasNotes": {
+      "title": "WaliKelasNotes",
+      "description": "Attendance, behavior, attitudes and extracurricular activities managed by homeroom teacher",
+      "type": "object",
+      "properties": {
+        "sakit": { "type": "number" },
+        "izin": { "type": "number" },
+        "alpa": { "type": "number" },
+        "catatan": { "type": "string", "maxLength": 2000 },
+        "spiritualUsaha": { "type": "string", "maxLength": 500 },
+        "spiritualProses": { "type": "string", "maxLength": 500 },
+        "spiritualCapaian": { "type": "string", "maxLength": 500 },
+        "spiritualDeskripsi": { "type": "string", "maxLength": 2000 },
+        "sosialUsaha": { "type": "string", "maxLength": 500 },
+        "sosialProses": { "type": "string", "maxLength": 500 },
+        "sosialCapaian": { "type": "string", "maxLength": 500 },
+        "sosialDeskripsi": { "type": "string", "maxLength": 2000 },
+        "ekskul": { "type": "array" }
+      }
+    },
+    "TujuanPembelajaranTemplate": {
+      "title": "TujuanPembelajaranTemplate",
+      "description": "Template objectives per subject",
+      "type": "object",
+      "properties": {
+        "tps": { "type": "array" }
+      }
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Application and raport card format configuration",
+      "type": "object",
+      "properties": {
+        "principalName": { "type": "string", "maxLength": 200 },
+        "principalNip": { "type": "string", "maxLength": 100 },
+        "format": { "type": "object" }
+      }
+    },
+    "Ekskul": {
+      "title": "Ekskul",
+      "description": "Master list of extracurricular activities",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 200 },
+        "type": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["name", "type"]
+    }
+  },
+  "firestore": {
+    "/teachers/{teacherId}": {
+      "schema": "Teacher",
+      "description": "Teachers, administrators, and homeroom teachers"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Student master records"
+    },
+    "/grades/{gradeId}": {
+      "schema": "Grade",
+      "description": "Student subject grades"
+    },
+    "/walikelas_notes/{studentId}": {
+      "schema": "WaliKelasNotes",
+      "description": "Homeroom teacher notes, attendance, character evaluation"
+    },
+    "/tujuan_pembelajaran_templates/{subject}": {
+      "schema": "TujuanPembelajaranTemplate",
+      "description": "Learning objective templates per subject"
+    },
+    "/settings/{settingId}": {
+      "schema": "Settings",
+      "description": "App and report card configuration"
+    },
+    "/ekskul/{ekskulId}": {
+      "schema": "Ekskul",
+      "description": "School extracurricular activities"
+    }
+  }
+}
