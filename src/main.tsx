@@ -294,6 +294,17 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           const res = await firebaseApi.deleteEkskul(id);
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
+
+        // 10. Firestore Sync & Stats
+        if (path === '/api/firestore-stats' && method === 'GET') {
+          const stats = await firebaseApi.getFirestoreStats();
+          return new Response(JSON.stringify(stats), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (path === '/api/firestore-sync' && method === 'POST') {
+          const result = await firebaseApi.syncAllToFirestore();
+          return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
       } catch (firebaseErr) {
         console.warn("Firestore call failed, falling back to local database storage:", firebaseErr);
       }

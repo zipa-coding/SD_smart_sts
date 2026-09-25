@@ -53,90 +53,222 @@ if (isFirebaseConfigured) {
     db = getFirestore(app);
     console.log("Firebase initialized successfully with cloud Firestore.");
     
-    // Check and seed templates in background only if completely empty
-    setTimeout(() => {
-      seedFirestoreIfEmpty().catch((err) => console.warn("Firestore seed skipped:", err));
-    }, 1500);
+    // Automatically populate Firestore in real-time immediately on boot if empty
+    seedFirestoreIfEmpty();
   } catch (error) {
     console.warn("Firebase initialization skipped or failed:", error);
   }
 }
 
-// Function to seed Firestore if completely empty
-async function seedFirestoreIfEmpty() {
+// Function to seed Firestore automatically in real-time if empty
+export async function seedFirestoreIfEmpty() {
   try {
     if (!db) return;
+    
+    // Check if teachers collection already exists
     const teachersRef = collection(db, "teachers");
-    const snapshot = await withTimeout(getDocs(teachersRef), 5000);
-    if (snapshot.empty) {
-      // Also check alternative 'guru' collection
-      const snapGuru = await withTimeout(getDocs(collection(db, "guru")), 3000).catch(() => ({ empty: true }));
-      if (!snapGuru.empty) {
-        console.log("Existing 'guru' collection detected, skipping default seed.");
-        return;
-      }
-
-      console.log("Firestore is empty. Seeding initial templates...");
-      
-      // 1. Seed Teachers
-      for (const t of dbDataAny.teachers) {
-        await setDoc(doc(db, "teachers", t.id), t);
-      }
-      
-      // 2. Seed Students
-      for (const s of dbDataAny.students) {
-        await setDoc(doc(db, "students", s.id), s);
-      }
-      
-      // 3. Seed Grades
-      for (const g of dbDataAny.grades) {
-        const id = `${g.studentId}_${g.subject.replace(/[^a-zA-Z0-9]/g, "_")}`;
-        await setDoc(doc(db, "grades", id), g);
-      }
-      
-      // 4. Seed Wali Kelas Notes
-      if (dbDataAny.walikelas_notes) {
-        for (const [studentId, note] of Object.entries(dbDataAny.walikelas_notes)) {
-          await setDoc(doc(db, "walikelas_notes", studentId), note as any);
-        }
-      }
-      
-      // 5. Seed TPs templates
-      if (dbDataAny.tujuan_pembelajaran_templates) {
-        for (const [subject, tps] of Object.entries(dbDataAny.tujuan_pembelajaran_templates)) {
-          await setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps });
-        }
-      }
-      
-      // 6. Seed Settings
-      if (dbDataAny.settings) {
-        await setDoc(doc(db, "settings", "app"), dbDataAny.settings);
-      }
-      
-      // 7. Seed Ekskul
-      const defaultEkskul = [
-        { "id": "e1", "name": "Pramuka", "type": "Wajib" },
-        { "id": "e2", "name": "Mentoring", "type": "Wajib" },
-        { "id": "e3", "name": "Futsal", "type": "Pilihan" },
-        { "id": "e4", "name": "Voli", "type": "Pilihan" },
-        { "id": "e5", "name": "Panahan", "type": "Pilihan" },
-        { "id": "e6", "name": "Study Club", "type": "Pilihan" }
-      ];
-      for (const e of defaultEkskul) {
-        await setDoc(doc(db, "ekskul", e.id), e);
-      }
-      
-      console.log("Firestore initialized with template data.");
-    } else {
-      console.log(`Firestore already has ${snapshot.size} teacher(s). Retaining all user database records.`);
+    const snapshot = await withTimeout(getDocs(teachersRef), 4000).catch(() => null);
+    
+    // If teachers collection exists and has documents, keep existing live data
+    if (snapshot && !snapshot.empty) {
+      console.log(`Firestore already has ${snapshot.size} teacher(s). Keeping live database records.`);
+      return;
     }
+
+    // Check alternative 'guru' collection
+    const snapGuru = await withTimeout(getDocs(collection(db, "guru")), 2500).catch(() => null);
+    if (snapGuru && !snapGuru.empty) {
+      console.log("Existing 'guru' collection detected, keeping live records.");
+      return;
+    }
+
+    console.log("⚡ Auto-seeding Cloud Firestore in real-time with initial website data...");
+    
+    // Get source data from localStorage if available, otherwise dbDataAny
+    let sourceData = dbDataAny;
+    try {
+      const rawLocal = localStorage.getItem("smart_sts_db");
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        if (parsed.teachers?.length || parsed.students?.length) {
+          sourceData = parsed;
+        }
+      }
+    } catch (e) {}
+
+    const writePromises: Promise<any>[] = [];
+
+    // 1. Teachers
+    for (const t of (sourceData.teachers || [])) {
+      writePromises.push(setDoc(doc(db, "teachers", t.id), t));
+    }
+
+    // 2. Students
+    for (const s of (sourceData.students || [])) {
+      writePromises.push(setDoc(doc(db, "students", s.id), s));
+    }
+
+    // 3. Grades
+    for (const g of (sourceData.grades || [])) {
+      const id = `${g.studentId}_${g.subject.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      writePromises.push(setDoc(doc(db, "grades", id), g));
+    }
+
+    // 4. Wali Kelas Notes
+    if (sourceData.walikelas_notes) {
+      for (const [studentId, note] of Object.entries(sourceData.walikelas_notes)) {
+        writePromises.push(setDoc(doc(db, "walikelas_notes", studentId), note as any));
+      }
+    }
+
+    // 5. TP Templates
+    if (sourceData.tujuan_pembelajaran_templates) {
+      for (const [subject, tps] of Object.entries(sourceData.tujuan_pembelajaran_templates)) {
+        writePromises.push(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps }));
+      }
+    }
+
+    // 6. Settings
+    if (sourceData.settings) {
+      writePromises.push(setDoc(doc(db, "settings", "app"), sourceData.settings));
+    }
+
+    // 7. Ekskul
+    const defaultEkskul = sourceData.ekskul || [
+      { id: "e1", name: "Pramuka", type: "Wajib" },
+      { id: "e2", name: "Mentoring", type: "Wajib" },
+      { id: "e3", name: "Futsal", type: "Pilihan" },
+      { id: "e4", name: "Voli", type: "Pilihan" },
+      { id: "e5", name: "Panahan", type: "Pilihan" },
+      { id: "e6", name: "Study Club", type: "Pilihan" }
+    ];
+    for (const e of defaultEkskul) {
+      writePromises.push(setDoc(doc(db, "ekskul", e.id), e));
+    }
+
+    // Execute in parallel batches
+    await Promise.allSettled(writePromises);
+    console.log(`✅ Cloud Firestore is now fully populated in real-time with ${writePromises.length} website records.`);
   } catch (error) {
-    console.warn("Background seed check skipped:", error);
+    console.warn("Auto-seed Firestore error:", error);
+  }
+}
+
+// Explicit sync function to populate/refresh Firestore from application dataset
+export async function syncAllToFirestore(onProgress?: (msg: string) => void): Promise<{ success: boolean; message: string; counts?: any }> {
+  if (!db) {
+    throw new Error("Firebase Firestore belum terhubung. Periksa konfigurasi Firebase.");
+  }
+
+  // Get source data from localStorage if available, otherwise dbDataAny
+  let sourceData = dbDataAny;
+  try {
+    const rawLocal = localStorage.getItem("smart_sts_db");
+    if (rawLocal) {
+      const parsed = JSON.parse(rawLocal);
+      if (parsed.teachers?.length || parsed.students?.length) {
+        sourceData = parsed;
+      }
+    }
+  } catch (e) {
+    // fallback to dbDataAny
+  }
+
+  const counts = { teachers: 0, students: 0, grades: 0, tps: 0, notes: 0, ekskul: 0, settings: 1 };
+
+  try {
+    onProgress?.("Menyinkronkan data Guru...");
+    for (const t of (sourceData.teachers || [])) {
+      await withTimeout(setDoc(doc(db, "teachers", t.id), t), 6000);
+      counts.teachers++;
+    }
+
+    onProgress?.(`Menyinkronkan ${sourceData.students?.length || 0} Siswa...`);
+    for (const s of (sourceData.students || [])) {
+      await withTimeout(setDoc(doc(db, "students", s.id), s), 6000);
+      counts.students++;
+    }
+
+    onProgress?.(`Menyinkronkan ${sourceData.grades?.length || 0} Nilai...`);
+    for (const g of (sourceData.grades || [])) {
+      const docId = `${g.studentId}_${g.subject.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      await withTimeout(setDoc(doc(db, "grades", docId), g), 6000);
+      counts.grades++;
+    }
+
+    onProgress?.("Menyinkronkan Catatan Wali Kelas...");
+    if (sourceData.walikelas_notes) {
+      for (const [studentId, note] of Object.entries(sourceData.walikelas_notes)) {
+        await withTimeout(setDoc(doc(db, "walikelas_notes", studentId), note as any), 6000);
+        counts.notes++;
+      }
+    }
+
+    onProgress?.("Menyinkronkan Template Tujuan Pembelajaran (TP)...");
+    if (sourceData.tujuan_pembelajaran_templates) {
+      for (const [subject, tps] of Object.entries(sourceData.tujuan_pembelajaran_templates)) {
+        await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps }), 6000);
+        counts.tps++;
+      }
+    }
+
+    onProgress?.("Menyinkronkan Pengaturan Sekolah...");
+    if (sourceData.settings) {
+      await withTimeout(setDoc(doc(db, "settings", "app"), sourceData.settings), 6000);
+    }
+
+    onProgress?.("Menyinkronkan Ekstrakurikuler...");
+    const ekskulList = sourceData.ekskul || [
+      { id: "e1", name: "Pramuka", type: "Wajib" },
+      { id: "e2", name: "Mentoring", type: "Wajib" },
+      { id: "e3", name: "Futsal", type: "Pilihan" },
+      { id: "e4", name: "Voli", type: "Pilihan" },
+      { id: "e5", name: "Panahan", type: "Pilihan" },
+      { id: "e6", name: "Study Club", type: "Pilihan" }
+    ];
+    for (const e of ekskulList) {
+      await withTimeout(setDoc(doc(db, "ekskul", e.id), e), 6000);
+      counts.ekskul++;
+    }
+
+    onProgress?.("Sinkronisasi Firestore berhasil!");
+    return {
+      success: true,
+      message: `Berhasil menyinkronkan: ${counts.teachers} Guru, ${counts.students} Siswa, ${counts.grades} Nilai, ${counts.tps} Template TP, dan Pengaturan ke Firestore.`,
+      counts
+    };
+  } catch (err: any) {
+    console.error("Gagal sinkronisasi Firestore:", err);
+    throw new Error(`Gagal menyinkronkan data ke Firestore: ${err.message || err}`);
+  }
+}
+
+export async function getFirestoreStats(): Promise<{ connected: boolean; teacherCount: number; studentCount: number; gradeCount: number; projectId: string }> {
+  if (!db) {
+    return { connected: false, teacherCount: 0, studentCount: 0, gradeCount: 0, projectId: firebaseConfig.projectId };
+  }
+  try {
+    const [tSnap, sSnap, gSnap] = await Promise.all([
+      withTimeout(getDocs(collection(db, "teachers")), 4000).catch(() => ({ size: 0 })),
+      withTimeout(getDocs(collection(db, "students")), 4000).catch(() => ({ size: 0 })),
+      withTimeout(getDocs(collection(db, "grades")), 4000).catch(() => ({ size: 0 }))
+    ]);
+    return {
+      connected: true,
+      teacherCount: tSnap.size,
+      studentCount: sSnap.size,
+      gradeCount: gSnap.size,
+      projectId: firebaseConfig.projectId
+    };
+  } catch (e) {
+    return { connected: false, teacherCount: 0, studentCount: 0, gradeCount: 0, projectId: firebaseConfig.projectId };
   }
 }
 
 // Firestore operations matching API routes
 export const firebaseApi = {
+  syncAllToFirestore,
+  getFirestoreStats,
   // 1. POST /api/login
   login: async (body: any) => {
     if (!db) return null;
