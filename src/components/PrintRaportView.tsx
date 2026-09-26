@@ -419,10 +419,14 @@ export default function PrintRaportView({
       const cahayaAmalLogoSrc =
         base64Logos.cahayaAmal || (await convertUrlToBase64(logoCahayaAmalUrl));
 
-      const watermarkBase64 = await getTransparentWatermarkBase64(
-        schoolLogoSrc,
-        format.watermarkOpacity || 0.05,
-      );
+      // Preload watermark image element for direct 2D canvas drawing
+      const wmImg = new Image();
+      wmImg.crossOrigin = "anonymous";
+      await new Promise<void>((resolve) => {
+        wmImg.onload = () => resolve();
+        wmImg.onerror = () => resolve();
+        wmImg.src = schoolLogoSrc;
+      });
 
       // Wrapper placed in document flow (invisible, no events) ensuring accurate rendering & layout calculation
       wrapper = document.createElement("div");
@@ -430,7 +434,7 @@ export default function PrintRaportView({
       wrapper.style.top = "0";
       wrapper.style.left = "0";
       wrapper.style.width = isA4 ? "720px" : "750px";
-      wrapper.style.background = "#ffffff";
+      wrapper.style.background = "transparent";
       wrapper.style.opacity = "0.01";
       wrapper.style.pointerEvents = "none";
       wrapper.style.zIndex = "-9999";
@@ -439,7 +443,7 @@ export default function PrintRaportView({
       pdfContainer.id = "pdf-container-root";
       pdfContainer.style.position = "relative";
       pdfContainer.style.width = isA4 ? "720px" : "750px";
-      pdfContainer.style.background = "#ffffff";
+      pdfContainer.style.background = "transparent";
       pdfContainer.style.padding = isA4 ? "4px 0px" : "5px 0px";
       pdfContainer.style.boxSizing = "border-box";
 
@@ -452,7 +456,7 @@ export default function PrintRaportView({
             font-size: ${isA4 ? "9.5pt" : "11pt"}; 
             line-height: ${isA4 ? "1.25" : "1.4"}; 
             color: #000000 !important; 
-            background-color: #ffffff; 
+            background-color: transparent !important; 
             position: relative;
           }
           .pdf-wrapper * {
@@ -460,10 +464,10 @@ export default function PrintRaportView({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .pdf-meta-table { width: 100%; border: none; margin-bottom: ${isA4 ? "3px" : "5px"}; font-size: ${isA4 ? "9pt" : "10pt"}; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; }
-          .pdf-meta-table td { padding: ${isA4 ? "0.5px 2px" : "1px 3px"}; vertical-align: middle; color: #000000 !important; }
-          .pdf-box-table { width: 100%; border-collapse: collapse; margin-bottom: ${isA4 ? "2.5px" : "4.5px"}; border: 1.2px solid black; background-color: #ffffff; margin-left: auto !important; margin-right: auto !important; }
-          .pdf-box-table td { border: 1px solid black; padding: ${isA4 ? "1px 3px" : "2px 4px"}; vertical-align: middle; font-size: ${isA4 ? "8.5pt" : "9.5pt"}; color: #000000 !important; }
+          .pdf-meta-table { width: 100%; border: none; margin-bottom: ${isA4 ? "3px" : "5px"}; font-size: ${isA4 ? "9pt" : "10pt"}; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; background-color: transparent !important; }
+          .pdf-meta-table td { padding: ${isA4 ? "0.5px 2px" : "1px 3px"}; vertical-align: middle; color: #000000 !important; background-color: transparent !important; }
+          .pdf-box-table { width: 100%; border-collapse: collapse; margin-bottom: ${isA4 ? "2.5px" : "4.5px"}; border: 1.2px solid black; background-color: transparent !important; margin-left: auto !important; margin-right: auto !important; }
+          .pdf-box-table td { border: 1px solid black; padding: ${isA4 ? "1px 3px" : "2px 4px"}; vertical-align: middle; font-size: ${isA4 ? "8.5pt" : "9.5pt"}; color: #000000 !important; background-color: transparent !important; }
           .pdf-box-table td[style*="font-size: 8.5pt"] {
             vertical-align: top !important;
             padding-top: ${isA4 ? "1px" : "2px"} !important;
@@ -900,12 +904,12 @@ export default function PrintRaportView({
       // Brief pause to ensure typography & layout calculations are finalized
       await new Promise((res) => setTimeout(res, 80));
 
-      // 2. Render container to a crisp canvas with allowTaint: false (pure untainted canvas!)
+      // 2. Render container to a crisp canvas with allowTaint: false (pure untainted canvas with transparent background!)
       const canvas = await html2canvas(pdfContainer, {
         scale: 2.0, // High-DPI resolution, super crisp
         useCORS: true,
         allowTaint: false,
-        backgroundColor: "#ffffff",
+        backgroundColor: null,
         logging: false,
         windowWidth: isA4 ? 720 : 750,
         scrollX: 0,
@@ -1049,8 +1053,40 @@ export default function PrintRaportView({
 
         const sliceCtx = sliceCanvas.getContext("2d");
         if (sliceCtx) {
+          // 1. Draw solid white background on the slice canvas
           sliceCtx.fillStyle = "#ffffff";
           sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+
+          // 2. Draw crisp watermark in the center of the page slice
+          if (wmImg.complete && wmImg.naturalWidth > 0) {
+            sliceCtx.save();
+            const targetOpacity =
+              typeof format.watermarkOpacity === "number" && format.watermarkOpacity > 0
+                ? format.watermarkOpacity
+                : 0.08;
+            sliceCtx.globalAlpha = targetOpacity;
+
+            const userSize = format.watermarkSize || (isA4 ? 380 : 440);
+            const scale = canvas.width / (isA4 ? 720 : 750);
+            const wmPixelSize = userSize * scale;
+
+            const imgAspect = wmImg.naturalWidth / wmImg.naturalHeight;
+            let drawW = wmPixelSize;
+            let drawH = wmPixelSize;
+            if (imgAspect > 1) {
+              drawH = wmPixelSize / imgAspect;
+            } else {
+              drawW = wmPixelSize * imgAspect;
+            }
+
+            const wx = (sliceCanvas.width - drawW) / 2;
+            const wy = (sliceCanvas.height - drawH) / 2;
+
+            sliceCtx.drawImage(wmImg, wx, wy, drawW, drawH);
+            sliceCtx.restore();
+          }
+
+          // 3. Draw page text and table content on top of watermark
           sliceCtx.drawImage(
             canvas,
             0,
@@ -1066,30 +1102,7 @@ export default function PrintRaportView({
 
         const sliceImgHeightMm = (sliceHeight * printWidth) / canvas.width;
 
-        // Draw Watermark centered on each page
-        if (watermarkBase64) {
-          const sizeInMm = isA4
-            ? ((format.watermarkSize || 400) / 440) * 125
-            : ((format.watermarkSize || 440) / 440) * 140;
-          const wx = (pageWidth - sizeInMm) / 2;
-          const wy = (pageHeight - sizeInMm) / 2;
-          try {
-            pdf.addImage(
-              watermarkBase64,
-              "PNG",
-              wx,
-              wy,
-              sizeInMm,
-              sizeInMm,
-              undefined,
-              "FAST",
-            );
-          } catch (wmErr) {
-            console.warn("Watermark render skipped:", wmErr);
-          }
-        }
-
-        // Draw Page Content Slice
+        // Draw the complete combined page slice into PDF
         const sliceDataUrl = sliceCanvas.toDataURL("image/jpeg", 0.95);
         pdf.addImage(
           sliceDataUrl,
@@ -1098,6 +1111,8 @@ export default function PrintRaportView({
           marginTop,
           printWidth,
           sliceImgHeightMm,
+          undefined,
+          "FAST",
         );
 
         // Professional Page Numbering in Footer
@@ -1961,13 +1976,13 @@ export default function PrintRaportView({
           style={{ pointerEvents: "none", zIndex: 0 }}
         >
           <img
-            src={logoUrl}
+            src={base64Logos.school || logoUrl}
             alt="Watermark"
-            className="object-contain select-none transition-all duration-300"
+            className="object-contain select-none transition-all duration-300 pointer-events-none"
             style={{
-              width: `${format.paperSize === "F4" ? (format.watermarkSize || 440) : Math.min(format.watermarkSize || 360, 360)}px`,
-              height: `${format.paperSize === "F4" ? (format.watermarkSize || 440) : Math.min(format.watermarkSize || 360, 360)}px`,
-              opacity: format.watermarkOpacity || 0.05,
+              width: `${format.watermarkSize || (format.paperSize === "F4" ? 440 : 380)}px`,
+              height: `${format.watermarkSize || (format.paperSize === "F4" ? 440 : 380)}px`,
+              opacity: typeof format.watermarkOpacity === "number" && format.watermarkOpacity > 0 ? format.watermarkOpacity : 0.08,
               WebkitPrintColorAdjust: "exact",
               printColorAdjust: "exact",
             }}

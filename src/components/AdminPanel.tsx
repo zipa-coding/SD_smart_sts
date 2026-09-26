@@ -2676,11 +2676,13 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                     }
                     className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#0c1424] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-emerald-500 font-medium"
                   >
-                    <option value={0.03}>Sangat Halus (3%)</option>
-                    <option value={0.05}>Tipis (5% - Direkomendasikan)</option>
-                    <option value={0.075}>Standar (7.5%)</option>
-                    <option value={0.1}>Sedang (10%)</option>
-                    <option value={0.15}>Tebal (15%)</option>
+                    <option value={0.04}>Sangat Lembut (4%)</option>
+                    <option value={0.06}>Lembut (6%)</option>
+                    <option value={0.08}>Standar Jelas (8% - Direkomendasikan)</option>
+                    <option value={0.10}>Jelas (10%)</option>
+                    <option value={0.13}>Lebih Jelas (13%)</option>
+                    <option value={0.16}>Tebal (16%)</option>
+                    <option value={0.20}>Sangat Tebal (20%)</option>
                   </select>
                 </div>
               </div>
