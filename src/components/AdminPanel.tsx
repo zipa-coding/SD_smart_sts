@@ -33,9 +33,10 @@ import {
 
 interface AdminPanelProps {
   onRefreshTrigger: () => void;
+  refreshTrigger?: number;
 }
 
-export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
+export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPanelProps) {
   // Navigation tabs
   const [activeTab, setActiveTab] = useState<
     "teachers" | "students" | "subjects" | "tps" | "settings" | "ekskul"
@@ -757,7 +758,7 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
 
   useEffect(() => {
     fetchAllData();
-  }, [activeTab]);
+  }, [activeTab, refreshTrigger]);
 
   const showSuccess = (msg: string) => {
     setSuccessMsg(msg);

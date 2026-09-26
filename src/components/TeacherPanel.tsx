@@ -15,11 +15,13 @@ import {
 interface TeacherPanelProps {
   user: Teacher;
   onRefreshTrigger: () => void;
+  refreshTrigger?: number;
 }
 
 export default function TeacherPanel({
   user,
   onRefreshTrigger,
+  refreshTrigger,
 }: TeacherPanelProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
@@ -113,7 +115,7 @@ export default function TeacherPanel({
 
   useEffect(() => {
     fetchData();
-  }, [selectedClass, user.subject]);
+  }, [selectedClass, user.subject, refreshTrigger]);
 
   // Helper function to generate narrative description based on Kurikulum Merdeka standards
   const generateNarrativeDescription = (

@@ -50,6 +50,56 @@ export default function App() {
     localStorage.setItem("smp_islam_smart_theme", "dark");
     document.body.classList.add("dark");
     document.documentElement.classList.add("dark");
+    
+    // Clear legacy offline cache so all devices immediately sync to clean live server database
+    try {
+      localStorage.removeItem("smart_sts_db");
+      localStorage.removeItem("smart_sts_deleted_students");
+      localStorage.removeItem("smart_sts_deleted_teachers");
+    } catch (e) {}
+  }, []);
+
+  // Real-time Multi-Device synchronization hook
+  useEffect(() => {
+    let lastVersion = 0;
+
+    const checkServerSync = async () => {
+      try {
+        const res = await fetch("/api/db-version", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.version) {
+            if (lastVersion !== 0 && data.version !== lastVersion) {
+              // A change occurred from another device!
+              setRefreshTrigger((prev) => prev + 1);
+            }
+            lastVersion = data.version;
+          }
+        }
+      } catch (e) {
+        // network silent
+      }
+    };
+
+    // Initial check
+    checkServerSync();
+
+    // Check periodically every 3 seconds for instant real-time sync across laptops/phones
+    const syncInterval = setInterval(checkServerSync, 3000);
+
+    // Also check immediately when window gets focus or user switches tab
+    const handleFocusSync = () => {
+      checkServerSync();
+    };
+
+    window.addEventListener("focus", handleFocusSync);
+    document.addEventListener("visibilitychange", handleFocusSync);
+
+    return () => {
+      clearInterval(syncInterval);
+      window.removeEventListener("focus", handleFocusSync);
+      document.removeEventListener("visibilitychange", handleFocusSync);
+    };
   }, []);
 
   // Track tab visits for fast DOM persistence
@@ -526,10 +576,15 @@ export default function App() {
                     <TeacherPanel
                       user={{ id: "admin_tester", name: "Pak Admin (Penguji)", username: "admin", subject: "Informatika", isWaliKelas: false, kelas: "" }}
                       onRefreshTrigger={triggerProgressRefresh}
+                      refreshTrigger={refreshTrigger}
                     />
                   </div>
                 ) : (
-                  <TeacherPanel user={currentUser} onRefreshTrigger={triggerProgressRefresh} />
+                  <TeacherPanel
+                    user={currentUser}
+                    onRefreshTrigger={triggerProgressRefresh}
+                    refreshTrigger={refreshTrigger}
+                  />
                 )}
               </div>
             )}
@@ -537,14 +592,21 @@ export default function App() {
             {visitedTabs["walikelas_panel"] && (
               <div className={activeTab === "walikelas_panel" ? "block animate-fade-in" : "hidden"}>
                 {/* Wali Kelas dashboard integration */}
-                <WaliKelasPanel user={currentUser} onRefreshTrigger={triggerProgressRefresh} />
+                <WaliKelasPanel
+                  user={currentUser}
+                  onRefreshTrigger={triggerProgressRefresh}
+                  refreshTrigger={refreshTrigger}
+                />
               </div>
             )}
 
             {visitedTabs["admin_panel"] && isSysAdmin && (
               <div className={activeTab === "admin_panel" ? "block animate-fade-in" : "hidden"}>
                 {/* Admin Database control hub */}
-                <AdminPanel onRefreshTrigger={triggerProgressRefresh} />
+                <AdminPanel
+                  onRefreshTrigger={triggerProgressRefresh}
+                  refreshTrigger={refreshTrigger}
+                />
               </div>
             )}
           </div>

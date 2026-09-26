@@ -14,6 +14,7 @@ const DB_PATH = path.join(process.cwd(), "src", "data", "db.json");
 // In-memory database cache for sub-millisecond responses
 let memoryDB: any = null;
 let saveDebounceTimer: NodeJS.Timeout | null = null;
+let dbVersion = Date.now();
 
 // Helper to read database with memory caching
 async function readDB() {
@@ -40,6 +41,7 @@ async function readDB() {
 // Helper to write database with background async disk sync
 async function writeDB(data: any) {
   memoryDB = data;
+  dbVersion = Date.now();
   try {
     await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
   } catch (err) {
@@ -49,6 +51,7 @@ async function writeDB(data: any) {
 
 // Background sync helper that doesn't block HTTP responses
 function asyncPersistDB() {
+  dbVersion = Date.now();
   if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
   saveDebounceTimer = setTimeout(async () => {
     if (memoryDB) {
@@ -62,6 +65,15 @@ function asyncPersistDB() {
 }
 
 // ==================== API ENDPOINTS ====================
+
+// Real-time Database Version Check for Multi-Device Auto-Sync
+app.get("/api/db-version", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.json({
+    version: dbVersion,
+    timestamp: Date.now(),
+  });
+});
 
 // 1. Auth Endpoint
 app.post("/api/login", async (req, res) => {
@@ -608,7 +620,7 @@ app.get("/api/settings", async (req, res) => {
     semesterName: "Ganjil",
     tahunPelajaran: "2026/2027",
     fontSize: "11pt",
-    showLogo: true,
+    showLogo: false,
     showSpiritual: true,
     showSosial: true,
     showAttendance: true,

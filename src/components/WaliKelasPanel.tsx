@@ -20,9 +20,10 @@ import PrintRaportView from "./PrintRaportView";
 interface WaliKelasPanelProps {
   user: Teacher;
   onRefreshTrigger: () => void;
+  refreshTrigger?: number;
 }
 
-export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPanelProps) {
+export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger }: WaliKelasPanelProps) {
   // Default Mata Pelajaran lists
   const defaultSubjects = [
     "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS", "Bahasa Inggris", "PJOK", "Prakarya", "Informatika",
@@ -169,7 +170,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger }: WaliKelasPane
 
   useEffect(() => {
     fetchData();
-  }, [selectedClass]);
+  }, [selectedClass, refreshTrigger]);
 
   const handleStudentSelect = (student: Student, notesMap = allClassNotes, eksList = activeEkskulList) => {
     setSelectedStudent(student);
