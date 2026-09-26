@@ -2233,6 +2233,7 @@
       "fontFamily": "Times New Roman",
       "paperSize": "A4",
       "tanggalRaport": "17 Juni 2026",
+      "signaturePosition": "kanan",
       "watermarkSize": 440,
       "watermarkOpacity": 0.05
     }

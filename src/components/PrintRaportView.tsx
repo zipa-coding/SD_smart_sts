@@ -31,10 +31,8 @@ export default function PrintRaportView({
   waliKelas,
   onBack,
 }: PrintRaportViewProps) {
-  // Use React state to toggle between screen light and dark modes
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem("smp_islam_smart_theme") === "dark";
-  });
+  // Lock to dark mode per user requirement
+  const darkMode = true;
 
   // Dynamic state for Headmaster/Principal info & Raport format configurations
   const [principal, setPrincipal] = useState({
@@ -54,6 +52,7 @@ export default function PrintRaportView({
     fontFamily: "Times New Roman",
     paperSize: "A4",
     tanggalRaport: "17 Juni 2026",
+    signaturePosition: "kanan" as "kanan" | "tengah" | "kiri",
     watermarkSize: 440,
     watermarkOpacity: 0.05,
   });
@@ -113,6 +112,9 @@ export default function PrintRaportView({
             fontFamily: data.format.fontFamily || "Times New Roman",
             paperSize: data.format.paperSize || "A4",
             tanggalRaport: data.format.tanggalRaport || "17 Juni 2026",
+            signaturePosition:
+              (data.format.signaturePosition as "kanan" | "tengah" | "kiri") ||
+              "kanan",
             watermarkSize:
               data.format.watermarkSize !== undefined
                 ? Number(data.format.watermarkSize)
@@ -126,19 +128,6 @@ export default function PrintRaportView({
       })
       .catch((err) => console.error("Error loading principal settings:", err));
   }, []);
-
-  const handleToggleDarkMode = () => {
-    const nextDark = !darkMode;
-    setDarkMode(nextDark);
-    localStorage.setItem("smp_islam_smart_theme", nextDark ? "dark" : "light");
-    if (nextDark) {
-      document.body.classList.add("dark");
-      document.documentElement.classList.add("dark");
-    } else {
-      document.body.classList.remove("dark");
-      document.documentElement.classList.remove("dark");
-    }
-  };
 
   // Categorized Subject lists in Kurikulum Merdeka preferred order
   const umumSubjects = [
@@ -402,8 +391,8 @@ export default function PrintRaportView({
             padding-bottom: 5.5px !important;
           }
           .pdf-heading { margin: 15px 0 9px 0; text-transform: uppercase; font-size: 9.5pt; font-weight: bold; color: #000000 !important; page-break-after: avoid !important; break-after: avoid !important; }
-          .pdf-signature-table { width: 100%; border: none; margin-top: 15px; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; }
-          .pdf-signature-table td { text-align: center; vertical-align: middle; color: #000000 !important; }
+          .pdf-signature-table { width: 100% !important; border: none; margin-top: 18px; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; table-layout: fixed !important; }
+          .pdf-signature-table td { text-align: center; vertical-align: top; color: #000000 !important; }
         </style>
         <div class="pdf-wrapper">
           <!-- Watermark is dynamically injected on every page in jsPDF to ensure perfect centering and replication -->
@@ -751,24 +740,56 @@ export default function PrintRaportView({
 
           <br />
 
-          <table class="pdf-signature-table" style="page-break-inside: avoid;">
+          <table class="pdf-signature-table" style="page-break-inside: avoid; width: 100% !important; table-layout: fixed !important; border-collapse: collapse;">
+            <colgroup>
+              <col style="width: 50%;" />
+              <col style="width: 50%;" />
+            </colgroup>
             <tr>
-              <td style="width: 50%; padding-bottom: 50px;">
+              <td style="width: 50%; padding-bottom: 50px; text-align: center; vertical-align: top;">
                 <p style="margin: 0 0 55px 0;">&nbsp;<br />Orang Tua/Wali Siswa</p>
                 <p style="margin: 0; font-weight: bold; font-size: 11pt;">……………………………</p>
               </td>
-              <td style="width: 50%; padding-bottom: 50px;">
+              <td style="width: 50%; padding-bottom: 50px; text-align: center; vertical-align: top;">
                 <p style="margin: 0 0 55px 0;">Pangkal Pinang, ${format.tanggalRaport || "17 Juni 2026"}<br />Wali Kelas Kelas ${student.kelas}</p>
                 <p style="margin: 0; font-weight: bold; font-size: 11pt;">${waliKelas ? waliKelas.name : "……………………………"}</p>
               </td>
             </tr>
+            ${
+              format.signaturePosition === "kiri"
+                ? `
             <tr>
-              <td colspan="2" style="text-align: center; padding-top: 15px;">
+              <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top;">
+                <p style="margin: 0 0 55px 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
+                <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
+                <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555;">NIP. ${principal.nip}</p>
+              </td>
+              <td style="width: 50%; text-align: center; vertical-align: top;">&nbsp;</td>
+            </tr>
+            `
+                : format.signaturePosition === "tengah"
+                ? `
+            <tr>
+              <td colspan="2" style="width: 100%; text-align: center; padding-top: 15px; vertical-align: top;">
+                <div style="display: inline-block; text-align: center; margin: 0 auto;">
+                  <p style="margin: 0 0 55px 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
+                  <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
+                  <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555;">NIP. ${principal.nip}</p>
+                </div>
+              </td>
+            </tr>
+            `
+                : `
+            <tr>
+              <td style="width: 50%; text-align: center; vertical-align: top;">&nbsp;</td>
+              <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top;">
                 <p style="margin: 0 0 55px 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
                 <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
                 <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555;">NIP. ${principal.nip}</p>
               </td>
             </tr>
+            `
+            }
           </table>
           </div>
         </div>
@@ -1367,7 +1388,11 @@ export default function PrintRaportView({
 
       <br />
 
-      <table style="width: 100%; border: none; margin-top: 25px; margin-left: auto; margin-right: auto; font-family: 'Times New Roman', Times, serif;">
+      <table style="width: 100%; border: none; margin-top: 25px; margin-left: auto; margin-right: auto; font-family: 'Times New Roman', Times, serif; border-collapse: collapse; table-layout: fixed;">
+        <colgroup>
+          <col style="width: 50%;" />
+          <col style="width: 50%;" />
+        </colgroup>
         <tr>
           <td style="width: 50%; padding-bottom: 50px; text-align: center; vertical-align: top; border: none; color: #000000;">
             <p style="margin: 0 0 50px 0; font-size: 11pt;">&nbsp;<br />Orang Tua/Wali Siswa</p>
@@ -1378,13 +1403,39 @@ export default function PrintRaportView({
             <p style="margin: 0; font-weight: bold; font-size: 11pt;">${waliKelas ? waliKelas.name : "……………………………"}</p>
           </td>
         </tr>
+        ${
+          format.signaturePosition === "kiri"
+            ? `
         <tr>
-          <td colspan="2" style="text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
+          <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
+            <p style="margin: 0 0 50px 0; line-height: 1.3; font-size: 11pt;">Mengetahui,<br />Kepala Sekolah</p>
+            <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
+            <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555555;">NIP. ${principal.nip}</p>
+          </td>
+          <td style="width: 50%; text-align: center; vertical-align: top; border: none; color: #000000;">&nbsp;</td>
+        </tr>
+        `
+            : format.signaturePosition === "tengah"
+            ? `
+        <tr>
+          <td colspan="2" style="width: 100%; text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
             <p style="margin: 0 0 50px 0; line-height: 1.3; font-size: 11pt;">Mengetahui,<br />Kepala Sekolah</p>
             <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
             <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555555;">NIP. ${principal.nip}</p>
           </td>
         </tr>
+        `
+            : `
+        <tr>
+          <td style="width: 50%; text-align: center; vertical-align: top; border: none; color: #000000;">&nbsp;</td>
+          <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
+            <p style="margin: 0 0 50px 0; line-height: 1.3; font-size: 11pt;">Mengetahui,<br />Kepala Sekolah</p>
+            <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
+            <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555555;">NIP. ${principal.nip}</p>
+          </td>
+        </tr>
+        `
+        }
       </table>
     `;
 
@@ -1554,25 +1605,49 @@ export default function PrintRaportView({
               </select>
             </div>
 
-            {/* Light/Dark Mode Switcher */}
-            <button
-              id="theme-toggle-view"
-              onClick={handleToggleDarkMode}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer border shadow-2xs ${darkMode ? "bg-amber-500 hover:bg-amber-600 text-slate-950 border-amber-600" : "bg-slate-800 hover:bg-slate-900 text-white border-slate-950"}`}
-              title="Ganti Mode Tampilan"
+            {/* Signature Position Selector */}
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`text-[11px] font-bold uppercase tracking-wider ${darkMode ? "text-slate-400" : "text-gray-500"}`}
+              >
+                Tanda Tangan:
+              </span>
+              <select
+                id="signature-position-select-view"
+                value={format.signaturePosition || "kanan"}
+                onChange={(e) => {
+                  const newPos = e.target.value as "kanan" | "tengah" | "kiri";
+                  setFormat((prev) => ({ ...prev, signaturePosition: newPos }));
+                  // Persist to the settings database so it's remembered
+                  fetch("/api/settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      principalName: principal.name,
+                      principalNip: principal.nip,
+                      format: { ...format, signaturePosition: newPos },
+                    }),
+                  }).catch((err) =>
+                    console.error("Error saving settings:", err),
+                  );
+                }}
+                className={`text-xs border rounded-lg p-1.5 font-bold focus:outline-none focus:ring-1 cursor-pointer ${darkMode ? "bg-slate-700 border-slate-600 text-white focus:ring-emerald-500" : "bg-white border-gray-300 text-slate-800 focus:ring-emerald-500"}`}
+                title="Atur posisi tanda tangan Kepala Sekolah: Kanan (di bawah Wali Kelas), Tengah, atau Kiri"
+              >
+                <option value="kanan">Kanan (Di Bawah Wali Kelas)</option>
+                <option value="tengah">Tengah (Di Tengah Lembar)</option>
+                <option value="kiri">Kiri (Di Bawah Orang Tua)</option>
+              </select>
+            </div>
+
+            {/* Dark Mode Indicator Badge */}
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 bg-slate-800 text-amber-400 select-none shadow-2xs"
+              title="Aplikasi berjalan dalam Mode Gelap Resmi"
             >
-              {darkMode ? (
-                <>
-                  <Sun className="w-3.5 h-3.5 text-slate-950" />
-                  <span>Mode Terang</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3.5 h-3.5 text-white" />
-                  <span>Mode Gelap</span>
-                </>
-              )}
-            </button>
+              <Moon className="w-3.5 h-3.5 fill-amber-400/20 text-amber-400" />
+              <span>Dark Mode</span>
+            </div>
           </div>
         </div>
 
@@ -2325,22 +2400,58 @@ export default function PrintRaportView({
               </div>
             </div>
 
-            {/* Underneath: Kepala sekolah centring */}
-            <div className="text-center pt-4">
-              <div className="max-w-md mx-auto justify-center text-black">
-                <p className="mb-16 uppercase font-bold tracking-wide text-black">
-                  Mengetahui,
-                  <br />
-                  Kepala Sekolah
-                </p>
-                <div className="font-bold inline-block text-center text-black">
-                  {principal.name}
+            {/* Underneath: Kepala sekolah based on signaturePosition */}
+            {format.signaturePosition === "kiri" ? (
+              <div className="grid grid-cols-2 text-center gap-4 pt-4">
+                <div>
+                  <p className="mb-16 uppercase font-bold tracking-wide text-black">
+                    Mengetahui,
+                    <br />
+                    Kepala Sekolah
+                  </p>
+                  <div className="font-bold inline-block text-center text-black">
+                    {principal.name}
+                  </div>
+                  <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
+                    NIP. {principal.nip}
+                  </p>
                 </div>
-                <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
-                  NIP. {principal.nip}
-                </p>
+                <div>{/* Empty column on right */}</div>
               </div>
-            </div>
+            ) : format.signaturePosition === "tengah" ? (
+              <div className="text-center pt-4">
+                <div className="max-w-md mx-auto justify-center text-black">
+                  <p className="mb-16 uppercase font-bold tracking-wide text-black">
+                    Mengetahui,
+                    <br />
+                    Kepala Sekolah
+                  </p>
+                  <div className="font-bold inline-block text-center text-black">
+                    {principal.name}
+                  </div>
+                  <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
+                    NIP. {principal.nip}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 text-center gap-4 pt-4">
+                <div>{/* Empty column on left */}</div>
+                <div>
+                  <p className="mb-16 uppercase font-bold tracking-wide text-black">
+                    Mengetahui,
+                    <br />
+                    Kepala Sekolah
+                  </p>
+                  <div className="font-bold inline-block text-center text-black">
+                    {principal.name}
+                  </div>
+                  <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
+                    NIP. {principal.nip}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -933,17 +933,31 @@ export const firebaseApi = {
         showCatatan: true,
         fontFamily: "Times New Roman",
         paperSize: "A4",
-        tanggalRaport: "17 Juni 2026"
+        tanggalRaport: "17 Juni 2026",
+        signaturePosition: "kanan",
+        watermarkSize: 440,
+        watermarkOpacity: 0.05
       }
     };
-    if (!db) return fallback;
+    if (!db) {
+      if (fallback.format) {
+        if (!fallback.format.tanggalRaport) fallback.format.tanggalRaport = "17 Juni 2026";
+        if (!fallback.format.signaturePosition) fallback.format.signaturePosition = "kanan";
+        if (fallback.format.watermarkSize === undefined) fallback.format.watermarkSize = 440;
+        if (fallback.format.watermarkOpacity === undefined) fallback.format.watermarkOpacity = 0.05;
+      }
+      return fallback;
+    }
     try {
       const ref = doc(db, "settings", "app");
       const docSnap = await withTimeout(getDoc(ref), 2500);
       if (docSnap && docSnap.exists()) {
         const data = docSnap.data();
-        if (data.format && !data.format.tanggalRaport) {
-          data.format.tanggalRaport = "17 Juni 2026";
+        if (data.format) {
+          if (!data.format.tanggalRaport) data.format.tanggalRaport = "17 Juni 2026";
+          if (!data.format.signaturePosition) data.format.signaturePosition = "kanan";
+          if (data.format.watermarkSize === undefined) data.format.watermarkSize = 440;
+          if (data.format.watermarkOpacity === undefined) data.format.watermarkOpacity = 0.05;
         }
         return data;
       }
@@ -966,7 +980,10 @@ export const firebaseApi = {
         showCatatan: format.showCatatan !== undefined ? format.showCatatan : true,
         fontFamily: format.fontFamily || "Times New Roman",
         paperSize: format.paperSize || "A4",
-        tanggalRaport: format.tanggalRaport || "17 Juni 2026"
+        tanggalRaport: format.tanggalRaport || "17 Juni 2026",
+        signaturePosition: format.signaturePosition || "kanan",
+        watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : 440,
+        watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : 0.05
       } : {}
     };
 

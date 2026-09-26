@@ -252,7 +252,7 @@ app.post("/api/students", async (req, res) => {
 
 // POST /api/students/batch - Batch import students
 app.post("/api/students/batch", async (req, res) => {
-  const { students } = req.body;
+  const { students, autoGenerateMissingNisn } = req.body;
   if (!Array.isArray(students) || students.length === 0) {
     return res
       .status(400)
@@ -272,16 +272,26 @@ app.post("/api/students/batch", async (req, res) => {
   let counter = 0;
   for (const item of students) {
     const name = String(item.name || "").trim();
-    const nisn = String(item.nisn || "").trim().replace(/\D/g, "");
+    let nisn = String(item.nisn || "").trim().replace(/\D/g, "");
     const kelas = String(item.kelas || "1").trim();
 
     if (!name) {
-      errors.push(`Baris NISN ${nisn || "?"}: Nama siswa tidak boleh kosong.`);
+      errors.push(`Baris: Nama siswa tidak boleh kosong.`);
       continue;
     }
+
     if (!nisn) {
-      errors.push(`Siswa "${name}": NISN tidak boleh kosong dan harus berupa angka.`);
-      continue;
+      if (autoGenerateMissingNisn || item.autoGenerateNisn) {
+        // Auto-generate clean 10-digit NISN: 2026 + random 6 digits
+        let gen = "";
+        do {
+          gen = "2026" + Math.floor(100000 + Math.random() * 900000);
+        } while (existingNisns.has(gen) || batchNisns.has(gen));
+        nisn = gen;
+      } else {
+        errors.push(`Siswa "${name}": NISN tidak boleh kosong dan harus berupa angka.`);
+        continue;
+      }
     }
 
     if (existingNisns.has(nisn) || batchNisns.has(nisn)) {

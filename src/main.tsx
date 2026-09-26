@@ -676,11 +676,17 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         showCatatan: true,
         fontFamily: "Times New Roman",
         paperSize: "A4",
-        tanggalRaport: "17 Juni 2026"
+        tanggalRaport: "17 Juni 2026",
+        signaturePosition: "kanan",
+        watermarkSize: 440,
+        watermarkOpacity: 0.05
       };
-      // If format doesn't have tanggalRaport, default it
-      if (format && !format.tanggalRaport) {
-        format.tanggalRaport = "17 Juni 2026";
+      // If format doesn't have tanggalRaport or signaturePosition, default it
+      if (format) {
+        if (!format.tanggalRaport) format.tanggalRaport = "17 Juni 2026";
+        if (!format.signaturePosition) format.signaturePosition = "kanan";
+        if (format.watermarkSize === undefined) format.watermarkSize = 440;
+        if (format.watermarkOpacity === undefined) format.watermarkOpacity = 0.05;
       }
       return new Response(JSON.stringify({ principalName, principalNip, format }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
@@ -704,7 +710,10 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           showCatatan: format.showCatatan !== undefined ? format.showCatatan : true,
           fontFamily: format.fontFamily || "Times New Roman",
           paperSize: format.paperSize || "A4",
-          tanggalRaport: format.tanggalRaport || "17 Juni 2026"
+          tanggalRaport: format.tanggalRaport || "17 Juni 2026",
+          signaturePosition: format.signaturePosition || "kanan",
+          watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : 440,
+          watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : 0.05
         };
       }
       saveDB(db);
