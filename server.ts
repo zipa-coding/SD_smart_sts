@@ -608,7 +608,7 @@ app.get("/api/settings", async (req, res) => {
     semesterName: "Ganjil",
     tahunPelajaran: "2026/2027",
     fontSize: "11pt",
-    showLogo: false,
+    showLogo: true,
     showSpiritual: true,
     showSosial: true,
     showAttendance: true,

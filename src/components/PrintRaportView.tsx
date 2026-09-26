@@ -13,8 +13,8 @@ import SmpIslamSmartLogo from "./SmpIslamSmartLogo";
 import logoUrl from "../assets/images/smp_logo_exact_match_revised_1783840969621.jpg";
 import logoJsitUrl from "../assets/images/logo_jsit_indonesia_1783956323407.jpg";
 import logoCahayaAmalUrl from "../assets/images/logo_cahaya_amal_1783956338475.jpg";
-// @ts-ignore
-import html2pdf from "html2pdf.js";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 interface PrintRaportViewProps {
   student: Student;
@@ -61,6 +61,48 @@ export default function PrintRaportView({
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isIframe, setIsIframe] = useState(false);
   const [allSubjects, setAllSubjects] = useState<string[]>([]);
+  const [base64Logos, setBase64Logos] = useState<{
+    school: string;
+    jsit: string;
+    cahayaAmal: string;
+  }>({
+    school: "",
+    jsit: "",
+    cahayaAmal: "",
+  });
+
+  const convertUrlToBase64 = async (url: string): Promise<string> => {
+    if (!url) return "";
+    if (url.startsWith("data:")) return url;
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          if (typeof reader.result === "string") {
+            resolve(reader.result);
+          } else {
+            resolve(url);
+          }
+        };
+        reader.onerror = () => resolve(url);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return url;
+    }
+  };
+
+  React.useEffect(() => {
+    Promise.all([
+      convertUrlToBase64(logoUrl),
+      convertUrlToBase64(logoJsitUrl),
+      convertUrlToBase64(logoCahayaAmalUrl),
+    ]).then(([school, jsit, cahayaAmal]) => {
+      setBase64Logos({ school, jsit, cahayaAmal });
+    });
+  }, []);
 
   React.useEffect(() => {
     setIsIframe(window.self !== window.top);
@@ -302,71 +344,91 @@ export default function PrintRaportView({
     window.print();
   };
 
-  const handleDownloadPDF = () => {
+  const handleDownloadPDF = async () => {
     setIsDownloadingPDF(true);
 
     const getTransparentWatermarkBase64 = (
-      url: string,
+      dataUri: string,
       opacity: number,
     ): Promise<string> => {
       return new Promise((resolve) => {
+        if (!dataUri) return resolve("");
         const img = new Image();
-        img.crossOrigin = "anonymous";
         img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = 800;
-          canvas.height = 800;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.clearRect(0, 0, 800, 800);
-            ctx.globalAlpha = opacity;
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = 600;
+            canvas.height = 600;
+            const ctx = canvas.getContext("2d");
+            if (ctx) {
+              ctx.clearRect(0, 0, 600, 600);
+              ctx.globalAlpha = opacity;
 
-            // Crop a perfect square from the center of the widescreen image
-            const size = Math.min(img.width, img.height);
-            const sx = (img.width - size) / 2;
-            const sy = (img.height - size) / 2;
+              const size = Math.min(img.width, img.height);
+              const sx = (img.width - size) / 2;
+              const sy = (img.height - size) / 2;
 
-            ctx.drawImage(img, sx, sy, size, size, 0, 0, 800, 800);
-            resolve(canvas.toDataURL("image/png"));
-          } else {
+              ctx.drawImage(img, sx, sy, size, size, 0, 0, 600, 600);
+              resolve(canvas.toDataURL("image/png"));
+            } else {
+              resolve("");
+            }
+          } catch {
             resolve("");
           }
         };
         img.onerror = () => {
           resolve("");
         };
-        img.src = url;
+        img.src = dataUri;
       });
     };
 
-    getTransparentWatermarkBase64(
-      logoUrl,
-      format.watermarkOpacity || 0.05,
-    ).then((watermarkBase64) => {
-      // Build a completely clean, isolated HTML template for the PDF (identical to the Word template layout)
-      // This avoids rendering live DOM which has complex CSS variables, grids, and oklch colors that crash html2canvas.
-      // We append it off-screen with a fixed position and standard width, ensuring perfect layout rendering
-      // without any responsive resizing or double-margin squeezing.
-      const wrapper = document.createElement("div");
-      wrapper.style.position = "fixed";
-      wrapper.style.left = "-9999px";
-      wrapper.style.top = "-9999px";
-      wrapper.style.width = "720px";
-      wrapper.style.background = "white";
+    let wrapper: HTMLDivElement | null = null;
+
+    try {
+      const isF4 = format.paperSize === "F4";
+      const isA4 = !isF4;
+
+      // Ensure base64 versions of logos are available so canvas is never tainted
+      const schoolLogoSrc =
+        base64Logos.school || (await convertUrlToBase64(logoUrl));
+      const jsitLogoSrc =
+        base64Logos.jsit || (await convertUrlToBase64(logoJsitUrl));
+      const cahayaAmalLogoSrc =
+        base64Logos.cahayaAmal || (await convertUrlToBase64(logoCahayaAmalUrl));
+
+      const watermarkBase64 = await getTransparentWatermarkBase64(
+        schoolLogoSrc,
+        format.watermarkOpacity || 0.05,
+      );
+
+      // Wrapper placed in document flow (invisible, no events) ensuring accurate rendering & layout calculation
+      wrapper = document.createElement("div");
+      wrapper.style.position = "absolute";
+      wrapper.style.top = "0";
+      wrapper.style.left = "0";
+      wrapper.style.width = isA4 ? "720px" : "750px";
+      wrapper.style.background = "#ffffff";
+      wrapper.style.opacity = "0.01";
+      wrapper.style.pointerEvents = "none";
+      wrapper.style.zIndex = "-9999";
 
       const pdfContainer = document.createElement("div");
+      pdfContainer.id = "pdf-container-root";
       pdfContainer.style.position = "relative";
-      pdfContainer.style.width = "720px"; // Clean width to match standard margins (maps perfectly to standard 12mm page margin)
-      pdfContainer.style.background = "white";
-      pdfContainer.style.padding = "5px 0px"; // Zero horizontal padding since jsPDF adds physical page margins!
+      pdfContainer.style.width = isA4 ? "720px" : "750px";
+      pdfContainer.style.background = "#ffffff";
+      pdfContainer.style.padding = isA4 ? "4px 0px" : "5px 0px";
       pdfContainer.style.boxSizing = "border-box";
 
+      // Dynamically adjusted template with tailored proportions for A4 vs F4
       const pdfHtmlContent = `
         <style>
           .pdf-wrapper { 
             font-family: 'Times New Roman', Times, serif; 
-            font-size: 11pt; 
-            line-height: 1.45; 
+            font-size: ${isA4 ? "10pt" : "11pt"}; 
+            line-height: ${isA4 ? "1.38" : "1.45"}; 
             color: #000000 !important; 
             background-color: #ffffff; 
             position: relative;
@@ -376,61 +438,62 @@ export default function PrintRaportView({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-          .pdf-meta-table { width: 100%; border: none; margin-bottom: 5px; font-size: 10pt; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; }
-          .pdf-meta-table td { padding: 1px 3px; vertical-align: middle; color: #000000 !important; }
-          .pdf-box-table { width: 100%; border-collapse: collapse; margin-bottom: 5px; border: 1.2px solid black; background-color: #ffffff; margin-left: auto !important; margin-right: auto !important; }
-          .pdf-box-table td { border: 1px solid black; padding: 2px 4.5px; vertical-align: middle; font-size: 9.5pt; color: #000000 !important; }
+          .pdf-meta-table { width: 100%; border: none; margin-bottom: ${isA4 ? "4px" : "5px"}; font-size: ${isA4 ? "9.5pt" : "10pt"}; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; }
+          .pdf-meta-table td { padding: ${isA4 ? "1px 2px" : "1px 3px"}; vertical-align: middle; color: #000000 !important; }
+          .pdf-box-table { width: 100%; border-collapse: collapse; margin-bottom: ${isA4 ? "4px" : "5px"}; border: 1.2px solid black; background-color: #ffffff; margin-left: auto !important; margin-right: auto !important; }
+          .pdf-box-table td { border: 1px solid black; padding: ${isA4 ? "1.5px 3.5px" : "2px 4.5px"}; vertical-align: middle; font-size: ${isA4 ? "9pt" : "9.5pt"}; color: #000000 !important; }
           .pdf-box-table td[style*="font-size: 8.5pt"] {
             vertical-align: top !important;
-            padding-top: 2px !important;
-            padding-bottom: 5px !important;
+            padding-top: ${isA4 ? "1.5px" : "2px"} !important;
+            padding-bottom: ${isA4 ? "3.5px" : "5px"} !important;
+            font-size: ${isA4 ? "8pt" : "8.5pt"} !important;
           }
           .pdf-box-table tr:nth-child(2) td[style*="font-size: 9.5pt"]:not([style*="padding"]) {
             vertical-align: top !important;
-            padding-top: 2.5px !important;
-            padding-bottom: 5.5px !important;
+            padding-top: ${isA4 ? "1.5px" : "2.5px"} !important;
+            padding-bottom: ${isA4 ? "3.5px" : "5.5px"} !important;
+            font-size: ${isA4 ? "9pt" : "9.5pt"} !important;
           }
-          .pdf-heading { margin: 15px 0 9px 0; text-transform: uppercase; font-size: 9.5pt; font-weight: bold; color: #000000 !important; page-break-after: avoid !important; break-after: avoid !important; }
-          .pdf-signature-table { width: 100% !important; border: none; margin-top: 18px; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; table-layout: fixed !important; }
+          .pdf-heading { margin: ${isA4 ? "9px 0 4px 0" : "15px 0 9px 0"}; text-transform: uppercase; font-size: ${isA4 ? "9pt" : "9.5pt"}; font-weight: bold; color: #000000 !important; page-break-after: avoid !important; break-after: avoid !important; }
+          .pdf-signature-table { width: 100% !important; border: none; margin-top: ${isA4 ? "12px" : "18px"}; border-collapse: collapse; margin-left: auto !important; margin-right: auto !important; table-layout: fixed !important; }
           .pdf-signature-table td { text-align: center; vertical-align: top; color: #000000 !important; }
         </style>
         <div class="pdf-wrapper">
-          <!-- Watermark is dynamically injected on every page in jsPDF to ensure perfect centering and replication -->
           <div>
             ${
               format.showLogo
                 ? `
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; width: 100%; border-bottom: 3px double #000000; padding-bottom: 12px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: ${isA4 ? "8px" : "15px"}; width: 100%; border-bottom: ${isA4 ? "2.5px" : "3px"} double #000000; padding-bottom: ${isA4 ? "8px" : "12px"};">
                 <!-- Left Side: Yayasan Cahaya Amal and JSIT logos -->
-                <div style="width: 165px; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; gap: 10px;">
-                  <div style="width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; background-color: #ffffff; box-sizing: border-box;">
-                    <img src="${logoCahayaAmalUrl}" style="width: 100%; height: 100%; object-fit: contain;" />
+                <div style="width: ${isA4 ? "120px" : "165px"}; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; gap: ${isA4 ? "6px" : "10px"};">
+                  <div style="width: ${isA4 ? "52px" : "75px"}; height: ${isA4 ? "52px" : "75px"}; display: flex; align-items: center; justify-content: center; background-color: #ffffff; box-sizing: border-box;">
+                    <img src="${cahayaAmalLogoSrc}" style="width: 100%; height: 100%; object-fit: contain;" />
                   </div>
-                  <div style="width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; background-color: #ffffff; box-sizing: border-box;">
-                    <img src="${logoJsitUrl}" style="width: 100%; height: 100%; object-fit: contain;" />
+                  <div style="width: ${isA4 ? "52px" : "75px"}; height: ${isA4 ? "52px" : "75px"}; display: flex; align-items: center; justify-content: center; background-color: #ffffff; box-sizing: border-box;">
+                    <img src="${jsitLogoSrc}" style="width: 100%; height: 100%; object-fit: contain;" />
                   </div>
                 </div>
                 <!-- Center: School name and report metadata -->
-                <div style="text-align: center; flex-grow: 1; padding: 0 10px;">
-                  <h2 style="margin: 0; text-transform: uppercase; font-size: 11.5pt; color: #000000; font-weight: bold; line-height: 1.25;">SD ISLAM SMART PANGKALPINANG</h2>
-                  <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 10pt; color: #000000; font-weight: bold; line-height: 1.25;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
-                  <h4 style="margin: 3px 0; font-size: 9.5pt; color: #000000; font-weight: bold; line-height: 1.25;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
-                  <p style="margin: 2px 0 0 0; font-size: 8.5pt; font-weight: bold; color: #000000; line-height: 1.25;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
+                <div style="text-align: center; flex-grow: 1; padding: 0 6px;">
+                  <h2 style="margin: 0; text-transform: uppercase; font-size: ${isA4 ? "11pt" : "11.5pt"}; color: #000000; font-weight: bold; line-height: 1.25;">SD ISLAM SMART PANGKALPINANG</h2>
+                  <h3 style="margin: 2px 0; text-transform: uppercase; font-size: ${isA4 ? "9.5pt" : "10pt"}; color: #000000; font-weight: bold; line-height: 1.25;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
+                  <h4 style="margin: 2px 0; font-size: ${isA4 ? "9pt" : "9.5pt"}; color: #000000; font-weight: bold; line-height: 1.25;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
+                  <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "8pt" : "8.5pt"}; font-weight: bold; color: #000000; line-height: 1.25;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
                 </div>
                 <!-- Right Side: School logo -->
-                <div style="width: 165px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
-                  <div style="width: 75px; height: 75px; display: flex; align-items: center; justify-content: center; border: 1.5px solid #cccccc; border-radius: 50%; overflow: hidden; background-color: #ffffff;">
-                    <img src="${logoUrl}" style="width: 75px; height: 75px; object-fit: cover;" />
+                <div style="width: ${isA4 ? "120px" : "165px"}; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                  <div style="width: ${isA4 ? "52px" : "75px"}; height: ${isA4 ? "52px" : "75px"}; display: flex; align-items: center; justify-content: center; border: 1.5px solid #cccccc; border-radius: 50%; overflow: hidden; background-color: #ffffff;">
+                    <img src="${schoolLogoSrc}" style="width: 100%; height: 100%; object-fit: cover;" />
                   </div>
                 </div>
               </div>
               `
                 : `
-              <div style="text-align: center; margin-bottom: 15px; width: 100%; border-bottom: 3px double #000000; padding-bottom: 12px;">
-                <h2 style="margin: 0; text-transform: uppercase; font-size: 14pt; color: #000000; font-weight: bold;">SD ISLAM SMART PANGKALPINANG</h2>
-                <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 12pt; color: #000000; font-weight: bold;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
-                <h4 style="margin: 3px 0; font-size: 11pt; color: #000000; font-weight: bold;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
-                <p style="margin: 2px 0 0 0; font-size: 10.5pt; font-weight: bold; color: #000000;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
+              <div style="text-align: center; margin-bottom: ${isA4 ? "8px" : "15px"}; width: 100%; border-bottom: ${isA4 ? "2.5px" : "3px"} double #000000; padding-bottom: ${isA4 ? "8px" : "12px"};">
+                <h2 style="margin: 0; text-transform: uppercase; font-size: ${isA4 ? "12.5pt" : "14pt"}; color: #000000; font-weight: bold;">SD ISLAM SMART PANGKALPINANG</h2>
+                <h3 style="margin: 2px 0; text-transform: uppercase; font-size: ${isA4 ? "11pt" : "12pt"}; color: #000000; font-weight: bold;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
+                <h4 style="margin: 2px 0; font-size: ${isA4 ? "10pt" : "11pt"}; color: #000000; font-weight: bold;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
+                <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "9.5pt" : "10.5pt"}; font-weight: bold; color: #000000;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
               </div>
               `
             }
@@ -459,32 +522,32 @@ export default function PrintRaportView({
           <!-- Spiritual Aspect Table -->
           <table class="pdf-box-table" style="page-break-inside: avoid;">
             <tr>
-              <td rowspan="2" style="width: 52%; font-weight: bold; font-size: 9.5pt; vertical-align: middle;">
+              <td rowspan="2" style="width: 52%; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; vertical-align: middle;">
                 1. Spiritual
               </td>
-              <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+              <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                 Usaha
               </td>
-              <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+              <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                 Proses
               </td>
-              <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+              <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                 Capaian
               </td>
             </tr>
             <tr>
-              <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+              <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                 ${waliKelasNote.spiritualUsaha || "-"}
               </td>
-              <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+              <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                 ${waliKelasNote.spiritualProses || "-"}
               </td>
-              <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+              <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                 ${waliKelasNote.spiritualCapaian || "-"}
               </td>
             </tr>
             <tr>
-              <td colspan="4" style="padding: 4px 6px 10px 6px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+              <td colspan="4" style="padding: ${isA4 ? "3px 5px 6px 5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                 <strong>Deskripsi:</strong> ${waliKelasNote.spiritualDeskripsi || ""}
               </td>
             </tr>
@@ -493,32 +556,32 @@ export default function PrintRaportView({
           <!-- Sosial Aspect Table -->
           <table class="pdf-box-table" style="page-break-inside: avoid;">
             <tr>
-              <td rowspan="2" style="width: 52%; font-weight: bold; font-size: 9.5pt; vertical-align: middle;">
+              <td rowspan="2" style="width: 52%; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; vertical-align: middle;">
                 2. Sosial
               </td>
-              <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+              <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                 Usaha
               </td>
-              <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+              <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                 Proses
               </td>
-              <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+              <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                 Capaian
               </td>
             </tr>
             <tr>
-              <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+              <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                 ${waliKelasNote.sosialUsaha || "-"}
               </td>
-              <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+              <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                 ${waliKelasNote.sosialProses || "-"}
               </td>
-              <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+              <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                 ${waliKelasNote.sosialCapaian || "-"}
               </td>
             </tr>
             <tr>
-              <td colspan="4" style="padding: 4px 6px 10px 6px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+              <td colspan="4" style="padding: ${isA4 ? "3px 5px 6px 5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                 <strong>Deskripsi:</strong> ${waliKelasNote.sosialDeskripsi || ""}
               </td>
             </tr>
@@ -536,32 +599,32 @@ export default function PrintRaportView({
               return `
               <table class="pdf-box-table" style="page-break-inside: avoid;">
                 <tr>
-                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: 9.5pt; vertical-align: middle;">
+                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; vertical-align: middle;">
                     ${title}
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Usaha
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Proses
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Capaian
                   </td>
                 </tr>
                 <tr>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${usahaGrade}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${prosesGrade}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${capaianGrade}
                   </td>
                 </tr>
                 <tr>
-                  <td colspan="4" style="padding: 4px 6px 10px 6px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+                  <td colspan="4" style="padding: ${isA4 ? "3px 5px 6px 5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                     <strong>Deskripsi:</strong> ${desc}
                   </td>
                 </tr>
@@ -582,32 +645,32 @@ export default function PrintRaportView({
               return `
               <table class="pdf-box-table" style="page-break-inside: avoid;">
                 <tr>
-                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: 9.5pt; vertical-align: middle;">
+                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; vertical-align: middle;">
                     ${title}
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Usaha
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Proses
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Capaian
                   </td>
                 </tr>
                 <tr>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${usahaGrade}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${prosesGrade}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${capaianGrade}
                   </td>
                 </tr>
                 <tr>
-                  <td colspan="4" style="padding: 4px 6px 10px 6px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+                  <td colspan="4" style="padding: ${isA4 ? "3px 5px 6px 5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                     <strong>Deskripsi:</strong> ${desc}
                   </td>
                 </tr>
@@ -628,32 +691,32 @@ export default function PrintRaportView({
               return `
               <table class="pdf-box-table" style="page-break-inside: avoid;">
                 <tr>
-                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: 9.5pt; vertical-align: middle;">
+                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; vertical-align: middle;">
                     ${title}
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Usaha
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Proses
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Capaian
                   </td>
                 </tr>
                 <tr>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${usahaGrade}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${prosesGrade}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${capaianGrade}
                   </td>
                 </tr>
                 <tr>
-                  <td colspan="4" style="padding: 4px 6px 10px 6px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+                  <td colspan="4" style="padding: ${isA4 ? "3px 5px 6px 5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                     <strong>Deskripsi:</strong> ${desc}
                   </td>
                 </tr>
@@ -668,7 +731,7 @@ export default function PrintRaportView({
               ? `
             <table class="pdf-box-table" style="page-break-inside: avoid;">
               <tr>
-                <td style="text-align: center; font-size: 10pt; padding: 6px; font-style: italic; color: #555;">
+                <td style="text-align: center; font-size: ${isA4 ? "9pt" : "10pt"}; padding: 5px; font-style: italic; color: #555;">
                   Tidak mengikuti kegiatan ekstrakurikuler.
                 </td>
               </tr>
@@ -680,32 +743,32 @@ export default function PrintRaportView({
                     return `
               <table class="pdf-box-table" style="page-break-inside: avoid;">
                 <tr>
-                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: 9.5pt; vertical-align: middle;">
+                  <td rowspan="2" style="width: 52%; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; vertical-align: middle;">
                     ${idx + 1}. Ekstrakurikuler ${e.type || "Pilihan"}: ${e.name}
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Usaha
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Proses
                   </td>
-                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: 8.5pt; background-color: #f2f2f2;">
+                  <td style="width: 16%; text-align: center; font-weight: bold; font-size: ${isA4 ? "8pt" : "8.5pt"}; background-color: #f2f2f2;">
                     Capaian
                   </td>
                 </tr>
                 <tr>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${grades.usaha}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${grades.proses}
                   </td>
-                  <td style="text-align: center; font-weight: bold; font-size: 9.5pt;">
+                  <td style="text-align: center; font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"};">
                     ${grades.capaian}
                   </td>
                 </tr>
                 <tr>
-                  <td colspan="4" style="padding: 4px 6px 10px 6px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+                  <td colspan="4" style="padding: ${isA4 ? "3px 5px 6px 5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                     <strong>Deskripsi:</strong> ${e.description || e.deskripsi || "-"}
                   </td>
                 </tr>
@@ -718,51 +781,49 @@ export default function PrintRaportView({
           <h4 class="pdf-heading">F. Saran-Saran</h4>
           <table class="pdf-box-table" style="page-break-inside: avoid;">
             <tr>
-              <td style="padding: 6px 8px 10px 8px; font-size: 9.5pt; text-align: justify; line-height: 1.45;">
+              <td style="padding: ${isA4 ? "4px 6px 7px 6px" : "6px 8px 10px 8px"}; font-size: ${isA4 ? "8.75pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.35" : "1.45"};">
                 ${waliKelasNote.catatan || ""}
               </td>
             </tr>
           </table>
 
-          <h4 class="pdf-heading">G. Kedisiplinan</h4>
-          <table class="pdf-box-table" style="page-break-inside: avoid; text-align: center; border-collapse: collapse; width: 100%;">
+          <h4 class="pdf-heading" style="margin: ${isA4 ? "6px 0 3px 0" : "12px 0 6px 0"};">G. Kedisiplinan</h4>
+          <table class="pdf-box-table" style="page-break-inside: avoid; text-align: center; border-collapse: collapse; width: 100%; margin-bottom: 0;">
             <tr style="background-color: transparent;">
-              <td style="font-weight: bold; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; width: 33.3%; padding: 6px 4px; vertical-align: middle; text-align: center; line-height: 1.2; color: #000000 !important;">Sakit</td>
-              <td style="font-weight: bold; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; width: 33.3%; padding: 6px 4px; vertical-align: middle; text-align: center; line-height: 1.2; color: #000000 !important;">Izin</td>
-              <td style="font-weight: bold; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; width: 33.3%; padding: 6px 4px; vertical-align: middle; text-align: center; line-height: 1.2; color: #000000 !important;">Tanpa Keterangan</td>
+              <td style="font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; font-family: 'Times New Roman', Times, serif; width: 33.3%; padding: ${isA4 ? "3px 3px" : "6px 4px"}; vertical-align: middle; text-align: center; line-height: 1.2; color: #000000 !important;">Sakit</td>
+              <td style="font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; font-family: 'Times New Roman', Times, serif; width: 33.3%; padding: ${isA4 ? "3px 3px" : "6px 4px"}; vertical-align: middle; text-align: center; line-height: 1.2; color: #000000 !important;">Izin</td>
+              <td style="font-weight: bold; font-size: ${isA4 ? "9pt" : "9.5pt"}; font-family: 'Times New Roman', Times, serif; width: 33.3%; padding: ${isA4 ? "3px 3px" : "6px 4px"}; vertical-align: middle; text-align: center; line-height: 1.2; color: #000000 !important;">Tanpa Keterangan</td>
             </tr>
             <tr>
-              <td style="font-size: 9.5pt; text-align: center; vertical-align: middle; font-weight: normal; font-family: 'Times New Roman', Times, serif; padding: 6px 4px; line-height: 1.2; color: #000000 !important;">${waliKelasNote.sakit && Number(waliKelasNote.sakit) > 0 ? `${waliKelasNote.sakit} Hari` : "- Hari"}</td>
-              <td style="font-size: 9.5pt; text-align: center; vertical-align: middle; font-weight: normal; font-family: 'Times New Roman', Times, serif; padding: 6px 4px; line-height: 1.2; color: #000000 !important;">${waliKelasNote.izin && Number(waliKelasNote.izin) > 0 ? `${waliKelasNote.izin} Hari` : "- Hari"}</td>
-              <td style="font-size: 9.5pt; text-align: center; vertical-align: middle; font-weight: normal; font-family: 'Times New Roman', Times, serif; padding: 6px 4px; line-height: 1.2; color: #000000 !important;">${waliKelasNote.alpa && Number(waliKelasNote.alpa) > 0 ? `${waliKelasNote.alpa} Hari` : "- Hari"}</td>
+              <td style="font-size: ${isA4 ? "9pt" : "9.5pt"}; text-align: center; vertical-align: middle; font-weight: normal; font-family: 'Times New Roman', Times, serif; padding: ${isA4 ? "3px 3px" : "6px 4px"}; line-height: 1.2; color: #000000 !important;">${waliKelasNote.sakit && Number(waliKelasNote.sakit) > 0 ? `${waliKelasNote.sakit} Hari` : "- Hari"}</td>
+              <td style="font-size: ${isA4 ? "9pt" : "9.5pt"}; text-align: center; vertical-align: middle; font-weight: normal; font-family: 'Times New Roman', Times, serif; padding: ${isA4 ? "3px 3px" : "6px 4px"}; line-height: 1.2; color: #000000 !important;">${waliKelasNote.izin && Number(waliKelasNote.izin) > 0 ? `${waliKelasNote.izin} Hari` : "- Hari"}</td>
+              <td style="font-size: ${isA4 ? "9pt" : "9.5pt"}; text-align: center; vertical-align: middle; font-weight: normal; font-family: 'Times New Roman', Times, serif; padding: ${isA4 ? "3px 3px" : "6px 4px"}; line-height: 1.2; color: #000000 !important;">${waliKelasNote.alpa && Number(waliKelasNote.alpa) > 0 ? `${waliKelasNote.alpa} Hari` : "- Hari"}</td>
             </tr>
           </table>
 
-          <br />
-
-          <table class="pdf-signature-table" style="page-break-inside: avoid; width: 100% !important; table-layout: fixed !important; border-collapse: collapse;">
+          <table class="pdf-signature-table" style="page-break-inside: avoid; width: 100% !important; table-layout: fixed !important; border-collapse: collapse; margin-top: ${isA4 ? "6px" : "12px"};">
             <colgroup>
               <col style="width: 50%;" />
               <col style="width: 50%;" />
             </colgroup>
             <tr>
-              <td style="width: 50%; padding-bottom: 50px; text-align: center; vertical-align: top;">
-                <p style="margin: 0 0 55px 0;">&nbsp;<br />Orang Tua/Wali Siswa</p>
-                <p style="margin: 0; font-weight: bold; font-size: 11pt;">……………………………</p>
+              <td style="width: 50%; padding-bottom: ${isA4 ? "4px" : "30px"}; text-align: center; vertical-align: top;">
+                <p style="margin: 0 0 ${isA4 ? "14px" : "40px"} 0;">&nbsp;<br />Orang Tua/Wali Siswa</p>
+                <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "10pt" : "11pt"};">……………………………</p>
               </td>
-              <td style="width: 50%; padding-bottom: 50px; text-align: center; vertical-align: top;">
-                <p style="margin: 0 0 55px 0;">Pangkal Pinang, ${format.tanggalRaport || "17 Juni 2026"}<br />Wali Kelas Kelas ${student.kelas}</p>
-                <p style="margin: 0; font-weight: bold; font-size: 11pt;">${waliKelas ? waliKelas.name : "……………………………"}</p>
+              <td style="width: 50%; padding-bottom: ${isA4 ? "4px" : "30px"}; text-align: center; vertical-align: top;">
+                <p style="margin: 0 0 ${isA4 ? "14px" : "40px"} 0;">Pangkal Pinang, ${format.tanggalRaport || "17 Juni 2026"}<br />Wali Kelas Kelas ${student.kelas}</p>
+                <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "10pt" : "11pt"};">${waliKelas ? waliKelas.name : "……………………………"}</p>
               </td>
             </tr>
             ${
               format.signaturePosition === "kiri"
                 ? `
             <tr>
-              <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top;">
-                <p style="margin: 0 0 55px 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
-                <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
-                <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555;">NIP. ${principal.nip}</p>
+              <td style="width: 50%; text-align: center; padding-top: ${isA4 ? "2px" : "10px"}; vertical-align: top;">
+                <p style="margin: 0 0 ${isA4 ? "14px" : "40px"} 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
+                <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "10pt" : "11pt"};">${principal.name}</p>
+                <p style="margin: 2px 0 0 0; font-size: ${isA4 ? "8.5pt" : "9.5pt"}; color: #555;">NIP. ${principal.nip}</p>
               </td>
               <td style="width: 50%; text-align: center; vertical-align: top;">&nbsp;</td>
             </tr>
@@ -770,11 +831,11 @@ export default function PrintRaportView({
                 : format.signaturePosition === "tengah"
                 ? `
             <tr>
-              <td colspan="2" style="width: 100%; text-align: center; padding-top: 15px; vertical-align: top;">
+              <td colspan="2" style="width: 100%; text-align: center; padding-top: ${isA4 ? "2px" : "10px"}; vertical-align: top;">
                 <div style="display: inline-block; text-align: center; margin: 0 auto;">
-                  <p style="margin: 0 0 55px 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
-                  <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
-                  <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555;">NIP. ${principal.nip}</p>
+                  <p style="margin: 0 0 ${isA4 ? "14px" : "40px"} 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
+                  <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "10pt" : "11pt"};">${principal.name}</p>
+                  <p style="margin: 2px 0 0 0; font-size: ${isA4 ? "8.5pt" : "9.5pt"}; color: #555;">NIP. ${principal.nip}</p>
                 </div>
               </td>
             </tr>
@@ -782,10 +843,10 @@ export default function PrintRaportView({
                 : `
             <tr>
               <td style="width: 50%; text-align: center; vertical-align: top;">&nbsp;</td>
-              <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top;">
-                <p style="margin: 0 0 55px 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
-                <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
-                <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555;">NIP. ${principal.nip}</p>
+              <td style="width: 50%; text-align: center; padding-top: ${isA4 ? "2px" : "10px"}; vertical-align: top;">
+                <p style="margin: 0 0 ${isA4 ? "14px" : "40px"} 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
+                <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "10pt" : "11pt"};">${principal.name}</p>
+                <p style="margin: 2px 0 0 0; font-size: ${isA4 ? "8.5pt" : "9.5pt"}; color: #555;">NIP. ${principal.nip}</p>
               </td>
             </tr>
             `
@@ -799,200 +860,252 @@ export default function PrintRaportView({
       wrapper.appendChild(pdfContainer);
       document.body.appendChild(wrapper);
 
-      const opt = {
-        margin: [8, 12, 12, 12], // Reduced top margin from 12 to 8 to move Kop closer to the top edge
-        filename: `Raport_STS_${student.name.replace(/\s+/g, "_")}.pdf`,
-        image: { type: "jpeg", quality: 1.0 },
-        html2canvas: {
-          scale: 3.0,
-          useCORS: true,
-          logging: false,
-          scrollY: 0,
-          scrollX: 0,
-          windowWidth: 720, // Enforce rendering width on all devices
-        },
-        jsPDF: {
-          unit: "mm",
-          format: format.paperSize === "F4" ? [215, 330] : "a4",
-          orientation: "portrait",
-        },
-        pagebreak: { mode: ["avoid-all", "css"] },
-      };
-
-      // Safely load and invoke html2pdf inside Vite
-      const runExport = (pdfExporter: any) => {
-        pdfExporter()
-          .set(opt)
-          .from(pdfContainer)
-          .toPdf()
-          .get("pdf")
-          .then((pdf: any) => {
-            const totalPages = pdf.internal.getNumberOfPages();
-            const pageWidth = pdf.internal.pageSize.getWidth();
-            const pageHeight = pdf.internal.pageSize.getHeight();
-
-            for (let i = 1; i <= totalPages; i++) {
-              pdf.setPage(i);
-
-              // 1. Draw Watermark on each page
-              if (watermarkBase64) {
-                // Watermark dimension proportional to the watermarkSize state (standard 440px on screen maps to 140mm in PDF)
-                const sizeInMm = ((format.watermarkSize || 440) / 440) * 140;
-                const imgWidth = sizeInMm;
-                const imgHeight = sizeInMm;
-                const x = (pageWidth - imgWidth) / 2;
-                const y = (pageHeight - imgHeight) / 2;
-                pdf.addImage(
-                  watermarkBase64,
-                  "PNG",
-                  x,
-                  y,
-                  imgWidth,
-                  imgHeight,
-                  undefined,
-                  "FAST",
-                );
-              }
-
-              // 2. Draw Page Number at bottom right
-              pdf.setFont("times", "normal");
-              pdf.setFontSize(9);
-              pdf.setTextColor(0, 0, 0); // Clear high-contrast text color
-              const pageText = `Halaman ${i} dari ${totalPages}`;
-              // Align to the right edge with a 12mm margin (matches the right page margin)
-              pdf.text(pageText, pageWidth - 12, pageHeight - 8, {
-                align: "right",
-              });
-            }
-            return pdf.output("blob");
-          })
-          .then((pdfBlob: Blob) => {
-            const url = URL.createObjectURL(pdfBlob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = `Raport_STS_${student.name.replace(/\s+/g, "_")}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-
-            if (document.body.contains(wrapper)) {
-              document.body.removeChild(wrapper);
-            }
-            setIsDownloadingPDF(false);
-          })
-          .catch((err: any) => {
-            console.error(
-              "PDF blob export failed, falling back to direct jsPDF save:",
-              err,
-            );
-            pdfExporter()
-              .set(opt)
-              .from(pdfContainer)
-              .toPdf()
-              .get("pdf")
-              .then((pdf: any) => {
-                const totalPages = pdf.internal.getNumberOfPages();
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-
-                for (let i = 1; i <= totalPages; i++) {
-                  pdf.setPage(i);
-
-                  if (watermarkBase64) {
-                    const sizeInMm =
-                      ((format.watermarkSize || 440) / 440) * 140;
-                    const imgWidth = sizeInMm;
-                    const imgHeight = sizeInMm;
-                    const x = (pageWidth - imgWidth) / 2;
-                    const y = (pageHeight - imgHeight) / 2;
-                    pdf.addImage(
-                      watermarkBase64,
-                      "PNG",
-                      x,
-                      y,
-                      imgWidth,
-                      imgHeight,
-                      undefined,
-                      "FAST",
-                    );
-                  }
-
-                  pdf.setFont("times", "normal");
-                  pdf.setFontSize(9);
-                  pdf.setTextColor(0, 0, 0);
-                  const pageText = `Halaman ${i} dari ${totalPages}`;
-                  pdf.text(pageText, pageWidth - 12, pageHeight - 8, {
-                    align: "right",
-                  });
-                }
-                pdf.save(`Raport_STS_${student.name.replace(/\s+/g, "_")}.pdf`);
-                if (document.body.contains(wrapper)) {
-                  document.body.removeChild(wrapper);
-                }
-                setIsDownloadingPDF(false);
-              })
-              .catch((saveErr: any) => {
-                console.error("Direct PDF save failed too:", saveErr);
-                if (document.body.contains(wrapper)) {
-                  document.body.removeChild(wrapper);
-                }
-                setIsDownloadingPDF(false);
-                window.print();
-              });
+      // Ensure all images inside pdfContainer are loaded before capturing
+      const images = Array.from(pdfContainer.querySelectorAll("img"));
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete) return Promise.resolve(true);
+          return new Promise((res) => {
+            img.onload = () => res(true);
+            img.onerror = () => res(false);
           });
-      };
+        }),
+      );
 
-      if ((window as any).html2pdf) {
-        runExport((window as any).html2pdf);
-      } else {
-        try {
-          const pkg =
-            typeof html2pdf === "function"
-              ? html2pdf
-              : (html2pdf as any).default;
-          if (pkg) {
-            runExport(pkg);
-          } else {
-            throw new Error("Local html2pdf is not loaded yet");
+      // Brief pause to ensure typography & layout calculations are finalized
+      await new Promise((res) => setTimeout(res, 80));
+
+      // 2. Render container to a crisp canvas with allowTaint: false (pure untainted canvas!)
+      const canvas = await html2canvas(pdfContainer, {
+        scale: 2.0, // High-DPI resolution, super crisp
+        useCORS: true,
+        allowTaint: false,
+        backgroundColor: "#ffffff",
+        logging: false,
+        windowWidth: isA4 ? 720 : 750,
+        scrollX: 0,
+        scrollY: 0,
+        onclone: (clonedDoc) => {
+          const stylesheets = clonedDoc.querySelectorAll('link[rel="stylesheet"], style');
+          stylesheets.forEach((sheet) => {
+            if (!sheet.closest('#pdf-container-root')) {
+              sheet.remove();
+            }
+          });
+        },
+      });
+
+      // 3. Setup PDF document matching the exact paper configuration
+      const pageWidth = isF4 ? 215 : 210;
+      const pageHeight = isF4 ? 330 : 297;
+
+      const marginTop = isA4 ? 8 : 10;
+      const marginBottom = isA4 ? 8 : 12;
+      const marginLeft = isA4 ? 10 : 12;
+      const marginRight = isA4 ? 10 : 12;
+
+      const printWidth = pageWidth - marginLeft - marginRight;
+      const printHeight = pageHeight - marginTop - marginBottom;
+
+      // Calculate maximum canvas slice height in px per physical page
+      const maxPageCanvasHeight = Math.floor(
+        (printHeight / printWidth) * canvas.width,
+      );
+
+      // Smart page break detection: slice cleanly between discrete elements so content & borders never bleed across pages
+      const scaleFactor = canvas.width / (pdfContainer.offsetWidth || (isA4 ? 720 : 750));
+      const blockElements = Array.from(
+        pdfContainer.querySelectorAll<HTMLElement>(
+          ".pdf-box-table, .pdf-heading, .pdf-signature-table, .pdf-meta-table",
+        ),
+      );
+
+      interface CutPoint {
+        prevBottom: number;
+        nextTop: number;
+      }
+
+      const cutPoints: CutPoint[] = [];
+
+      for (let i = 1; i < blockElements.length; i++) {
+        const prevEl = blockElements[i - 1];
+        const nextEl = blockElements[i];
+
+        // Never separate a section heading from its first following content table
+        if (prevEl.classList.contains("pdf-heading") && nextEl.classList.contains("pdf-box-table")) {
+          continue;
+        }
+
+        const prevBottom = Math.ceil((prevEl.offsetTop + prevEl.offsetHeight) * scaleFactor) + 1;
+        const nextTop = Math.floor(nextEl.offsetTop * scaleFactor) - 1;
+
+        cutPoints.push({
+          prevBottom,
+          nextTop: Math.max(prevBottom, nextTop),
+        });
+      }
+
+      interface PageSlice {
+        startY: number;
+        endY: number;
+      }
+
+      const pageSlices: PageSlice[] = [];
+      let currentStartY = 0;
+
+      while (currentStartY < canvas.height) {
+        const maxCanvasY = currentStartY + maxPageCanvasHeight;
+
+        if (maxCanvasY >= canvas.height) {
+          pageSlices.push({
+            startY: currentStartY,
+            endY: canvas.height,
+          });
+          break;
+        }
+
+        // Find the deepest cut point that fits within the current page limit
+        let chosenCut: CutPoint | null = null;
+        for (const cp of cutPoints) {
+          if (cp.prevBottom > currentStartY + maxPageCanvasHeight * 0.3 && cp.prevBottom <= maxCanvasY) {
+            chosenCut = cp;
           }
-        } catch (e) {
-          console.warn(
-            "NPM module html2pdf load failed, trying dynamic CDN load:",
-            e,
-          );
-          // Script loader fallback
-          const script = document.createElement("script");
-          script.src =
-            "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-          script.onload = () => {
-            if ((window as any).html2pdf) {
-              runExport((window as any).html2pdf);
-            } else {
-              console.error("Failed to load html2pdf via CDN");
-              if (document.body.contains(wrapper)) {
-                document.body.removeChild(wrapper);
-              }
-              setIsDownloadingPDF(false);
-              window.print();
-            }
-          };
-          script.onerror = () => {
-            console.error("Failed to inject html2pdf CDN script");
-            if (document.body.contains(wrapper)) {
-              document.body.removeChild(wrapper);
-            }
-            setIsDownloadingPDF(false);
-            window.print();
-          };
-          document.head.appendChild(script);
+        }
+
+        if (chosenCut) {
+          pageSlices.push({
+            startY: currentStartY,
+            endY: chosenCut.prevBottom,
+          });
+          currentStartY = chosenCut.nextTop;
+        } else {
+          // Fallback if no cut point found
+          pageSlices.push({
+            startY: currentStartY,
+            endY: maxCanvasY,
+          });
+          currentStartY = maxCanvasY;
         }
       }
-    });
+
+      const totalPages = pageSlices.length;
+
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: isF4 ? [215, 330] : "a4",
+        compress: true,
+      });
+
+      for (let p = 0; p < totalPages; p++) {
+        if (p > 0) {
+          pdf.addPage(isF4 ? [215, 330] : "a4", "portrait");
+        }
+
+        const startY = pageSlices[p].startY;
+        const sliceHeight = pageSlices[p].endY - startY;
+
+        const sliceCanvas = document.createElement("canvas");
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = sliceHeight;
+
+        const sliceCtx = sliceCanvas.getContext("2d");
+        if (sliceCtx) {
+          sliceCtx.fillStyle = "#ffffff";
+          sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+          sliceCtx.drawImage(
+            canvas,
+            0,
+            startY,
+            canvas.width,
+            sliceHeight,
+            0,
+            0,
+            canvas.width,
+            sliceHeight,
+          );
+        }
+
+        const sliceImgHeightMm = (sliceHeight * printWidth) / canvas.width;
+
+        // Draw Watermark centered on each page
+        if (watermarkBase64) {
+          const sizeInMm = isA4
+            ? ((format.watermarkSize || 400) / 440) * 125
+            : ((format.watermarkSize || 440) / 440) * 140;
+          const wx = (pageWidth - sizeInMm) / 2;
+          const wy = (pageHeight - sizeInMm) / 2;
+          try {
+            pdf.addImage(
+              watermarkBase64,
+              "PNG",
+              wx,
+              wy,
+              sizeInMm,
+              sizeInMm,
+              undefined,
+              "FAST",
+            );
+          } catch (wmErr) {
+            console.warn("Watermark render skipped:", wmErr);
+          }
+        }
+
+        // Draw Page Content Slice
+        const sliceDataUrl = sliceCanvas.toDataURL("image/jpeg", 0.95);
+        pdf.addImage(
+          sliceDataUrl,
+          "JPEG",
+          marginLeft,
+          marginTop,
+          printWidth,
+          sliceImgHeightMm,
+        );
+
+        // Professional Page Numbering in Footer
+        pdf.setFont("times", "normal");
+        pdf.setFontSize(isA4 ? 8.5 : 9);
+        pdf.setTextColor(80, 80, 80);
+        pdf.text(
+          `Halaman ${p + 1} dari ${totalPages}`,
+          pageWidth - marginRight,
+          pageHeight - (isA4 ? 4.5 : 6),
+          { align: "right" },
+        );
+      }
+
+      // Download file directly via Blob URL — exactly identical to Word (.doc) download!
+      const fileName = `Raport_STS_${student.name.replace(/\s+/g, "_")}.pdf`;
+      const pdfBlob = pdf.output("blob");
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 2000);
+    } catch (err: any) {
+      console.error("Gagal membuat berkas PDF rapor:", err);
+      alert(
+        "Terjadi kendala saat memproses berkas PDF: " +
+          (err?.message || "Silakan coba beberapa saat lagi."),
+      );
+    } finally {
+      if (wrapper && document.body.contains(wrapper)) {
+        document.body.removeChild(wrapper);
+      }
+      setIsDownloadingPDF(false);
+    }
   };
 
   // Convert report card layout to Microsoft Word compatible .doc format
   const handleDownloadWord = () => {
+    const isF4 = format.paperSize === "F4";
+    const isA4 = !isF4;
     const title = `Raport_STS_${student.name.replace(/\s+/g, "_")}`;
 
     const makeAbsoluteUrl = (url: string) => {
@@ -1007,9 +1120,12 @@ export default function PrintRaportView({
       return window.location.origin + url;
     };
 
-    const absLogoCahayaAmalUrl = makeAbsoluteUrl(logoCahayaAmalUrl);
-    const absLogoJsitUrl = makeAbsoluteUrl(logoJsitUrl);
-    const absLogoUrl = makeAbsoluteUrl(logoUrl);
+    const absLogoCahayaAmalUrl =
+      base64Logos.cahayaAmal || makeAbsoluteUrl(logoCahayaAmalUrl);
+    const absLogoJsitUrl =
+      base64Logos.jsit || makeAbsoluteUrl(logoJsitUrl);
+    const absLogoUrl =
+      base64Logos.school || makeAbsoluteUrl(logoUrl);
 
     const htmlHeader = `
       <html xmlns:o='urn:schemas-microsoft-500-col:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -1025,10 +1141,10 @@ export default function PrintRaportView({
         <![endif]-->
          <style>
           @page {
-            size: 8.27in 11.69in; /* A4 size */
-            margin: 0.5in 0.5in 0.5in 0.5in;
+            size: ${isF4 ? "8.46in 12.99in" : "8.27in 11.69in"}; /* F4 or A4 size */
+            margin: ${isF4 ? "0.5in 0.5in 0.5in 0.5in" : "0.35in 0.45in 0.35in 0.45in"};
           }
-          body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.4; color: #000; }
+          body { font-family: 'Times New Roman', Times, serif; font-size: ${isF4 ? "11pt" : "9.5pt"}; line-height: ${isF4 ? "1.4" : "1.35"}; color: #000; }
         </style>
       </head>
       <body>
@@ -1038,35 +1154,35 @@ export default function PrintRaportView({
       ${
         format.showLogo
           ? `
-        <table style="width: 100%; border-collapse: collapse; border: none; margin-bottom: 15px; border-bottom: 3.5px double #000000; margin-left: auto; margin-right: auto;">
+        <table style="width: 100%; border-collapse: collapse; border: none; margin-bottom: ${isA4 ? "10px" : "15px"}; border-bottom: ${isA4 ? "2.5px" : "3.5px"} double #000000; margin-left: auto; margin-right: auto;">
           <tr>
             <!-- Left Side Logos -->
-            <td style="width: 25%; text-align: left; vertical-align: middle; border: none; padding-bottom: 12px;">
-              <img src="${absLogoCahayaAmalUrl}" style="width: 55px; height: 55px; display: inline-block; margin-right: 5px;" />
-              <img src="${absLogoJsitUrl}" style="width: 55px; height: 55px; display: inline-block;" />
+            <td style="width: 25%; text-align: left; vertical-align: middle; border: none; padding-bottom: ${isA4 ? "8px" : "12px"};">
+              <img src="${absLogoCahayaAmalUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block; margin-right: 5px;" />
+              <img src="${absLogoJsitUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block;" />
             </td>
             <!-- Center Title and Info -->
-            <td style="width: 50%; text-align: center; vertical-align: middle; border: none; padding-bottom: 12px; font-family: 'Times New Roman', Times, serif;">
-              <h2 style="margin: 0; text-transform: uppercase; font-size: 11.5pt; font-weight: bold; color: #000000; line-height: 1.25;">SD ISLAM SMART PANGKALPINANG</h2>
-              <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 10pt; font-weight: bold; color: #000000; line-height: 1.25;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
-              <h4 style="margin: 3px 0; font-size: 9.5pt; font-weight: bold; color: #000000; line-height: 1.25;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
-              <p style="margin: 2px 0 0 0; font-size: 8.5pt; font-weight: bold; color: #000000; line-height: 1.25;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
+            <td style="width: 50%; text-align: center; vertical-align: middle; border: none; padding-bottom: ${isA4 ? "8px" : "12px"}; font-family: 'Times New Roman', Times, serif;">
+              <h2 style="margin: 0; text-transform: uppercase; font-size: ${isA4 ? "11pt" : "11.5pt"}; font-weight: bold; color: #000000; line-height: 1.25;">SD ISLAM SMART PANGKALPINANG</h2>
+              <h3 style="margin: 2px 0; text-transform: uppercase; font-size: ${isA4 ? "9.5pt" : "10pt"}; font-weight: bold; color: #000000; line-height: 1.25;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
+              <h4 style="margin: 2px 0; font-size: ${isA4 ? "9pt" : "9.5pt"}; font-weight: bold; color: #000000; line-height: 1.25;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
+              <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "8pt" : "8.5pt"}; font-weight: bold; color: #000000; line-height: 1.25;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
             </td>
             <!-- Right Side School Logo -->
-            <td style="width: 25%; text-align: center; vertical-align: middle; border: none; padding-bottom: 12px;">
-              <img src="${absLogoUrl}" style="width: 55px; height: 55px; display: inline-block; border: 1px solid #cccccc; border-radius: 50%;" />
+            <td style="width: 25%; text-align: center; vertical-align: middle; border: none; padding-bottom: ${isA4 ? "8px" : "12px"};">
+              <img src="${absLogoUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block; border: 1px solid #cccccc; border-radius: 50%;" />
             </td>
           </tr>
         </table>
         `
           : `
-        <table style="width: 100%; border-collapse: collapse; border: none; margin-bottom: 15px; border-bottom: 3.5px double #000000; margin-left: auto; margin-right: auto;">
+        <table style="width: 100%; border-collapse: collapse; border: none; margin-bottom: ${isA4 ? "10px" : "15px"}; border-bottom: ${isA4 ? "2.5px" : "3.5px"} double #000000; margin-left: auto; margin-right: auto;">
           <tr>
-            <td style="width: 100%; text-align: center; vertical-align: middle; border: none; padding-bottom: 12px; font-family: 'Times New Roman', Times, serif;">
-              <h2 style="margin: 0; text-transform: uppercase; font-size: 13.5pt; font-weight: bold; color: #000000;">SD ISLAM SMART PANGKALPINANG</h2>
-              <h3 style="margin: 3px 0; text-transform: uppercase; font-size: 11.5pt; font-weight: bold; color: #000000;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
-              <h4 style="margin: 3px 0; font-size: 10.5pt; font-weight: bold; color: #000000;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
-              <p style="margin: 2px 0 0 0; font-size: 9.5pt; font-weight: bold; color: #000000;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
+            <td style="width: 100%; text-align: center; vertical-align: middle; border: none; padding-bottom: ${isA4 ? "8px" : "12px"}; font-family: 'Times New Roman', Times, serif;">
+              <h2 style="margin: 0; text-transform: uppercase; font-size: ${isA4 ? "12.5pt" : "13.5pt"}; font-weight: bold; color: #000000;">SD ISLAM SMART PANGKALPINANG</h2>
+              <h3 style="margin: 2px 0; text-transform: uppercase; font-size: ${isA4 ? "10.5pt" : "11.5pt"}; font-weight: bold; color: #000000;">LAPORAN SUMATIF TENGAH SEMESTER (STS)</h3>
+              <h4 style="margin: 2px 0; font-size: ${isA4 ? "9.5pt" : "10.5pt"}; font-weight: bold; color: #000000;">SEMESTER ${format.semesterName ? format.semesterName.toUpperCase() : "GANJIL"}</h4>
+              <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "8.5pt" : "9.5pt"}; font-weight: bold; color: #000000;">TAHUN PELAJARAN ${format.tahunPelajaran || "2026-2027"}</p>
             </td>
           </tr>
         </table>
@@ -1758,11 +1874,11 @@ export default function PrintRaportView({
         @media print {
           @page {
             size: ${format.paperSize === "F4" ? "215mm 330mm" : format.paperSize === "Legal" ? "215.9mm 355.6mm" : format.paperSize === "Letter" ? "215.9mm 279.4mm" : "210mm 297mm"};
-            margin: 0.8cm 1.2cm 1.2cm 1.2cm;
+            margin: ${format.paperSize === "F4" ? "0.8cm 1.2cm 1.2cm 1.2cm" : "0.6cm 0.9cm 0.7cm 0.9cm"};
           }
           body, #raport-sheet-print, #raport-sheet-print * {
             font-family: "${format.fontFamily || "Times New Roman"}", serif !important;
-            font-size: ${format.fontSize || "11pt"} !important;
+            font-size: ${format.paperSize === "F4" ? (format.fontSize || "11pt") : "10pt"} !important;
           }
           .page-break-avoid {
             page-break-inside: avoid !important;
@@ -1788,11 +1904,15 @@ export default function PrintRaportView({
 
       {/* Raport Sheet Preview Container */}
       <div
-        className="rounded-lg border p-6 md:p-8 bg-white border-gray-300 text-slate-950 shadow-md max-w-4xl mx-auto print-container transition-all duration-300 shadow-slate-900/10 animate-fade-in relative overflow-hidden"
+        className={`rounded-lg border bg-white border-gray-300 text-slate-950 shadow-md mx-auto print-container transition-all duration-300 shadow-slate-900/10 animate-fade-in relative overflow-hidden ${
+          format.paperSize === "F4"
+            ? "max-w-4xl p-6 md:p-8"
+            : "max-w-[794px] w-full p-4 sm:p-5 md:p-6"
+        }`}
         id="raport-sheet-print"
         style={{
           fontFamily: format.fontFamily || "Times New Roman",
-          fontSize: format.fontSize || "11pt",
+          fontSize: format.paperSize === "F4" ? (format.fontSize || "11pt") : "10pt",
         }}
       >
         {/* Absolute centered watermark behind on-screen and browser-printed layouts */}
@@ -1806,8 +1926,8 @@ export default function PrintRaportView({
             alt="Watermark"
             className="object-contain select-none transition-all duration-300"
             style={{
-              width: `${format.watermarkSize || 440}px`,
-              height: `${format.watermarkSize || 440}px`,
+              width: `${format.paperSize === "F4" ? (format.watermarkSize || 440) : Math.min(format.watermarkSize || 360, 360)}px`,
+              height: `${format.paperSize === "F4" ? (format.watermarkSize || 440) : Math.min(format.watermarkSize || 360, 360)}px`,
               opacity: format.watermarkOpacity || 0.05,
               WebkitPrintColorAdjust: "exact",
               printColorAdjust: "exact",
@@ -1818,10 +1938,10 @@ export default function PrintRaportView({
 
         <div className="relative w-full flex flex-col" style={{ zIndex: 10 }}>
           {/* Formal Report Header */}
-          <div className="pb-4 border-b-2 border-double mb-6 font-serif border-gray-800 flex items-center justify-between gap-4">
+          <div className={`${format.paperSize === "F4" ? "pb-4 border-b-2 border-double mb-6 gap-4" : "pb-2.5 border-b-2 border-double mb-3.5 gap-2.5"} font-serif border-gray-800 flex items-center justify-between`}>
             {format.showLogo ? (
-              <div className="flex items-center gap-1.5 md:gap-2.5 w-32 md:w-44 shrink-0 justify-start">
-                <div className="w-14 h-14 md:w-18 md:h-18 select-none bg-white flex items-center justify-center p-0.5">
+              <div className={`flex items-center gap-1.5 md:gap-2 shrink-0 justify-start ${format.paperSize === "F4" ? "w-32 md:w-44" : "w-24 md:w-32"}`}>
+                <div className={`${format.paperSize === "F4" ? "w-14 h-14 md:w-18 md:h-18" : "w-10 h-10 md:w-13 md:h-13"} select-none bg-white flex items-center justify-center p-0.5`}>
                   <img
                     src={logoCahayaAmalUrl}
                     alt="Yayasan Logo"
@@ -1829,7 +1949,7 @@ export default function PrintRaportView({
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <div className="w-14 h-14 md:w-18 md:h-18 select-none bg-white flex items-center justify-center p-0.5">
+                <div className={`${format.paperSize === "F4" ? "w-14 h-14 md:w-18 md:h-18" : "w-10 h-10 md:w-13 md:h-13"} select-none bg-white flex items-center justify-center p-0.5`}>
                   <img
                     src={logoJsitUrl}
                     alt="JSIT Logo"
@@ -1840,25 +1960,25 @@ export default function PrintRaportView({
               </div>
             ) : null}
             <div className="text-center flex-1">
-              <h2 className="text-sm md:text-base lg:text-lg font-extrabold uppercase mt-0.5 tracking-wide text-black leading-tight">
+              <h2 className={`${format.paperSize === "F4" ? "text-sm md:text-base lg:text-lg" : "text-xs md:text-sm lg:text-[15px]"} font-extrabold uppercase mt-0.5 tracking-wide text-black leading-tight`}>
                 SD ISLAM SMART PANGKALPINANG
               </h2>
-              <h3 className="text-[10px] md:text-xs lg:text-sm font-bold tracking-wider uppercase mt-1 text-gray-800 leading-tight">
+              <h3 className={`${format.paperSize === "F4" ? "text-[10px] md:text-xs lg:text-sm" : "text-[9px] md:text-[11px] lg:text-xs"} font-bold tracking-wider uppercase mt-0.5 text-gray-800 leading-tight`}>
                 LAPORAN SUMATIF TENGAH SEMESTER (STS)
               </h3>
-              <h4 className="text-[10px] md:text-xs lg:text-sm font-bold uppercase mt-1 tracking-wider text-black leading-tight">
+              <h4 className={`${format.paperSize === "F4" ? "text-[10px] md:text-xs lg:text-sm" : "text-[9px] md:text-[11px] lg:text-xs"} font-bold uppercase mt-0.5 tracking-wider text-black leading-tight`}>
                 SEMESTER{" "}
                 {format.semesterName
                   ? format.semesterName.toUpperCase()
                   : "GANJIL"}
               </h4>
-              <p className="text-[9px] md:text-[10px] text-gray-500 font-medium italic mt-1 font-sans">
+              <p className="text-[9px] md:text-[10px] text-gray-500 font-medium italic mt-0.5 font-sans">
                 TAHUN PELAJARAN {format.tahunPelajaran || "2026-2027"}
               </p>
             </div>
             {format.showLogo ? (
-              <div className="flex items-center w-32 md:w-44 shrink-0 justify-center">
-                <div className="w-14 h-14 md:w-18 md:h-18 shrink-0 select-none overflow-hidden rounded-full border-1.5 border-gray-300 bg-white flex items-center justify-center">
+              <div className={`flex items-center shrink-0 justify-center ${format.paperSize === "F4" ? "w-32 md:w-44" : "w-24 md:w-32"}`}>
+                <div className={`${format.paperSize === "F4" ? "w-14 h-14 md:w-18 md:h-18" : "w-10 h-10 md:w-13 md:h-13"} shrink-0 select-none overflow-hidden rounded-full border-1.5 border-gray-300 bg-white flex items-center justify-center`}>
                   <img
                     src={logoUrl}
                     alt="School Logo"
@@ -1871,7 +1991,7 @@ export default function PrintRaportView({
           </div>
 
           {/* Student metadata tables */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs mb-3 font-serif">
+          <div className={`grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 ${format.paperSize === "F4" ? "text-xs mb-3" : "text-[11px] md:text-xs mb-2"} font-serif`}>
             <table className="w-full border-none mx-auto">
               <tbody>
                 <tr>
@@ -1918,13 +2038,13 @@ export default function PrintRaportView({
           </div>
 
           {/* SECTION A: SIKAP */}
-          <div className="mb-3 font-serif">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-3" : "mb-2"} font-serif`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               A. Sikap
             </h4>
 
             {/* Spiritual Aspect Box */}
-            <div className="page-break-avoid border p-0 mb-2 border-black bg-transparent text-black">
+            <div className={`page-break-avoid border p-0 ${format.paperSize === "F4" ? "mb-2" : "mb-1.5"} border-black bg-transparent text-black`}>
               <table className="w-full border-collapse border-none mx-auto">
                 <tbody>
                   <tr className="border-b border-black">
@@ -1959,8 +2079,8 @@ export default function PrintRaportView({
                   <tr>
                     <td
                       colSpan={4}
-                      className="pt-1.5 pb-2.5 px-2 leading-relaxed text-justify"
-                      style={{ fontSize: "9.5pt" }}
+                      className={`${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-2" : "py-1 px-2"} leading-relaxed text-justify`}
+                      style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
                     >
                       <strong className="font-semibold mr-1 text-black">
                         Deskripsi:
@@ -1975,7 +2095,7 @@ export default function PrintRaportView({
             </div>
 
             {/* Sosial Aspect Box */}
-            <div className="page-break-avoid border p-0 mb-2 border-black bg-transparent text-black">
+            <div className={`page-break-avoid border p-0 ${format.paperSize === "F4" ? "mb-2" : "mb-1.5"} border-black bg-transparent text-black`}>
               <table className="w-full border-collapse border-none mx-auto">
                 <tbody>
                   <tr className="border-b border-black">
@@ -2010,8 +2130,8 @@ export default function PrintRaportView({
                   <tr>
                     <td
                       colSpan={4}
-                      className="pt-1.5 pb-2.5 px-2 leading-relaxed text-justify"
-                      style={{ fontSize: "9.5pt" }}
+                      className={`${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-2" : "py-1 px-2"} leading-relaxed text-justify`}
+                      style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
                     >
                       <strong className="font-semibold mr-1 text-black">
                         Deskripsi:
@@ -2027,8 +2147,8 @@ export default function PrintRaportView({
           </div>
 
           {/* SECTION B: UMUM */}
-          <div className="mb-3 font-serif">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-3" : "mb-2"} font-serif`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               B. Umum
             </h4>
 
@@ -2042,7 +2162,7 @@ export default function PrintRaportView({
               return (
                 <div
                   key={sub}
-                  className="page-break-avoid border p-0 mb-2 border-black bg-transparent text-black"
+                  className={`page-break-avoid border p-0 ${format.paperSize === "F4" ? "mb-2" : "mb-1.5"} border-black bg-transparent text-black`}
                 >
                   <table className="w-full border-collapse border-none mx-auto">
                     <tbody>
@@ -2078,8 +2198,8 @@ export default function PrintRaportView({
                       <tr>
                         <td
                           colSpan={4}
-                          className="pt-1.5 pb-2.5 px-2 leading-relaxed text-justify text-slate-850"
-                          style={{ fontSize: "9.5pt" }}
+                          className={`${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-2" : "py-1 px-2"} leading-relaxed text-justify text-slate-850`}
+                          style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
                         >
                           <strong className="font-semibold mr-1 text-black">
                             Deskripsi:
@@ -2095,8 +2215,8 @@ export default function PrintRaportView({
           </div>
 
           {/* SECTION C: MUATAN LOKAL */}
-          <div className="mb-3 font-serif">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-3" : "mb-2"} font-serif`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               C. Muatan Lokal
             </h4>
 
@@ -2110,7 +2230,7 @@ export default function PrintRaportView({
               return (
                 <div
                   key={sub}
-                  className="page-break-avoid border p-0 mb-2 border-black bg-transparent text-black"
+                  className={`page-break-avoid border p-0 ${format.paperSize === "F4" ? "mb-2" : "mb-1.5"} border-black bg-transparent text-black`}
                 >
                   <table className="w-full border-collapse border-none mx-auto">
                     <tbody>
@@ -2146,8 +2266,8 @@ export default function PrintRaportView({
                       <tr>
                         <td
                           colSpan={4}
-                          className="pt-1.5 pb-2.5 px-2 leading-relaxed text-justify text-slate-850"
-                          style={{ fontSize: "9.5pt" }}
+                          className={`${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-2" : "py-1 px-2"} leading-relaxed text-justify text-slate-850`}
+                          style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
                         >
                           <strong className="font-semibold mr-1 text-black">
                             Deskripsi:
@@ -2163,8 +2283,8 @@ export default function PrintRaportView({
           </div>
 
           {/* SECTION D: KEISLAMAN */}
-          <div className="mb-3 font-serif">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-3" : "mb-2"} font-serif`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               D. Keislaman
             </h4>
 
@@ -2178,7 +2298,7 @@ export default function PrintRaportView({
               return (
                 <div
                   key={sub}
-                  className="page-break-avoid border p-0 mb-2 border-black bg-transparent text-black"
+                  className={`page-break-avoid border p-0 ${format.paperSize === "F4" ? "mb-2" : "mb-1.5"} border-black bg-transparent text-black`}
                 >
                   <table className="w-full border-collapse border-none mx-auto">
                     <tbody>
@@ -2214,8 +2334,8 @@ export default function PrintRaportView({
                       <tr>
                         <td
                           colSpan={4}
-                          className="pt-1.5 pb-2.5 px-2 leading-relaxed text-justify text-slate-850"
-                          style={{ fontSize: "9.5pt" }}
+                          className={`${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-2" : "py-1 px-2"} leading-relaxed text-justify text-slate-850`}
+                          style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
                         >
                           <strong className="font-semibold mr-1 text-black">
                             Deskripsi:
@@ -2231,8 +2351,8 @@ export default function PrintRaportView({
           </div>
 
           {/* SECTION E: EKSTRAKURIKULER DAN KETERAMPILAN */}
-          <div className="mb-3 font-serif">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-3" : "mb-2"} font-serif`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               E. Ekstrakurikuler dan Keterampilan
             </h4>
             {((waliKelasNote as any).ekskul || []).length === 0 ? (
@@ -2246,7 +2366,7 @@ export default function PrintRaportView({
                   return (
                     <div
                       key={idx}
-                      className="page-break-avoid border p-0 mb-2 border-black bg-transparent text-black"
+                      className={`page-break-avoid border p-0 ${format.paperSize === "F4" ? "mb-2" : "mb-1.5"} border-black bg-transparent text-black`}
                     >
                       <table className="w-full border-collapse border-none mx-auto">
                         <tbody>
@@ -2283,8 +2403,8 @@ export default function PrintRaportView({
                           <tr>
                             <td
                               colSpan={4}
-                              className="pt-1.5 pb-2.5 px-2 leading-relaxed text-justify text-slate-850"
-                              style={{ fontSize: "9.5pt" }}
+                              className={`${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-2" : "py-1 px-2"} leading-relaxed text-justify text-slate-850`}
+                              style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
                             >
                               <strong className="font-semibold mr-1 text-black">
                                 Deskripsi:
@@ -2302,40 +2422,40 @@ export default function PrintRaportView({
           </div>
 
           {/* SECTION F: SARAN-SARAN */}
-          <div className="mb-3 font-serif page-break-avoid">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-3" : "mb-2"} font-serif page-break-avoid`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               F. Saran-Saran
             </h4>
             <div
-              className="border pt-1.5 pb-2.5 px-3 text-xs leading-relaxed text-justify border-black text-slate-900 bg-transparent min-h-[40px]"
-              style={{ fontSize: "9.5pt" }}
+              className={`border ${format.paperSize === "F4" ? "pt-1.5 pb-2.5 px-3 min-h-[40px]" : "py-1 px-2.5 min-h-[28px]"} text-xs leading-relaxed text-justify border-black text-slate-900 bg-transparent`}
+              style={{ fontSize: format.paperSize === "F4" ? "9.5pt" : "8.75pt" }}
             >
               {waliKelasNote.catatan || ""}
             </div>
           </div>
 
           {/* SECTION G: KEDISIPLINAN */}
-          <div className="mb-4 font-serif page-break-avoid">
-            <h4 className="text-xs md:text-sm font-bold mb-2.5 uppercase tracking-wide text-black">
+          <div className={`${format.paperSize === "F4" ? "mb-4" : "mb-2.5"} font-serif page-break-avoid`}>
+            <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               G. Kedisiplinan
             </h4>
             <table className="w-full border border-black border-collapse text-center text-xs text-black bg-transparent mx-auto">
               <thead>
                 <tr className="bg-transparent border-b border-black">
                   <th
-                    className="py-1.5 px-2 font-bold border-r border-black w-1/3 text-center align-middle"
+                    className={`${format.paperSize === "F4" ? "py-1.5" : "py-1"} px-2 font-bold border-r border-black w-1/3 text-center align-middle`}
                     style={{ lineHeight: "1.2" }}
                   >
                     Sakit
                   </th>
                   <th
-                    className="py-1.5 px-2 font-bold border-r border-black w-1/3 text-center align-middle"
+                    className={`${format.paperSize === "F4" ? "py-1.5" : "py-1"} px-2 font-bold border-r border-black w-1/3 text-center align-middle`}
                     style={{ lineHeight: "1.2" }}
                   >
                     Izin
                   </th>
                   <th
-                    className="py-1.5 px-2 font-bold w-1/3 text-center align-middle"
+                    className={`${format.paperSize === "F4" ? "py-1.5" : "py-1"} px-2 font-bold w-1/3 text-center align-middle`}
                     style={{ lineHeight: "1.2" }}
                   >
                     Tanpa Keterangan
@@ -2345,7 +2465,7 @@ export default function PrintRaportView({
               <tbody>
                 <tr>
                   <td
-                    className="py-1.5 border-r border-black text-xs text-center align-middle"
+                    className={`${format.paperSize === "F4" ? "py-1.5" : "py-1"} border-r border-black text-xs text-center align-middle`}
                     style={{ lineHeight: "1.2" }}
                   >
                     {waliKelasNote.sakit && Number(waliKelasNote.sakit) > 0
@@ -2353,7 +2473,7 @@ export default function PrintRaportView({
                       : "- Hari"}
                   </td>
                   <td
-                    className="py-1.5 border-r border-black text-xs text-center align-middle"
+                    className={`${format.paperSize === "F4" ? "py-1.5" : "py-1"} border-r border-black text-xs text-center align-middle`}
                     style={{ lineHeight: "1.2" }}
                   >
                     {waliKelasNote.izin && Number(waliKelasNote.izin) > 0
@@ -2361,7 +2481,7 @@ export default function PrintRaportView({
                       : "- Hari"}
                   </td>
                   <td
-                    className="py-1.5 text-xs text-center align-middle"
+                    className={`${format.paperSize === "F4" ? "py-1.5" : "py-1"} text-xs text-center align-middle`}
                     style={{ lineHeight: "1.2" }}
                   >
                     {waliKelasNote.alpa && Number(waliKelasNote.alpa) > 0
@@ -2374,11 +2494,11 @@ export default function PrintRaportView({
           </div>
 
           {/* Signatures section aligned side-by-side */}
-          <div className="text-xs mt-8 space-y-12 font-serif page-break-avoid text-black">
+          <div className={`${format.paperSize === "F4" ? "text-xs mt-6 space-y-8" : "text-[11px] md:text-xs mt-3 space-y-4 md:space-y-5"} font-serif page-break-avoid text-black`}>
             {/* Wali Kelas and Parent side-by-side */}
             <div className="grid grid-cols-2 text-center gap-4">
               <div>
-                <p className="mb-16 text-black font-semibold">
+                <p className={`${format.paperSize === "F4" ? "mb-10" : "mb-6"} text-black font-semibold`}>
                   <span className="invisible block">&nbsp;</span>
                   Orang Tua/Wali Siswa
                 </p>
@@ -2387,7 +2507,7 @@ export default function PrintRaportView({
                 </div>
               </div>
               <div>
-                <p className="mb-16 text-black">
+                <p className={`${format.paperSize === "F4" ? "mb-10" : "mb-6"} text-black`}>
                   Pangkal Pinang, {format.tanggalRaport || "17 Juni 2026"}
                   <br />
                   <span className="font-semibold">
@@ -2402,9 +2522,9 @@ export default function PrintRaportView({
 
             {/* Underneath: Kepala sekolah based on signaturePosition */}
             {format.signaturePosition === "kiri" ? (
-              <div className="grid grid-cols-2 text-center gap-4 pt-4">
+              <div className="grid grid-cols-2 text-center gap-4 pt-1">
                 <div>
-                  <p className="mb-16 uppercase font-bold tracking-wide text-black">
+                  <p className={`${format.paperSize === "F4" ? "mb-10" : "mb-6"} uppercase font-bold tracking-wide text-black`}>
                     Mengetahui,
                     <br />
                     Kepala Sekolah
@@ -2412,16 +2532,16 @@ export default function PrintRaportView({
                   <div className="font-bold inline-block text-center text-black">
                     {principal.name}
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold">
                     NIP. {principal.nip}
                   </p>
                 </div>
                 <div>{/* Empty column on right */}</div>
               </div>
             ) : format.signaturePosition === "tengah" ? (
-              <div className="text-center pt-4">
+              <div className="text-center pt-1">
                 <div className="max-w-md mx-auto justify-center text-black">
-                  <p className="mb-16 uppercase font-bold tracking-wide text-black">
+                  <p className={`${format.paperSize === "F4" ? "mb-10" : "mb-6"} uppercase font-bold tracking-wide text-black`}>
                     Mengetahui,
                     <br />
                     Kepala Sekolah
@@ -2429,16 +2549,16 @@ export default function PrintRaportView({
                   <div className="font-bold inline-block text-center text-black">
                     {principal.name}
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold">
                     NIP. {principal.nip}
                   </p>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 text-center gap-4 pt-4">
+              <div className="grid grid-cols-2 text-center gap-4 pt-1">
                 <div>{/* Empty column on left */}</div>
                 <div>
-                  <p className="mb-16 uppercase font-bold tracking-wide text-black">
+                  <p className={`${format.paperSize === "F4" ? "mb-10" : "mb-6"} uppercase font-bold tracking-wide text-black`}>
                     Mengetahui,
                     <br />
                     Kepala Sekolah
@@ -2446,7 +2566,7 @@ export default function PrintRaportView({
                   <div className="font-bold inline-block text-center text-black">
                     {principal.name}
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono mt-1 font-bold">
+                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold">
                     NIP. {principal.nip}
                   </p>
                 </div>

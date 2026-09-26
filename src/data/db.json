@@ -2286,5 +2286,25 @@
     "Tahfizh Al-Qur’an",
     "Do’a Harian dan Hadits",
     "Wudhu dan Sholat"
-  ]
+  ],
+  "settings": {
+    "principalName": "Ustadz H. Ir. Abdul Muhyi, M.Pd",
+    "principalNip": "19780512 200501 1 002",
+    "format": {
+      "semesterName": "Ganjil",
+      "tahunPelajaran": "2026/2027",
+      "fontSize": "11pt",
+      "showLogo": true,
+      "showSpiritual": true,
+      "showSosial": true,
+      "showAttendance": true,
+      "showCatatan": true,
+      "fontFamily": "Times New Roman",
+      "paperSize": "A4",
+      "tanggalRaport": "17 Juni 2026",
+      "signaturePosition": "kanan",
+      "watermarkSize": 440,
+      "watermarkOpacity": 0.05
+    }
+  }
 }
