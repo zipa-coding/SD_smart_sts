@@ -346,6 +346,38 @@ app.put("/api/students/:id", async (req, res) => {
   res.json(db.students[index]);
 });
 
+app.delete("/api/students/batch", async (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "Daftar ID siswa tidak valid." });
+  }
+  const db = await readDB();
+  const idSet = new Set(ids.map(String));
+  db.students = db.students.filter((s: any) => !idSet.has(String(s.id)));
+  db.grades = db.grades.filter((g: any) => !idSet.has(String(g.studentId)));
+  if (db.walikelas_notes) {
+    ids.forEach((id: string) => { delete db.walikelas_notes[id]; });
+  }
+  await writeDB(db);
+  res.json({ message: `${ids.length} siswa berhasil dihapus.`, deletedCount: ids.length });
+});
+
+app.post("/api/students/delete-batch", async (req, res) => {
+  const { ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: "Daftar ID siswa tidak valid." });
+  }
+  const db = await readDB();
+  const idSet = new Set(ids.map(String));
+  db.students = db.students.filter((s: any) => !idSet.has(String(s.id)));
+  db.grades = db.grades.filter((g: any) => !idSet.has(String(g.studentId)));
+  if (db.walikelas_notes) {
+    ids.forEach((id: string) => { delete db.walikelas_notes[id]; });
+  }
+  await writeDB(db);
+  res.json({ message: `${ids.length} siswa berhasil dihapus.`, deletedCount: ids.length });
+});
+
 app.delete("/api/students/:id", async (req, res) => {
   const { id } = req.params;
   const db = await readDB();
@@ -533,24 +565,28 @@ app.post("/api/tps", async (req, res) => {
   res.status(201).json(newTP);
 });
 
-app.delete("/api/tps/:subject/:tpId", async (req, res) => {
+const deleteTpHandler = async (req: any, res: any) => {
   const { subject, tpId } = req.params;
+  const decodedSubject = decodeURIComponent(subject);
   const db = await readDB();
 
   if (
     db.tujuan_pembelajaran_templates &&
-    db.tujuan_pembelajaran_templates[subject]
+    db.tujuan_pembelajaran_templates[decodedSubject]
   ) {
-    db.tujuan_pembelajaran_templates[subject] =
-      db.tujuan_pembelajaran_templates[subject].filter(
-        (tp: any) => tp.id !== tpId,
+    db.tujuan_pembelajaran_templates[decodedSubject] =
+      db.tujuan_pembelajaran_templates[decodedSubject].filter(
+        (tp: any) => String(tp.id) !== String(tpId),
       );
     await writeDB(db);
     res.json({ message: "TP berhasil dihapus." });
   } else {
     res.status(404).json({ error: "Tujuan Pembelajaran tidak ditemukan." });
   }
-});
+};
+
+app.delete("/api/tps/:subject/:tpId", deleteTpHandler);
+app.delete("/api/tp/:subject/:tpId", deleteTpHandler);
 
 // 6.5. School Settings API (Principal, NIP & Raport Format config)
 app.get("/api/settings", async (req, res) => {

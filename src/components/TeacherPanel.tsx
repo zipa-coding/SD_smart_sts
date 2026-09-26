@@ -465,7 +465,7 @@ export default function TeacherPanel({
     setSuccess("");
 
     try {
-      const response = await fetch(`/api/tps/${user.subject}/${tpId}`, {
+      const response = await fetch(`/api/tps/${encodeURIComponent(user.subject)}/${tpId}`, {
         method: "DELETE",
       });
 

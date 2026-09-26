@@ -39,38 +39,18 @@ function initializeLocalStorage() {
     if (raw) {
       try {
         clientDbCache = JSON.parse(raw);
-        // If stored database still has old SMP structure (e.g. teachers or students with kelas 7, 8, 9 and no 1-6), refresh with SD data
+        // Only reset if stored database still has old SMP structure (e.g. teachers with kelas 7, 8, 9)
         const hasSmpTeachers = Array.isArray(clientDbCache.teachers) && clientDbCache.teachers.some((t: any) => ["7", "8", "9"].includes(t.kelas));
-        const hasSdClasses = Array.isArray(clientDbCache.students) && clientDbCache.students.some((s: any) => ["1", "2", "3", "4", "5", "6"].includes(s.kelas));
         
-        if (hasSmpTeachers || !hasSdClasses) {
+        if (hasSmpTeachers) {
           clientDbCache = dbData;
           localStorage.setItem('smart_sts_db', JSON.stringify(dbData));
           return;
         }
 
-        // Ensure TP templates are strictly separated per class (Kelas 1 - 6)
-        let needsSave = false;
+        // Initialize TP templates if completely missing
         if (!clientDbCache.tujuan_pembelajaran_templates || typeof clientDbCache.tujuan_pembelajaran_templates !== 'object') {
           clientDbCache.tujuan_pembelajaran_templates = dbData.tujuan_pembelajaran_templates;
-          needsSave = true;
-        } else {
-          const seedTemplates = dbData.tujuan_pembelajaran_templates as Record<string, any[]>;
-          for (const sub of Object.keys(seedTemplates)) {
-            const currentList = clientDbCache.tujuan_pembelajaran_templates[sub];
-            if (
-              !Array.isArray(currentList) ||
-              currentList.length === 0 ||
-              currentList.some((t: any) => !t.kelas || t.kelas === "all" || ["7", "8", "9"].includes(String(t.kelas))) ||
-              !currentList.some((t: any) => String(t.kelas).trim() === "1") ||
-              !currentList.some((t: any) => String(t.kelas).trim() === "6")
-            ) {
-              clientDbCache.tujuan_pembelajaran_templates[sub] = seedTemplates[sub];
-              needsSave = true;
-            }
-          }
-        }
-        if (needsSave) {
           localStorage.setItem('smart_sts_db', JSON.stringify(clientDbCache));
         }
       } catch (e) {
@@ -93,7 +73,18 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
   }
 
   initializeLocalStorage();
-  const getDB = () => clientDbCache || JSON.parse(localStorage.getItem('smart_sts_db') || '{}');
+  const getDB = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem('smart_sts_db');
+        if (raw) {
+          clientDbCache = JSON.parse(raw);
+          return clientDbCache;
+        }
+      }
+    } catch (e) {}
+    return clientDbCache || JSON.parse(JSON.stringify(dbData));
+  };
   const saveDB = (data: any) => {
     clientDbCache = data;
     localStorage.setItem('smart_sts_db', JSON.stringify(data));
@@ -208,6 +199,13 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           return new Response(JSON.stringify(s), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
+        // DELETE /api/students/batch or POST /api/students/delete-batch
+        if ((path === '/api/students/batch' && method === 'DELETE') || (path === '/api/students/delete-batch' && method === 'POST')) {
+          const ids = body?.ids || [];
+          const res = await firebaseApi.deleteStudentsBatch(ids);
+          return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
         // DELETE /api/students/:id
         if (path.startsWith('/api/students/') && method === 'DELETE') {
           const id = path.split('/').pop() || "";
@@ -251,13 +249,31 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           return new Response(JSON.stringify(tp), { status: 201, headers: { 'Content-Type': 'application/json' } });
         }
 
-        // DELETE /api/tps/:subject/:tpId
-        if (path.startsWith('/api/tps/') && method === 'DELETE') {
-          const parts = path.split('/');
+        // DELETE /api/tps/:subject/:tpId or /api/tp/:subject/:tpId
+        if ((path.startsWith('/api/tps/') || path.startsWith('/api/tp/')) && method === 'DELETE') {
+          const raw = path.replace(/^\/api\/(?:tps|tp)\//, '');
+          const parts = raw.split('/');
           const tpId = parts.pop() || "";
-          const subject = decodeURIComponent(parts.pop() || '');
+          const subject = decodeURIComponent(parts.join('/'));
           const res = await firebaseApi.deleteTP(subject, tpId);
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        // GET, POST, DELETE /api/subjects
+        if (path === '/api/subjects' && method === 'GET') {
+          const s = await firebaseApi.getSubjects();
+          return new Response(JSON.stringify(s), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (path === '/api/subjects' && method === 'POST') {
+          const s = await firebaseApi.postSubject(body?.name);
+          return new Response(JSON.stringify({ message: "Mata pelajaran berhasil ditambahkan.", subjects: s }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (path.startsWith('/api/subjects/') && method === 'DELETE') {
+          const name = decodeURIComponent(path.replace('/api/subjects/', '')).trim();
+          const s = await firebaseApi.deleteSubject(name);
+          return new Response(JSON.stringify({ message: `Mata pelajaran "${name}" berhasil dihapus.`, subjects: s }), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
         // 7. GET /api/settings
@@ -499,6 +515,20 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       return new Response(JSON.stringify(db.students[index]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
+    // DELETE /api/students/batch or POST /api/students/delete-batch
+    if ((path === '/api/students/batch' && method === 'DELETE') || (path === '/api/students/delete-batch' && method === 'POST')) {
+      const ids: string[] = body?.ids || [];
+      const db = getDB();
+      const idSet = new Set(ids.map(String));
+      db.students = db.students.filter((s: any) => !idSet.has(String(s.id)));
+      db.grades = db.grades.filter((g: any) => !idSet.has(String(g.studentId)));
+      if (db.walikelas_notes) {
+        ids.forEach(id => { delete db.walikelas_notes[id]; });
+      }
+      saveDB(db);
+      return new Response(JSON.stringify({ message: `${ids.length} siswa berhasil dihapus.`, deletedCount: ids.length }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
     // DELETE /api/students/:id
     if (path.startsWith('/api/students/') && method === 'DELETE') {
       const id = path.split('/').pop();
@@ -615,14 +645,15 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       return new Response(JSON.stringify(newTP), { status: 201, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // DELETE /api/tps/:subject/:tpId
-    if (path.startsWith('/api/tps/') && method === 'DELETE') {
-      const parts = path.split('/');
+    // DELETE /api/tps/:subject/:tpId or /api/tp/:subject/:tpId
+    if ((path.startsWith('/api/tps/') || path.startsWith('/api/tp/')) && method === 'DELETE') {
+      const raw = path.replace(/^\/api\/(?:tps|tp)\//, '');
+      const parts = raw.split('/');
       const tpId = parts.pop();
-      const subject = decodeURIComponent(parts.pop() || '');
+      const subject = decodeURIComponent(parts.join('/'));
       const db = getDB();
       if (db.tujuan_pembelajaran_templates && db.tujuan_pembelajaran_templates[subject]) {
-        db.tujuan_pembelajaran_templates[subject] = db.tujuan_pembelajaran_templates[subject].filter((tp: any) => tp.id !== tpId);
+        db.tujuan_pembelajaran_templates[subject] = db.tujuan_pembelajaran_templates[subject].filter((tp: any) => String(tp.id) !== String(tpId));
         saveDB(db);
         return new Response(JSON.stringify({ message: "TP berhasil dihapus." }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }

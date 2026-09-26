@@ -21,6 +21,7 @@ import {
   Search,
   FileText,
   Copy,
+  Loader2,
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -43,6 +44,18 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
   const [ekskuls, setEkskuls] = useState<
     { id: string; name: string; type: "Wajib" | "Pilihan" }[]
   >([]);
+
+  // Batch student selection state
+  const [selectedStudentIds, setSelectedStudentIds] = useState<Set<string>>(new Set());
+
+  // In-app Delete Confirmation Modal State
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
+  const [deleteConfirmLoading, setDeleteConfirmLoading] = useState(false);
 
   // Subject management state
   const [newSubjectName, setNewSubjectName] = useState("");
@@ -375,19 +388,21 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
     }
   };
 
-  const handleDeleteEkskul = async (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus ekstrakurikuler ini?"))
-      return;
-    setError("");
-    try {
-      const res = await fetch(`/api/ekskul/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal menghapus.");
-      await fetchAllData();
-      showSuccess("Ekstrakurikuler berhasil dihapus.");
-    } catch (err: any) {
-      setError(err.message || "Gagal menghapus.");
-    }
+  const handleDeleteEkskul = (id: string) => {
+    const item = ekskuls.find((e) => e.id === id);
+    setDeleteConfirm({
+      title: "Hapus Ekstrakurikuler",
+      message: `Apakah Anda yakin ingin menghapus ekstrakurikuler "${item ? item.name : id}"?`,
+      confirmLabel: "Hapus Ekskul",
+      onConfirm: async () => {
+        const res = await fetch(`/api/ekskul/${id}`, { method: "DELETE" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Gagal menghapus.");
+        setEkskuls((prev) => prev.filter((e) => e.id !== id));
+        fetchAllData();
+        showSuccess("Ekstrakurikuler berhasil dihapus.");
+      },
+    });
   };
 
   // Subject Management Handlers
@@ -420,29 +435,34 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
     }
   };
 
-  const handleDeleteSubject = async (subjectName: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus mata pelajaran "${subjectName}"? Seluruh template TP terkait mapel ini akan ikut dihapus.`)) {
-      return;
-    }
-    setError("");
-    setDeletingSubject(subjectName);
-    try {
-      const res = await fetch(`/api/subjects/${encodeURIComponent(subjectName)}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Gagal menghapus mata pelajaran.");
-      }
+  const handleDeleteSubject = (subjectName: string) => {
+    setDeleteConfirm({
+      title: "Hapus Mata Pelajaran",
+      message: `Apakah Anda yakin ingin menghapus mata pelajaran "${subjectName}"? Seluruh template TP terkait mapel ini akan ikut dihapus.`,
+      confirmLabel: "Hapus Mata Pelajaran",
+      onConfirm: async () => {
+        setDeletingSubject(subjectName);
+        try {
+          const res = await fetch(
+            `/api/subjects/${encodeURIComponent(subjectName)}`,
+            {
+              method: "DELETE",
+            },
+          );
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || "Gagal menghapus mata pelajaran.");
+          }
 
-      showSuccess(`Mata pelajaran "${subjectName}" berhasil dihapus.`);
-      await fetchAllData();
-      onRefreshTrigger();
-    } catch (err: any) {
-      setError(err.message || "Gagal menghapus mata pelajaran.");
-    } finally {
-      setDeletingSubject(null);
-    }
+          setSubjectsList((prev) => prev.filter((s) => s !== subjectName));
+          showSuccess(`Mata pelajaran "${subjectName}" berhasil dihapus.`);
+          fetchAllData();
+          onRefreshTrigger();
+        } finally {
+          setDeletingSubject(null);
+        }
+      },
+    });
   };
 
   // Fetch all starting info
@@ -627,21 +647,27 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
     setIsTeacherModalOpen(true);
   };
 
-  const deleteTeacher = async (id: string) => {
-    if (!confirm("Apakah Anda yakin ingin menghapus akun guru ini?")) return;
-    setError("");
-
-    try {
-      const response = await fetch(`/api/teachers/${id}`, { method: "DELETE" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Gagal menghapus guru.");
-
-      await fetchAllData();
-      onRefreshTrigger();
-      showSuccess("Guru berhasil dihapus.");
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan.");
+  const deleteTeacher = (id: string) => {
+    if (id === "t1") {
+      setError("Akun Super Admin utama tidak boleh dihapus.");
+      return;
     }
+    const t = teachers.find((x) => x.id === id);
+    setDeleteConfirm({
+      title: "Hapus Akun Guru",
+      message: `Apakah Anda yakin ingin menghapus akun guru "${t ? t.name : id}"? Guru ini tidak akan dapat login lagi.`,
+      confirmLabel: "Hapus Akun Guru",
+      onConfirm: async () => {
+        const response = await fetch(`/api/teachers/${id}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Gagal menghapus guru.");
+
+        setTeachers((prev) => prev.filter((x) => x.id !== id));
+        fetchAllData();
+        onRefreshTrigger();
+        showSuccess("Guru berhasil dihapus.");
+      },
+    });
   };
 
   // STUDENT CRUD
@@ -722,26 +748,55 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
     setIsStudentModalOpen(true);
   };
 
-  const deleteStudent = async (id: string) => {
-    if (
-      !confirm(
-        "Menghapus siswa ini juga akan menghapus seluruh data nilai dan catatan wali kelasnya. Lanjutkan?",
-      )
-    )
-      return;
-    setError("");
+  const deleteStudent = (id: string) => {
+    const s = students.find((x) => x.id === id);
+    setDeleteConfirm({
+      title: "Hapus Siswa",
+      message: `Menghapus siswa "${s ? s.name : id}" (NISN: ${s ? s.nisn : "-"}) juga akan menghapus seluruh data nilai dan catatan wali kelasnya secara permanen. Lanjutkan?`,
+      confirmLabel: "Hapus Siswa",
+      onConfirm: async () => {
+        const response = await fetch(`/api/students/${id}`, { method: "DELETE" });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Gagal menghapus siswa.");
 
-    try {
-      const response = await fetch(`/api/students/${id}`, { method: "DELETE" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Gagal menghapus siswa.");
+        setStudents((prev) => prev.filter((x) => x.id !== id));
+        setSelectedStudentIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        fetchAllData();
+        onRefreshTrigger();
+        showSuccess("Siswa berhasil dihapus bersama relasi nilainya.");
+      },
+    });
+  };
 
-      await fetchAllData();
-      onRefreshTrigger();
-      showSuccess("Siswa dihapus bersama relasi nilainya.");
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan.");
-    }
+  const deleteBatchStudents = (idsToDelete?: string[]) => {
+    const targetIds = idsToDelete || Array.from(selectedStudentIds);
+    if (targetIds.length === 0) return;
+
+    setDeleteConfirm({
+      title: "Hapus Banyak Siswa Sekaligus",
+      message: `Apakah Anda yakin ingin menghapus ${targetIds.length} siswa yang dipilih secara permanen beserta seluruh data nilai dan catatan wali kelas mereka?`,
+      confirmLabel: `Hapus ${targetIds.length} Siswa`,
+      onConfirm: async () => {
+        const response = await fetch("/api/students/delete-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: targetIds }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Gagal menghapus data siswa.");
+
+        const deletedSet = new Set(targetIds);
+        setStudents((prev) => prev.filter((s) => !deletedSet.has(s.id)));
+        setSelectedStudentIds(new Set());
+        fetchAllData();
+        onRefreshTrigger();
+        showSuccess(`${targetIds.length} siswa berhasil dihapus secara massal.`);
+      },
+    });
   };
 
   // Objectives (TP) Adding
@@ -771,21 +826,33 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
     }
   };
 
-  const deleteTpObjective = async (subject: string, tpId: string) => {
-    if (!confirm("Hapus Tujuan Pembelajaran (TP) template ini?")) return;
-    setError("");
+  const deleteTpObjective = (subject: string, tpId: string) => {
+    setDeleteConfirm({
+      title: "Hapus Tujuan Pembelajaran (TP)",
+      message: `Apakah Anda yakin ingin menghapus template TP ini untuk mata pelajaran "${subject}"?`,
+      confirmLabel: "Hapus TP",
+      onConfirm: async () => {
+        const response = await fetch(
+          `/api/tps/${encodeURIComponent(subject)}/${tpId}`,
+          {
+            method: "DELETE",
+          },
+        );
+        if (!response.ok) throw new Error("Gagal menghapus tujuan pembelajaran.");
 
-    try {
-      const response = await fetch(`/api/tps/${subject}/${tpId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Gagal menghapus tujuan pembelajaran.");
-
-      await fetchAllData();
-      showSuccess("Tujuan Pembelajaran berhasil dihapus!");
-    } catch (err: any) {
-      setError(err.message || "Terjadi kesalahan.");
-    }
+        setTpsTemplates((prev) => {
+          const updated = { ...prev };
+          if (updated[subject]) {
+            updated[subject] = updated[subject].filter(
+              (item) => String(item.id) !== String(tpId),
+            );
+          }
+          return updated;
+        });
+        fetchAllData();
+        showSuccess("Tujuan Pembelajaran berhasil dihapus!");
+      },
+    });
   };
 
   const handleSettingsSubmit = async (e: React.FormEvent) => {
@@ -1166,10 +1233,106 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
             </div>
           </div>
 
+          {/* Batch Action Toolbar */}
+          {selectedStudentIds.size > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 mb-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-xl animate-fade-in shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-red-600 text-white font-black text-xs flex items-center justify-center shadow-xs">
+                  {selectedStudentIds.size}
+                </span>
+                <div>
+                  <span className="text-xs font-bold text-red-900 dark:text-red-200 block">
+                    {selectedStudentIds.size} siswa terpilih
+                  </span>
+                  <span className="text-[10px] text-red-700/80 dark:text-red-400">
+                    Siswa yang dipilih dapat dihapus sekaligus bersama seluruh nilai terkait
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStudentIds(new Set())}
+                  className="px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-red-100/50 dark:hover:bg-red-900/30 rounded-lg transition cursor-pointer"
+                >
+                  Batalkan Pilihan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteBatchStudents()}
+                  className="px-4 py-1.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus Siswa Terpilih ({selectedStudentIds.size})
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Clean Up Class Action if no items individually selected */}
+          {selectedStudentIds.size === 0 && filteredStudents.length > 0 && (
+            <div className="flex justify-end mb-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const targetList = filteredStudents;
+                  const label = studentClassFilter === "all" ? "Semua Siswa" : `Semua Siswa Kelas ${studentClassFilter}`;
+                  setDeleteConfirm({
+                    title: `Hapus ${label}`,
+                    message: `Apakah Anda yakin ingin menghapus seluruh ${targetList.length} siswa pada tampilan ini (${label})? Seluruh data nilai dan catatan wali kelasnya akan ikut dihapus.`,
+                    confirmLabel: `Hapus ${targetList.length} Siswa`,
+                    onConfirm: async () => {
+                      const ids = targetList.map((s) => s.id);
+                      const response = await fetch("/api/students/delete-batch", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ ids }),
+                      });
+                      const data = await response.json();
+                      if (!response.ok) throw new Error(data.error || "Gagal menghapus siswa.");
+                      const deletedSet = new Set(ids);
+                      setStudents((prev) => prev.filter((s) => !deletedSet.has(s.id)));
+                      fetchAllData();
+                      onRefreshTrigger();
+                      showSuccess(`${targetList.length} siswa berhasil dihapus.`);
+                    },
+                  });
+                }}
+                className="text-[11px] text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-semibold hover:underline flex items-center gap-1 cursor-pointer transition"
+              >
+                <Trash2 className="w-3 h-3" />
+                {studentClassFilter === "all"
+                  ? "Kosongkan/Hapus Seluruh Data Siswa"
+                  : `Hapus Seluruh Siswa di Kelas ${studentClassFilter} (${filteredStudents.length} Siswa)`}
+              </button>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs md:text-sm border-collapse text-gray-700 dark:text-slate-200">
               <thead>
                 <tr className="bg-gray-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-800">
+                  <th className="p-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredStudents.length > 0 &&
+                        filteredStudents.every((s) => selectedStudentIds.has(s.id))
+                      }
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const next = new Set(selectedStudentIds);
+                          filteredStudents.forEach((s) => next.add(s.id));
+                          setSelectedStudentIds(next);
+                        } else {
+                          const next = new Set(selectedStudentIds);
+                          filteredStudents.forEach((s) => next.delete(s.id));
+                          setSelectedStudentIds(next);
+                        }
+                      }}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                      title="Pilih semua siswa di tabel ini"
+                    />
+                  </th>
                   <th className="p-3 font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider w-12 text-center">
                     No
                   </th>
@@ -1190,43 +1353,64 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
               <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                 {filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-gray-400 dark:text-slate-500 text-xs">
+                    <td colSpan={6} className="p-6 text-center text-gray-400 dark:text-slate-500 text-xs">
                       Tidak ada data siswa yang cocok dengan filter atau pencarian.
                     </td>
                   </tr>
                 ) : (
-                  filteredStudents.map((s, idx) => (
-                    <tr key={s.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/40">
-                      <td className="p-3 text-center text-gray-400 dark:text-slate-500 font-mono text-xs">
-                        {idx + 1}
-                      </td>
-                      <td className="p-3 font-bold text-gray-800 dark:text-slate-100">{s.name}</td>
-                      <td className="p-3 font-mono text-gray-500 dark:text-slate-400">{s.nisn}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-850 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 rounded text-xs font-bold font-mono">
-                          Kelas {s.kelas}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="inline-flex gap-2">
-                          <button
-                            onClick={() => startEditStudent(s)}
-                            className="p-1 text-sky-650 hover:bg-sky-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
-                            title="Edit Siswa"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteStudent(s.id)}
-                            className="p-1 text-red-650 hover:bg-red-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
-                            title="Hapus Siswa"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                  filteredStudents.map((s, idx) => {
+                    const isSelected = selectedStudentIds.has(s.id);
+                    return (
+                      <tr
+                        key={s.id}
+                        className={`hover:bg-gray-50/50 dark:hover:bg-slate-800/40 transition ${
+                          isSelected ? "bg-red-50/40 dark:bg-red-950/20" : ""
+                        }`}
+                      >
+                        <td className="p-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              const next = new Set(selectedStudentIds);
+                              if (e.target.checked) next.add(s.id);
+                              else next.delete(s.id);
+                              setSelectedStudentIds(next);
+                            }}
+                            className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 dark:border-slate-700 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-3 text-center text-gray-400 dark:text-slate-500 font-mono text-xs">
+                          {idx + 1}
+                        </td>
+                        <td className="p-3 font-bold text-gray-800 dark:text-slate-100">{s.name}</td>
+                        <td className="p-3 font-mono text-gray-500 dark:text-slate-400">{s.nisn}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-850 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 rounded text-xs font-bold font-mono">
+                            Kelas {s.kelas}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="inline-flex gap-2">
+                            <button
+                              onClick={() => startEditStudent(s)}
+                              className="p-1 text-sky-650 hover:bg-sky-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
+                              title="Edit Siswa"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteStudent(s.id)}
+                              className="p-1 text-red-650 hover:bg-red-50 dark:hover:bg-slate-800 rounded transition cursor-pointer"
+                              title="Hapus Siswa"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -2631,6 +2815,79 @@ export default function AdminPanel({ onRefreshTrigger }: AdminPanelProps) {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* In-App Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/60 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0 mt-0.5">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  {deleteConfirm.title}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  {deleteConfirm.message}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleteConfirmLoading}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl text-amber-900 dark:text-amber-300 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <span>Data yang dihapus akan langsung hilang dari website dan database.</span>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirm(null)}
+                disabled={deleteConfirmLoading}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setDeleteConfirmLoading(true);
+                  try {
+                    await deleteConfirm.onConfirm();
+                    setDeleteConfirm(null);
+                  } catch (err: any) {
+                    setError(err.message || "Gagal menghapus data.");
+                  } finally {
+                    setDeleteConfirmLoading(false);
+                  }
+                }}
+                disabled={deleteConfirmLoading}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 active:bg-red-800 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {deleteConfirmLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>{deleteConfirm.confirmLabel || "Ya, Hapus"}</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

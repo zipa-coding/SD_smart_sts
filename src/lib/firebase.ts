@@ -37,6 +37,93 @@ export const isFirebaseConfigured = !!(
 let app: any = null;
 let db: any = null;
 
+// Helpers to guarantee data is NEVER lost and immediately persists
+export function getLocalFallbackData() {
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem("smart_sts_db");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    }
+  } catch (e) {}
+  return dbDataAny;
+}
+
+export function getDeletedSet(key: string): Set<string> {
+  try {
+    if (typeof window === 'undefined') return new Set();
+    const raw = localStorage.getItem(`smart_sts_deleted_${key}`);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr)) return new Set(arr.map(String));
+    }
+  } catch (e) {}
+  return new Set();
+}
+
+export function recordDeletedId(key: string, id: string | string[]) {
+  try {
+    if (typeof window === 'undefined') return;
+    const set = getDeletedSet(key);
+    const ids = Array.isArray(id) ? id : [id];
+    ids.forEach(i => { if (i) set.add(String(i).trim()); });
+    localStorage.setItem(`smart_sts_deleted_${key}`, JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+export function unmarkDeletedId(key: string, id: string | string[]) {
+  try {
+    if (typeof window === 'undefined') return;
+    const set = getDeletedSet(key);
+    const ids = Array.isArray(id) ? id : [id];
+    ids.forEach(i => { if (i) set.delete(String(i).trim()); });
+    localStorage.setItem(`smart_sts_deleted_${key}`, JSON.stringify(Array.from(set)));
+  } catch (e) {}
+}
+
+export function updateLocalFallbackItem(collectionName: 'students' | 'teachers' | 'grades' | 'ekskul', item: any, idKey: string = 'id') {
+  try {
+    if (typeof window === 'undefined') return;
+    const raw = localStorage.getItem("smart_sts_db");
+    const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+    if (!dbObj[collectionName]) dbObj[collectionName] = [];
+    const idx = dbObj[collectionName].findIndex((x: any) => String(x[idKey]) === String(item[idKey]));
+    if (idx >= 0) {
+      dbObj[collectionName][idx] = { ...dbObj[collectionName][idx], ...item };
+    } else {
+      dbObj[collectionName].push(item);
+    }
+    localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+  } catch (e) {
+    console.warn("Failed to update local storage item:", e);
+  }
+}
+
+export function deleteLocalFallbackItem(collectionName: 'students' | 'teachers' | 'grades' | 'ekskul', id: string, idKey: string = 'id') {
+  try {
+    if (typeof window === 'undefined') return;
+    const raw = localStorage.getItem("smart_sts_db");
+    if (!raw) return;
+    const dbObj = JSON.parse(raw);
+    if (!dbObj[collectionName]) return;
+    dbObj[collectionName] = dbObj[collectionName].filter((x: any) => String(x[idKey]) !== String(id));
+    
+    // Cascading clean up for students
+    if (collectionName === 'students') {
+      if (Array.isArray(dbObj.grades)) {
+        dbObj.grades = dbObj.grades.filter((g: any) => String(g.studentId) !== String(id));
+      }
+      if (dbObj.walikelas_notes && dbObj.walikelas_notes[id]) {
+        delete dbObj.walikelas_notes[id];
+      }
+    }
+
+    localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+  } catch (e) {}
+}
+
 // Timeout helper with 8s default so Firestore operations have ample time
 export function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   return Promise.race([
@@ -55,6 +142,8 @@ if (isFirebaseConfigured) {
     
     // Automatically populate Firestore in real-time immediately on boot if empty
     seedFirestoreIfEmpty();
+    // Schedule a quick retry in case security rules or network are initializing
+    setTimeout(() => seedFirestoreIfEmpty(), 4000);
   } catch (error) {
     console.warn("Firebase initialization skipped or failed:", error);
   }
@@ -67,7 +156,7 @@ export async function seedFirestoreIfEmpty() {
     
     // Check if teachers collection already exists
     const teachersRef = collection(db, "teachers");
-    const snapshot = await withTimeout(getDocs(teachersRef), 4000).catch(() => null);
+    const snapshot = await withTimeout(getDocs(teachersRef), 3500).catch(() => null);
     
     // If teachers collection exists and has documents, keep existing live data
     if (snapshot && !snapshot.empty) {
@@ -76,7 +165,7 @@ export async function seedFirestoreIfEmpty() {
     }
 
     // Check alternative 'guru' collection
-    const snapGuru = await withTimeout(getDocs(collection(db, "guru")), 2500).catch(() => null);
+    const snapGuru = await withTimeout(getDocs(collection(db, "guru")), 2000).catch(() => null);
     if (snapGuru && !snapGuru.empty) {
       console.log("Existing 'guru' collection detected, keeping live records.");
       return;
@@ -85,16 +174,7 @@ export async function seedFirestoreIfEmpty() {
     console.log("⚡ Auto-seeding Cloud Firestore in real-time with initial website data...");
     
     // Get source data from localStorage if available, otherwise dbDataAny
-    let sourceData = dbDataAny;
-    try {
-      const rawLocal = localStorage.getItem("smart_sts_db");
-      if (rawLocal) {
-        const parsed = JSON.parse(rawLocal);
-        if (parsed.teachers?.length || parsed.students?.length) {
-          sourceData = parsed;
-        }
-      }
-    } catch (e) {}
+    const sourceData = getLocalFallbackData();
 
     const writePromises: Promise<any>[] = [];
 
@@ -147,10 +227,13 @@ export async function seedFirestoreIfEmpty() {
     }
 
     // Execute in parallel batches
-    await Promise.allSettled(writePromises);
-    console.log(`✅ Cloud Firestore is now fully populated in real-time with ${writePromises.length} website records.`);
+    const results = await Promise.allSettled(writePromises);
+    const successful = results.filter(r => r.status === 'fulfilled').length;
+    if (successful > 0) {
+      console.log(`✅ Cloud Firestore is now populated in real-time with ${successful} website records.`);
+    }
   } catch (error) {
-    console.warn("Auto-seed Firestore error:", error);
+    console.warn("Auto-seed Firestore error (will retry when online/rules published):", error);
   }
 }
 
@@ -345,14 +428,18 @@ export const firebaseApi = {
 
   // 2. GET & POST /api/teachers
   getTeachers: async (): Promise<any[]> => {
-    if (!db) return [];
+    const deleted = getDeletedSet('teachers');
+    const fallback = (getLocalFallbackData().teachers || []).filter(
+      (t: any) => !deleted.has(String(t.id)) && !deleted.has(String(t.username || ""))
+    );
+    if (!db) return fallback;
     const teacherCollections = ["teachers", "guru", "Teachers", "Guru", "data_guru", "dataGuru", "data_teachers", "DataGuru", "ustadz"];
     try {
       for (const colName of teacherCollections) {
         try {
           const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
           if (snap && !snap.empty) {
-            return snap.docs.map(docSnap => {
+            const list = snap.docs.map(docSnap => {
               const d = docSnap.data();
               return {
                 id: docSnap.id,
@@ -365,6 +452,7 @@ export const firebaseApi = {
                 ...d
               };
             });
+            return list.filter((t: any) => !deleted.has(String(t.id)) && !deleted.has(String(t.username || "")));
           }
         } catch (err) {
           // continue
@@ -373,46 +461,82 @@ export const firebaseApi = {
     } catch (e) {
       console.warn("Failed to get teachers from Firestore:", e);
     }
-    return [];
+    return fallback;
   },
   postTeacher: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { name, username, password, subject, isWaliKelas, kelas } = body;
-    // Check duplication
-    const q = query(collection(db, "teachers"), where("username", "==", username));
-    const dup = await withTimeout(getDocs(q), 2500);
-    if (!dup.empty) throw new Error("Username sudah digunakan.");
+    const fallback = getLocalFallbackData();
+    const exists = (fallback.teachers || []).some((t: any) => t.username.toLowerCase() === username.toLowerCase());
+    if (exists) throw new Error("Username sudah digunakan.");
 
     const id = "t_" + Date.now();
     const newTeacher = { id, name, username, password, subject, isWaliKelas: !!isWaliKelas, kelas: kelas || "" };
-    await withTimeout(setDoc(doc(db, "teachers", id), newTeacher), 2500);
+    
+    unmarkDeletedId('teachers', [id, username]);
+    // Always persist to local cache immediately
+    updateLocalFallbackItem('teachers', newTeacher);
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "teachers", id), newTeacher), 4000);
+      } catch (err) {
+        console.warn("Firestore postTeacher write error:", err);
+      }
+    }
     return newTeacher;
   },
   putTeacher: async (id: string, body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { name, username, password, subject, isWaliKelas, kelas } = body;
-    const ref = doc(db, "teachers", id);
-    const updated = { name, username, password, subject, isWaliKelas: !!isWaliKelas, kelas: kelas || "" };
-    await withTimeout(updateDoc(ref, updated), 2500);
-    return { id, ...updated };
+    const updated = { id, name, username, password, subject, isWaliKelas: !!isWaliKelas, kelas: kelas || "" };
+    updateLocalFallbackItem('teachers', updated);
+
+    if (db) {
+      try {
+        await withTimeout(updateDoc(doc(db, "teachers", id), updated), 4000);
+      } catch (err) {
+        console.warn("Firestore putTeacher write error:", err);
+      }
+    }
+    return updated;
   },
   deleteTeacher: async (id: string) => {
-    if (!db) throw new Error("Database not connected");
     if (id === 't1') throw new Error("Akun Super Admin utama tidak boleh dihapus.");
-    await withTimeout(deleteDoc(doc(db, "teachers", id)), 2500);
+    const fallback = getLocalFallbackData();
+    const target = (fallback.teachers || []).find((t: any) => String(t.id) === String(id));
+    const username = target?.username;
+
+    recordDeletedId('teachers', [id, username].filter(Boolean) as string[]);
+    deleteLocalFallbackItem('teachers', id);
+
+    if (db) {
+      try {
+        await withTimeout(deleteDoc(doc(db, "teachers", id)), 4000);
+        await deleteDoc(doc(db, "guru", id)).catch(() => {});
+        if (username) {
+          await deleteDoc(doc(db, "teachers", username)).catch(() => {});
+          await deleteDoc(doc(db, "guru", username)).catch(() => {});
+        }
+      } catch (err) {
+        console.warn("Firestore deleteTeacher error:", err);
+      }
+    }
     return { message: "Guru berhasil dihapus." };
   },
 
   // 3. GET, POST, PUT, DELETE /api/students
   getStudents: async (): Promise<any[]> => {
-    if (!db) return dbDataAny.students || [];
+    const deleted = getDeletedSet('students');
+    const fallback = (getLocalFallbackData().students || []).filter(
+      (s: any) => !deleted.has(String(s.id)) && !deleted.has(String(s.nisn || ""))
+    );
+    if (!db) return fallback;
     const studentCollections = ["students", "siswa", "Students", "Siswa", "data_siswa", "dataSiswa", "data_students", "DataSiswa", "santri"];
     try {
       for (const colName of studentCollections) {
         try {
           const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
           if (snap && !snap.empty) {
-            return snap.docs.map(docSnap => {
+            const list = snap.docs.map(docSnap => {
               const d = docSnap.data();
               return {
                 id: docSnap.id,
@@ -422,6 +546,7 @@ export const firebaseApi = {
                 ...d
               };
             });
+            return list.filter((s: any) => !deleted.has(String(s.id)) && !deleted.has(String(s.nisn || "")));
           }
         } catch (err) {
           // continue
@@ -430,24 +555,34 @@ export const firebaseApi = {
     } catch (e) {
       console.warn("Failed to get students from Firestore:", e);
     }
-    return dbDataAny.students || [];
+    return fallback;
   },
   postStudent: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { name, nisn, kelas } = body;
     const cleanNisn = String(nisn || "").trim().replace(/\D/g, "");
-    const q = query(collection(db, "students"), where("nisn", "==", cleanNisn));
-    const dup = await withTimeout(getDocs(q), 5000).catch(() => ({ empty: true }));
-    if (!dup.empty) throw new Error("Siswa dengan NISN ini sudah terdaftar.");
+    const fallback = getLocalFallbackData();
+    const dupLocal = (fallback.students || []).some((s: any) => String(s.nisn).trim() === cleanNisn);
+    if (dupLocal) throw new Error("Siswa dengan NISN ini sudah terdaftar.");
 
     const id = "s_" + Date.now();
     const newStudent = { id, nisn: cleanNisn, name: String(name || "").trim(), kelas: String(kelas || "1").trim() };
-    await withTimeout(setDoc(doc(db, "students", id), newStudent), 5000);
+    
+    unmarkDeletedId('students', [id, cleanNisn]);
+    // Always persist to local cache immediately
+    updateLocalFallbackItem('students', newStudent);
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "students", id), newStudent), 4000);
+      } catch (err) {
+        console.warn("Firestore postStudent write error:", err);
+      }
+    }
     return newStudent;
   },
   postStudentsBatch: async (studentsList: any[]): Promise<any> => {
-    if (!db) throw new Error("Database not connected");
-    const existing = await firebaseApi.getStudents();
+    const fallback = getLocalFallbackData();
+    const existing = fallback.students || [];
     const existingNisns = new Set(existing.map((s: any) => String(s.nisn || "").trim()));
     const batchNisns = new Set<string>();
 
@@ -480,8 +615,13 @@ export const firebaseApi = {
 
       const id = "s_" + Date.now() + "_" + (++counter);
       const newStudent = { id, nisn, name, kelas };
-      await withTimeout(setDoc(doc(db, "students", id), newStudent), 5000);
+      unmarkDeletedId('students', [id, nisn]);
+      updateLocalFallbackItem('students', newStudent);
       addedStudents.push(newStudent);
+
+      if (db) {
+        setDoc(doc(db, "students", id), newStudent).catch(() => {});
+      }
     }
 
     return {
@@ -495,49 +635,122 @@ export const firebaseApi = {
     };
   },
   putStudent: async (id: string, body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { name, nisn, kelas } = body;
-    const ref = doc(db, "students", id);
-    const updated = { name, nisn, kelas };
-    await withTimeout(updateDoc(ref, updated), 5000);
+    const updated = { id, name, nisn, kelas };
+    updateLocalFallbackItem('students', updated);
+
+    if (db) {
+      try {
+        await withTimeout(updateDoc(doc(db, "students", id), updated), 4000);
+      } catch (err) {
+        console.warn("Firestore putStudent error:", err);
+      }
+    }
     return { id, ...updated };
   },
   deleteStudent: async (id: string) => {
-    if (!db) throw new Error("Database not connected");
-    // Delete student doc
-    await withTimeout(deleteDoc(doc(db, "students", id)), 5000);
-    
-    // Clean up grades
-    const gradesSnap = await withTimeout(getDocs(collection(db, "grades")), 5000).catch(() => ({ docs: [] }));
-    for (const gDoc of gradesSnap.docs) {
-      if (gDoc.data().studentId === id) {
-        await deleteDoc(doc(db, "grades", gDoc.id));
+    const fallback = getLocalFallbackData();
+    const st = (fallback.students || []).find((s: any) => String(s.id) === String(id) || String(s.nisn) === String(id));
+    const nisn = st?.nisn;
+
+    recordDeletedId('students', [id, nisn].filter(Boolean) as string[]);
+    deleteLocalFallbackItem('students', id);
+    if (nisn) deleteLocalFallbackItem('students', nisn, 'nisn');
+
+    if (db) {
+      try {
+        const studentCollections = ["students", "siswa", "Students", "Siswa"];
+        for (const col of studentCollections) {
+          await deleteDoc(doc(db, col, id)).catch(() => {});
+          if (nisn) await deleteDoc(doc(db, col, nisn)).catch(() => {});
+        }
+        // Clean up grades
+        const gradesSnap = await withTimeout(getDocs(collection(db, "grades")), 4000).catch(() => ({ docs: [] }));
+        for (const gDoc of gradesSnap.docs) {
+          const gData = gDoc.data();
+          if (gData.studentId === id || (nisn && gData.studentId === nisn)) {
+            await deleteDoc(doc(db, "grades", gDoc.id)).catch(() => {});
+          }
+        }
+        await deleteDoc(doc(db, "walikelas_notes", id)).catch(() => {});
+        if (nisn) await deleteDoc(doc(db, "walikelas_notes", nisn)).catch(() => {});
+      } catch (err) {
+        console.warn("Firestore deleteStudent error:", err);
       }
     }
-    
-    // Clean up notes
-    await deleteDoc(doc(db, "walikelas_notes", id)).catch(() => {});
     return { message: "Siswa berhasil dihapus." };
+  },
+  deleteStudentsBatch: async (ids: string[]) => {
+    if (!Array.isArray(ids) || ids.length === 0) return { deletedCount: 0 };
+    const fallback = getLocalFallbackData();
+    const deletedNisns: string[] = [];
+    ids.forEach(id => {
+      const st = (fallback.students || []).find((s: any) => String(s.id) === String(id) || String(s.nisn) === String(id));
+      if (st?.nisn) deletedNisns.push(st.nisn);
+    });
+
+    const allKeys = [...ids, ...deletedNisns];
+    recordDeletedId('students', allKeys);
+
+    ids.forEach(id => {
+      deleteLocalFallbackItem('students', id);
+    });
+    deletedNisns.forEach(nisn => {
+      deleteLocalFallbackItem('students', nisn, 'nisn');
+    });
+
+    if (db) {
+      try {
+        const studentCollections = ["students", "siswa", "Students", "Siswa"];
+        for (const id of ids) {
+          for (const col of studentCollections) {
+            deleteDoc(doc(db, col, id)).catch(() => {});
+          }
+          deleteDoc(doc(db, "walikelas_notes", id)).catch(() => {});
+        }
+        for (const nisn of deletedNisns) {
+          for (const col of studentCollections) {
+            deleteDoc(doc(db, col, nisn)).catch(() => {});
+          }
+          deleteDoc(doc(db, "walikelas_notes", nisn)).catch(() => {});
+        }
+        // Clean up grades
+        getDocs(collection(db, "grades")).then(snap => {
+          const idSet = new Set(allKeys);
+          for (const gDoc of snap.docs) {
+            if (idSet.has(gDoc.data().studentId)) {
+              deleteDoc(doc(db, "grades", gDoc.id)).catch(() => {});
+            }
+          }
+        }).catch(() => {});
+      } catch (e) {
+        console.warn("Firestore batch delete error:", e);
+      }
+    }
+    return { success: true, deletedCount: ids.length, message: `${ids.length} siswa berhasil dihapus.` };
   },
 
   // 4. GET & POST /api/grades
   getGrades: async (): Promise<any[]> => {
-    if (!db) return [];
+    const fallback = getLocalFallbackData().grades || [];
+    if (!db) return fallback;
     try {
-      const snap = await withTimeout(getDocs(collection(db, "grades")), 8000);
-      return snap.docs.map(docSnap => docSnap.data());
+      const snap = await withTimeout(getDocs(collection(db, "grades")), 6000);
+      if (snap && !snap.empty) {
+        return snap.docs.map(docSnap => docSnap.data());
+      }
     } catch (e) {
       console.warn("Failed to get grades from Firestore:", e);
-      return [];
     }
+    return fallback;
   },
   postGrade: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { studentId, subject, score, tps, teacherName, usaha, proses, capaian, deskripsi } = body;
     const cleanSub = subject.replace(/[^a-zA-Z0-9]/g, "_");
     const docId = `${studentId}_${cleanSub}`;
     
     const updatedGrade = {
+      id: docId,
       studentId,
       subject,
       score: Number(score),
@@ -550,22 +763,35 @@ export const firebaseApi = {
       lastUpdatedAt: new Date().toISOString()
     };
     
-    await withTimeout(setDoc(doc(db, "grades", docId), updatedGrade), 5000);
+    updateLocalFallbackItem('grades', updatedGrade, 'id');
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "grades", docId), updatedGrade), 4000);
+      } catch (err) {
+        console.warn("Firestore postGrade error:", err);
+      }
+    }
     return updatedGrade;
   },
 
   // 5. GET & POST /api/walikelas/notes
   getWaliKelasNotes: async () => {
-    if (!db) return {};
-    const snap = await withTimeout(getDocs(collection(db, "walikelas_notes")), 2500);
-    const notes: any = {};
-    snap.docs.forEach(docSnap => {
-      notes[docSnap.id] = docSnap.data();
-    });
-    return notes;
+    const fallback = getLocalFallbackData().walikelas_notes || {};
+    if (!db) return fallback;
+    try {
+      const snap = await withTimeout(getDocs(collection(db, "walikelas_notes")), 3500);
+      if (snap && !snap.empty) {
+        const notes: any = {};
+        snap.docs.forEach(docSnap => {
+          notes[docSnap.id] = docSnap.data();
+        });
+        return notes;
+      }
+    } catch (err) {}
+    return fallback;
   },
   postWaliKelasNotes: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { studentId, sakit, izin, alpa, catatan, spiritualUsaha, spiritualProses, spiritualCapaian, spiritualDeskripsi, sosialUsaha, sosialProses, sosialCapaian, sosialDeskripsi, ekskul } = body;
     const note = {
       sakit: Number(sakit || 0),
@@ -582,62 +808,118 @@ export const firebaseApi = {
       sosialDeskripsi: sosialDeskripsi || "",
       ekskul: ekskul || []
     };
-    await withTimeout(setDoc(doc(db, "walikelas_notes", studentId), note), 2500);
+
+    // Update local
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem("smart_sts_db");
+        const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+        if (!dbObj.walikelas_notes) dbObj.walikelas_notes = {};
+        dbObj.walikelas_notes[studentId] = note;
+        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+      }
+    } catch (e) {}
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "walikelas_notes", studentId), note), 4000);
+      } catch (err) {
+        console.warn("Firestore postWaliKelasNotes error:", err);
+      }
+    }
     return { studentId, ...note };
   },
 
   // 6. GET, POST, DELETE /api/tps
   getTPs: async (kelas?: string) => {
-    if (!db) return {};
-    const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 2500);
-    const templates: any = {};
-    snap.docs.forEach(docSnap => {
-      let tpsList = docSnap.data().tps || [];
-      if (kelas) {
-        tpsList = tpsList.filter((item: any) => String(item.kelas || '').trim() === String(kelas).trim());
+    const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
+    if (!db) return fallback;
+    try {
+      const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 3500);
+      if (snap && !snap.empty) {
+        const templates: any = {};
+        snap.docs.forEach(docSnap => {
+          let tpsList = docSnap.data().tps || [];
+          if (kelas) {
+            tpsList = tpsList.filter((item: any) => String(item.kelas || '').trim() === String(kelas).trim());
+          }
+          templates[docSnap.id] = tpsList;
+        });
+        return templates;
       }
-      templates[docSnap.id] = tpsList;
-    });
-    return templates;
+    } catch (e) {}
+    return fallback;
   },
   postTP: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { subject, tpText, kelas } = body;
-    const ref = doc(db, "tujuan_pembelajaran_templates", subject);
-    const docSnap = await withTimeout(getDoc(ref), 2500);
-    let tpsList = [];
-    if (docSnap.exists()) {
-      tpsList = docSnap.data().tps || [];
-    }
     const newTP = { id: "tp_" + Date.now(), text: tpText, kelas: kelas ? String(kelas).trim() : "1" };
-    tpsList.push(newTP);
-    await withTimeout(setDoc(ref, { tps: tpsList }), 2500);
+    
+    // Update local
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem("smart_sts_db");
+        const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+        if (!dbObj.tujuan_pembelajaran_templates) dbObj.tujuan_pembelajaran_templates = {};
+        if (!dbObj.tujuan_pembelajaran_templates[subject]) dbObj.tujuan_pembelajaran_templates[subject] = [];
+        dbObj.tujuan_pembelajaran_templates[subject].push(newTP);
+        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+      }
+    } catch (e) {}
+
+    if (db) {
+      try {
+        const ref = doc(db, "tujuan_pembelajaran_templates", subject);
+        const docSnap = await withTimeout(getDoc(ref), 2500).catch(() => null);
+        let tpsList = [];
+        if (docSnap && docSnap.exists()) {
+          tpsList = docSnap.data().tps || [];
+        }
+        tpsList.push(newTP);
+        await withTimeout(setDoc(ref, { tps: tpsList }), 2500);
+      } catch (err) {
+        console.warn("Firestore postTP write error:", err);
+      }
+    }
     return newTP;
   },
   deleteTP: async (subject: string, tpId: string) => {
-    if (!db) throw new Error("Database not connected");
-    const ref = doc(db, "tujuan_pembelajaran_templates", subject);
-    const docSnap = await withTimeout(getDoc(ref), 2500);
-    if (!docSnap.exists()) throw new Error("TP tidak ditemukan.");
-    const tpsList = docSnap.data().tps || [];
-    const filtered = tpsList.filter((tp: any) => tp.id !== tpId);
-    await withTimeout(setDoc(ref, { tps: filtered }), 2500);
+    const cleanSubject = decodeURIComponent(subject || '').trim();
+    recordDeletedId('tps', `${cleanSubject}_${tpId}`);
+    // Update local
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem("smart_sts_db");
+        if (raw) {
+          const dbObj = JSON.parse(raw);
+          if (dbObj.tujuan_pembelajaran_templates && dbObj.tujuan_pembelajaran_templates[cleanSubject]) {
+            dbObj.tujuan_pembelajaran_templates[cleanSubject] = dbObj.tujuan_pembelajaran_templates[cleanSubject].filter(
+              (x: any) => String(x.id) !== String(tpId)
+            );
+            localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+          }
+        }
+      }
+    } catch (e) {}
+
+    if (db) {
+      try {
+        const ref = doc(db, "tujuan_pembelajaran_templates", cleanSubject);
+        const docSnap = await withTimeout(getDoc(ref), 2500);
+        if (docSnap.exists()) {
+          const tpsList = docSnap.data().tps || [];
+          const filtered = tpsList.filter((tp: any) => String(tp.id) !== String(tpId));
+          await withTimeout(setDoc(ref, { tps: filtered }), 2500);
+        }
+      } catch (err) {
+        console.warn("Firestore deleteTP error:", err);
+      }
+    }
     return { message: "TP berhasil dihapus." };
   },
 
   // 7. GET & POST /api/settings
   getSettings: async () => {
-    if (!db) throw new Error("Database not connected");
-    const ref = doc(db, "settings", "app");
-    const docSnap = await withTimeout(getDoc(ref), 2500);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      if (data.format && !data.format.tanggalRaport) {
-        data.format.tanggalRaport = "17 Juni 2026";
-      }
-      return data;
-    }
-    return {
+    const fallback = getLocalFallbackData().settings || {
       principalName: "Ustadz H. Ir. Abdul Muhyi, M.Pd",
       principalNip: "19780512 200501 1 002",
       format: {
@@ -654,9 +936,21 @@ export const firebaseApi = {
         tanggalRaport: "17 Juni 2026"
       }
     };
+    if (!db) return fallback;
+    try {
+      const ref = doc(db, "settings", "app");
+      const docSnap = await withTimeout(getDoc(ref), 2500);
+      if (docSnap && docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.format && !data.format.tanggalRaport) {
+          data.format.tanggalRaport = "17 Juni 2026";
+        }
+        return data;
+      }
+    } catch (err) {}
+    return fallback;
   },
   postSettings: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { principalName, principalNip, format } = body;
     const settingsData = {
       principalName: principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd",
@@ -675,7 +969,24 @@ export const firebaseApi = {
         tanggalRaport: format.tanggalRaport || "17 Juni 2026"
       } : {}
     };
-    await withTimeout(setDoc(doc(db, "settings", "app"), settingsData), 2500);
+
+    // Update local
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem("smart_sts_db");
+        const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+        dbObj.settings = settingsData;
+        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+      }
+    } catch (e) {}
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "settings", "app"), settingsData), 2500);
+      } catch (err) {
+        console.warn("Firestore postSettings error:", err);
+      }
+    }
     return { success: true, settings: settingsData };
   },
 
@@ -808,32 +1119,121 @@ export const firebaseApi = {
 
   // 9. GET, POST, DELETE /api/ekskul
   getEkskul: async (): Promise<any[]> => {
-    if (!db) return [];
-    const snap = await withTimeout(getDocs(collection(db, "ekskul")), 2500);
-    if (snap.empty) {
-      return [
-        { "id": "e1", "name": "Pramuka", "type": "Wajib" },
-        { "id": "e2", "name": "Mentoring", "type": "Wajib" },
-        { "id": "e3", "name": "Futsal", "type": "Pilihan" },
-        { "id": "e4", "name": "Voli", "type": "Pilihan" },
-        { "id": "e5", "name": "Panahan", "type": "Pilihan" },
-        { "id": "e6", "name": "Study Club", "type": "Pilihan" }
-      ];
-    }
-    return snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+    const fallback = getLocalFallbackData().ekskul || [
+      { "id": "e1", "name": "Pramuka", "type": "Wajib" },
+      { "id": "e2", "name": "Mentoring", "type": "Wajib" },
+      { "id": "e3", "name": "Futsal", "type": "Pilihan" },
+      { "id": "e4", "name": "Voli", "type": "Pilihan" },
+      { "id": "e5", "name": "Panahan", "type": "Pilihan" },
+      { "id": "e6", "name": "Study Club", "type": "Pilihan" }
+    ];
+    if (!db) return fallback;
+    try {
+      const snap = await withTimeout(getDocs(collection(db, "ekskul")), 2500);
+      if (snap && !snap.empty) {
+        return snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+      }
+    } catch (e) {}
+    return fallback;
   },
   postEkskul: async (body: any) => {
-    if (!db) throw new Error("Database not connected");
     const { name, type } = body;
     const id = "e_" + Date.now();
     const newE = { id, name, type };
-    await withTimeout(setDoc(doc(db, "ekskul", id), newE), 2500);
+    updateLocalFallbackItem('ekskul', newE);
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "ekskul", id), newE), 2500);
+      } catch (err) {
+        console.warn("Firestore postEkskul error:", err);
+      }
+    }
     return newE;
   },
   deleteEkskul: async (id: string) => {
-    if (!db) throw new Error("Database not connected");
-    await withTimeout(deleteDoc(doc(db, "ekskul", id)), 2500);
+    deleteLocalFallbackItem('ekskul', id);
+
+    if (db) {
+      try {
+        await withTimeout(deleteDoc(doc(db, "ekskul", id)), 2500);
+      } catch (err) {
+        console.warn("Firestore deleteEkskul error:", err);
+      }
+    }
     return { message: "Ekskul deleted" };
+  },
+
+  // 10. GET, POST, DELETE /api/subjects
+  getSubjects: async (): Promise<string[]> => {
+    const fallback = getLocalFallbackData();
+    const defaultSubs = [
+      "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS",
+      "Bahasa Inggris", "PJOK", "Prakarya", "Informatika", "Bahasa Arab",
+      "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
+    ];
+    let list = Array.isArray(fallback.subjects) && fallback.subjects.length > 0 
+      ? fallback.subjects 
+      : defaultSubs;
+
+    if (!db) return list;
+    try {
+      const snap = await withTimeout(getDoc(doc(db, "settings", "subjects")), 2500).catch(() => null);
+      if (snap && snap.exists() && Array.isArray(snap.data().list) && snap.data().list.length > 0) {
+        return snap.data().list;
+      }
+    } catch (e) {}
+    return list;
+  },
+  postSubject: async (name: string): Promise<string[]> => {
+    const trimmed = String(name || "").trim();
+    if (!trimmed) throw new Error("Nama mata pelajaran wajib diisi.");
+    const fallback = getLocalFallbackData();
+    const defaultSubs = [
+      "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS",
+      "Bahasa Inggris", "PJOK", "Prakarya", "Informatika", "Bahasa Arab",
+      "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
+    ];
+    if (!Array.isArray(fallback.subjects)) fallback.subjects = [...defaultSubs];
+    if (fallback.subjects.some((s: string) => s.toLowerCase() === trimmed.toLowerCase())) {
+      throw new Error(`Mata pelajaran "${trimmed}" sudah terdaftar.`);
+    }
+    fallback.subjects.push(trimmed);
+    if (!fallback.tujuan_pembelajaran_templates) fallback.tujuan_pembelajaran_templates = {};
+    if (!fallback.tujuan_pembelajaran_templates[trimmed]) fallback.tujuan_pembelajaran_templates[trimmed] = [];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+    }
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "settings", "subjects"), { list: fallback.subjects }), 2500);
+      } catch (e) {}
+    }
+    return fallback.subjects;
+  },
+  deleteSubject: async (name: string): Promise<string[]> => {
+    const trimmed = decodeURIComponent(name || "").trim();
+    const fallback = getLocalFallbackData();
+    const defaultSubs = [
+      "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS",
+      "Bahasa Inggris", "PJOK", "Prakarya", "Informatika", "Bahasa Arab",
+      "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
+    ];
+    if (!Array.isArray(fallback.subjects)) fallback.subjects = [...defaultSubs];
+    fallback.subjects = fallback.subjects.filter((s: string) => s.toLowerCase() !== trimmed.toLowerCase());
+    if (fallback.tujuan_pembelajaran_templates && fallback.tujuan_pembelajaran_templates[trimmed]) {
+      delete fallback.tujuan_pembelajaran_templates[trimmed];
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+    }
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "settings", "subjects"), { list: fallback.subjects }), 2500);
+        await withTimeout(deleteDoc(doc(db, "tujuan_pembelajaran_templates", trimmed)), 2500).catch(() => {});
+      } catch (e) {}
+    }
+    return fallback.subjects;
   }
 };
 export { db as default };

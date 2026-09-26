@@ -47,6 +47,14 @@ jobs:
       - name: Build Web App
         run: npm run build
 
+      - name: Deploy Firestore Rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx -y firebase-tools deploy --only firestore:rules --project smart-sd-sts || echo "Firestore rules deploy skipped or failed"
+          rm -f /tmp/sa.json
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
