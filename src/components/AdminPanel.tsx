@@ -1180,24 +1180,30 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       message: `Apakah Anda yakin ingin menghapus template TP ini untuk mata pelajaran "${subject}"?`,
       confirmLabel: "Hapus TP",
       onConfirm: async () => {
+        // Optimistic UI removal
+        setTpsTemplates((prev) => {
+          const updated: typeof prev = {};
+          for (const key of Object.keys(prev)) {
+            if (Array.isArray(prev[key])) {
+              updated[key] = prev[key].filter(
+                (item) => String(item.id).trim() !== String(tpId).trim(),
+              );
+            }
+          }
+          return updated;
+        });
+
         const response = await fetch(
-          `/api/tps/${encodeURIComponent(subject)}/${tpId}`,
+          `/api/tps/${encodeURIComponent(subject)}/${encodeURIComponent(tpId)}`,
           {
             method: "DELETE",
           },
         );
-        if (!response.ok) throw new Error("Gagal menghapus tujuan pembelajaran.");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "Gagal menghapus tujuan pembelajaran.");
 
-        setTpsTemplates((prev) => {
-          const updated = { ...prev };
-          if (updated[subject]) {
-            updated[subject] = updated[subject].filter(
-              (item) => String(item.id) !== String(tpId),
-            );
-          }
-          return updated;
-        });
-        fetchAllData();
+        await fetchAllData();
+        onRefreshTrigger();
         showSuccess("Tujuan Pembelajaran berhasil dihapus!");
       },
     });

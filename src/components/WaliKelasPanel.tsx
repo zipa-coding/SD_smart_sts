@@ -664,32 +664,46 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
 
                   return (
                     <div className="space-y-2">
-                      {savedEkskuls.map((eks: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">⚽</span>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-bold text-xs text-slate-800">{eks.name}</span>
-                                {eks.type && (
-                                  <span className="px-1.5 py-0.2 rounded text-[8px] font-bold uppercase bg-slate-200 text-slate-700">
-                                    {eks.type}
-                                  </span>
-                                )}
+                      {savedEkskuls.map((eks: any, idx: number) => {
+                        const usaha = eks.usaha || "B";
+                        const proses = eks.proses || "B";
+                        const capaian = eks.capaian || eks.predicate || "B";
+
+                        return (
+                          <div
+                            key={idx}
+                            className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <span className="text-lg shrink-0">⚽</span>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-xs text-slate-900">{eks.name}</span>
+                                  {eks.type && (
+                                    <span className="px-2 py-0.5 rounded text-[9px] font-extrabold uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                                      {eks.type}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-700 italic mt-1 leading-relaxed">
+                                  {eks.description || eks.deskripsi || "Aktif mengikuti kegiatan ekstrakurikuler."}
+                                </p>
                               </div>
-                              <p className="text-[11px] text-slate-600 italic mt-0.5">
-                                {eks.description || eks.deskripsi || "Aktif mengikuti kegiatan ekstrakurikuler."}
-                              </p>
+                            </div>
+                            <div className="flex items-center gap-1.5 self-start sm:self-auto shrink-0 flex-wrap">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-50 text-blue-900 border border-blue-200">
+                                Usaha: {usaha}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-purple-50 text-purple-900 border border-purple-200">
+                                Proses: {proses}
+                              </span>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300 font-black">
+                                Capaian: {capaian}
+                              </span>
                             </div>
                           </div>
-                          <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-300 self-start sm:self-auto shrink-0">
-                            Predikat: {eks.predicate || eks.capaian || "Baik"}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })()}

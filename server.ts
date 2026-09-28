@@ -714,26 +714,58 @@ app.post("/api/tps", async (req, res) => {
 
 const deleteTpHandler = async (req: any, res: any) => {
   const { subject, tpId } = req.params;
-  const decodedSubject = decodeURIComponent(subject);
+  const decodedSubject = decodeURIComponent(subject || "").trim();
+  const cleanTpId = decodeURIComponent(tpId || "").trim();
   const db = await readDB();
 
-  if (
-    db.tujuan_pembelajaran_templates &&
-    db.tujuan_pembelajaran_templates[decodedSubject]
-  ) {
-    db.tujuan_pembelajaran_templates[decodedSubject] =
-      db.tujuan_pembelajaran_templates[decodedSubject].filter(
-        (tp: any) => String(tp.id) !== String(tpId),
-      );
-    await writeDB(db);
-    res.json({ message: "TP berhasil dihapus." });
-  } else {
-    res.status(404).json({ error: "Tujuan Pembelajaran tidak ditemukan." });
+  if (!db.tujuan_pembelajaran_templates) {
+    db.tujuan_pembelajaran_templates = {};
   }
+
+  let deleted = false;
+  const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
+  const targetNorm = norm(decodedSubject);
+
+  // 1. Try matching subject key
+  for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (key === decodedSubject || norm(key) === targetNorm) {
+      const list = db.tujuan_pembelajaran_templates[key];
+      if (Array.isArray(list)) {
+        const prevLen = list.length;
+        db.tujuan_pembelajaran_templates[key] = list.filter(
+          (tp: any) => String(tp.id).trim() !== cleanTpId
+        );
+        if (db.tujuan_pembelajaran_templates[key].length < prevLen) {
+          deleted = true;
+        }
+      }
+    }
+  }
+
+  // 2. Global search across all subjects for this tpId
+  if (!deleted) {
+    for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+      const list = db.tujuan_pembelajaran_templates[key];
+      if (Array.isArray(list)) {
+        const prevLen = list.length;
+        db.tujuan_pembelajaran_templates[key] = list.filter(
+          (tp: any) => String(tp.id).trim() !== cleanTpId
+        );
+        if (db.tujuan_pembelajaran_templates[key].length < prevLen) {
+          deleted = true;
+        }
+      }
+    }
+  }
+
+  await writeDB(db);
+  res.json({ message: "TP berhasil dihapus.", deleted: true });
 };
 
 app.delete("/api/tps/:subject/:tpId", deleteTpHandler);
 app.delete("/api/tp/:subject/:tpId", deleteTpHandler);
+app.delete("/api/tps/:tpId", deleteTpHandler);
+app.delete("/api/tp/:tpId", deleteTpHandler);
 
 // 6.5. School Settings API (Principal, NIP & Raport Format config)
 app.get("/api/settings", async (req, res) => {
@@ -1064,7 +1096,7 @@ app.get("/api/ekskul/grades", async (req, res) => {
 });
 
 app.post("/api/ekskul/grades", async (req, res) => {
-  const { studentId, ekskulName, type, predicate, description } = req.body;
+  const { studentId, ekskulName, type, usaha, proses, capaian, predicate, description, deskripsi } = req.body;
   if (!studentId || !ekskulName) {
     return res.status(400).json({ error: "ID Siswa dan Nama Ekskul wajib diisi." });
   }
@@ -1098,11 +1130,15 @@ app.post("/api/ekskul/grades", async (req, res) => {
     (e: any) => e && (e.name === ekskulName || e.ekskulName === ekskulName)
   );
 
+  const finalCapaian = capaian || predicate || "B";
   const ekskulEntry = {
     name: ekskulName,
     type: type || "Pilihan",
-    predicate: predicate || "Baik",
-    description: description || "",
+    usaha: usaha || "B",
+    proses: proses || "B",
+    capaian: finalCapaian,
+    predicate: finalCapaian,
+    description: description || deskripsi || "",
   };
 
   if (existingIdx >= 0) {

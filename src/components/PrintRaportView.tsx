@@ -273,26 +273,25 @@ export default function PrintRaportView({
   };
 
   const getEkskulGrades = (e: any) => {
-    const pred = (e.predicate || e.capaian || "Baik").trim();
+    if (e && e.usaha && e.proses && e.capaian) {
+      return {
+        usaha: String(e.usaha).trim(),
+        proses: String(e.proses).trim(),
+        capaian: String(e.capaian).trim(),
+      };
+    }
+    const pred = (e?.capaian || e?.predicate || "B").trim();
     let letter = "B";
     if (pred === "Sangat Baik" || pred === "A") letter = "A";
     else if (pred === "Baik" || pred === "B") letter = "B";
     else if (pred === "Cukup" || pred === "C") letter = "C";
     else if (pred === "Kurang" || pred === "D") letter = "D";
 
-    if (letter === "A") {
-      if (e.name.toLowerCase().includes("mentoring")) {
-        return { usaha: "A", proses: "B", capaian: "B" };
-      }
-      if (
-        e.name.toLowerCase().includes("voli") ||
-        e.name.toLowerCase().includes("volly")
-      ) {
-        return { usaha: "A", proses: "A", capaian: "B" };
-      }
-      return { usaha: "A", proses: "B", capaian: "B" };
-    }
-    return { usaha: letter, proses: letter, capaian: letter };
+    return {
+      usaha: e?.usaha || letter,
+      proses: e?.proses || letter,
+      capaian: e?.capaian || letter,
+    };
   };
 
   // Generate automated narrative backup fallback if subject deskripsi is empty

@@ -988,17 +988,35 @@ export const firebaseApi = {
   },
   deleteTP: async (subject: string, tpId: string) => {
     const cleanSubject = decodeURIComponent(subject || '').trim();
-    recordDeletedId('tps', `${cleanSubject}_${tpId}`);
-    // Update local
+    const cleanTpId = decodeURIComponent(tpId || '').trim();
+    recordDeletedId('tps', `${cleanSubject}_${cleanTpId}`);
+    recordDeletedId('tps', cleanTpId);
+
+    // Update local storage
     try {
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem("smart_sts_db");
         if (raw) {
           const dbObj = JSON.parse(raw);
-          if (dbObj.tujuan_pembelajaran_templates && dbObj.tujuan_pembelajaran_templates[cleanSubject]) {
-            dbObj.tujuan_pembelajaran_templates[cleanSubject] = dbObj.tujuan_pembelajaran_templates[cleanSubject].filter(
-              (x: any) => String(x.id) !== String(tpId)
-            );
+          if (dbObj.tujuan_pembelajaran_templates) {
+            const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
+            for (const key of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
+              if (!cleanSubject || key === cleanSubject || norm(key) === norm(cleanSubject)) {
+                if (Array.isArray(dbObj.tujuan_pembelajaran_templates[key])) {
+                  dbObj.tujuan_pembelajaran_templates[key] = dbObj.tujuan_pembelajaran_templates[key].filter(
+                    (x: any) => String(x.id).trim() !== cleanTpId
+                  );
+                }
+              }
+            }
+            // Global search
+            for (const key of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
+              if (Array.isArray(dbObj.tujuan_pembelajaran_templates[key])) {
+                dbObj.tujuan_pembelajaran_templates[key] = dbObj.tujuan_pembelajaran_templates[key].filter(
+                  (x: any) => String(x.id).trim() !== cleanTpId
+                );
+              }
+            }
             localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
           }
         }
@@ -1007,12 +1025,25 @@ export const firebaseApi = {
 
     if (db) {
       try {
-        const ref = doc(db, "tujuan_pembelajaran_templates", cleanSubject);
-        const docSnap = await withTimeout(getDoc(ref), 2500);
-        if (docSnap.exists()) {
-          const tpsList = docSnap.data().tps || [];
-          const filtered = tpsList.filter((tp: any) => String(tp.id) !== String(tpId));
-          await withTimeout(setDoc(ref, { tps: filtered }), 2500);
+        if (cleanSubject) {
+          const ref = doc(db, "tujuan_pembelajaran_templates", cleanSubject);
+          const docSnap = await withTimeout(getDoc(ref), 2500).catch(() => null);
+          if (docSnap && docSnap.exists()) {
+            const tpsList = docSnap.data().tps || [];
+            const filtered = tpsList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
+            await withTimeout(setDoc(ref, { tps: filtered }), 2500);
+          }
+        }
+        // Also check all documents in collection to ensure thorough deletion
+        const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 2500).catch(() => null);
+        if (snap && !snap.empty) {
+          for (const docItem of snap.docs) {
+            const tpsList = docItem.data().tps || [];
+            if (tpsList.some((tp: any) => String(tp.id).trim() === cleanTpId)) {
+              const filtered = tpsList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
+              await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", docItem.id), { tps: filtered }), 2500);
+            }
+          }
         }
       } catch (err) {
         console.warn("Firestore deleteTP error:", err);
@@ -1240,7 +1271,66 @@ export const firebaseApi = {
     };
   },
 
-  // 9. GET, POST, PUT, DELETE /api/ekskul
+  postEkskulGrade: async (body: any) => {
+    const { studentId, ekskulName, type, usaha, proses, capaian, predicate, description, deskripsi } = body;
+    const fallback = getLocalFallbackData();
+    if (!fallback.walikelas_notes) fallback.walikelas_notes = {};
+    if (!fallback.walikelas_notes[studentId]) {
+      fallback.walikelas_notes[studentId] = {
+        sakit: 0, izin: 0, alpa: 0, catatan: "",
+        spiritualUsaha: "B", spiritualProses: "B", spiritualCapaian: "B", spiritualDeskripsi: "",
+        sosialUsaha: "B", sosialProses: "B", sosialCapaian: "B", sosialDeskripsi: "",
+        ekskul: []
+      };
+    }
+    if (!Array.isArray(fallback.walikelas_notes[studentId].ekskul)) {
+      fallback.walikelas_notes[studentId].ekskul = [];
+    }
+
+    const existingIdx = fallback.walikelas_notes[studentId].ekskul.findIndex(
+      (e: any) => e && (e.name === ekskulName || e.ekskulName === ekskulName)
+    );
+
+    const finalCapaian = capaian || predicate || "B";
+    const ekskulEntry = {
+      name: ekskulName,
+      type: type || "Pilihan",
+      usaha: usaha || "B",
+      proses: proses || "B",
+      capaian: finalCapaian,
+      predicate: finalCapaian,
+      description: description || deskripsi || "",
+    };
+
+    if (existingIdx >= 0) {
+      fallback.walikelas_notes[studentId].ekskul[existingIdx] = ekskulEntry;
+    } else {
+      fallback.walikelas_notes[studentId].ekskul.push(ekskulEntry);
+    }
+
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem("smart_sts_db");
+        const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+        if (!dbObj.walikelas_notes) dbObj.walikelas_notes = {};
+        dbObj.walikelas_notes[studentId] = fallback.walikelas_notes[studentId];
+        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+      }
+    } catch (e) {}
+
+    if (db) {
+      try {
+        const ref = doc(db, "walikelas_notes", String(studentId));
+        await withTimeout(setDoc(ref, fallback.walikelas_notes[studentId]), 2500);
+      } catch (err) {
+        console.warn("Firestore postEkskulGrade error:", err);
+      }
+    }
+
+    return { success: true, studentId, ekskul: fallback.walikelas_notes[studentId].ekskul };
+  },
+
+  // 10. GET, POST, PUT, DELETE /api/ekskul
   getEkskul: async (): Promise<any[]> => {
     const fallback = getLocalFallbackData();
     let ekskulList = Array.isArray(fallback.ekskul) && fallback.ekskul.length > 0

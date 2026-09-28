@@ -346,6 +346,17 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
+        // GET & POST /api/ekskul/grades
+        if (path === '/api/ekskul/grades' && method === 'GET') {
+          const notes = await firebaseApi.getWaliKelasNotes();
+          return new Response(JSON.stringify(notes), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (path === '/api/ekskul/grades' && method === 'POST') {
+          const res = await firebaseApi.postEkskulGrade(body);
+          return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
         // 10. Firestore Sync & Stats
         if (path === '/api/firestore-stats' && method === 'GET') {
           const stats = await firebaseApi.getFirestoreStats();
@@ -785,15 +796,37 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     if ((path.startsWith('/api/tps/') || path.startsWith('/api/tp/')) && method === 'DELETE') {
       const raw = path.replace(/^\/api\/(?:tps|tp)\//, '');
       const parts = raw.split('/');
-      const tpId = parts.pop();
-      const subject = decodeURIComponent(parts.join('/'));
+      const tpId = decodeURIComponent(parts.pop() || '').trim();
+      const subject = decodeURIComponent(parts.join('/') || '').trim();
       const db = getDB();
-      if (db.tujuan_pembelajaran_templates && db.tujuan_pembelajaran_templates[subject]) {
-        db.tujuan_pembelajaran_templates[subject] = db.tujuan_pembelajaran_templates[subject].filter((tp: any) => String(tp.id) !== String(tpId));
-        saveDB(db);
-        return new Response(JSON.stringify({ message: "TP berhasil dihapus." }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+
+      const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
+      const targetNorm = norm(subject);
+
+      for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+        if (!subject || key === subject || norm(key) === targetNorm) {
+          const list = db.tujuan_pembelajaran_templates[key];
+          if (Array.isArray(list)) {
+            db.tujuan_pembelajaran_templates[key] = list.filter(
+              (tp: any) => String(tp.id).trim() !== tpId
+            );
+          }
+        }
       }
-      return new Response(JSON.stringify({ error: "TP tidak ditemukan." }), { status: 404, headers: { 'Content-Type': 'application/json' } });
+
+      // Also global search across all subjects for this tpId
+      for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+        const list = db.tujuan_pembelajaran_templates[key];
+        if (Array.isArray(list)) {
+          db.tujuan_pembelajaran_templates[key] = list.filter(
+            (tp: any) => String(tp.id).trim() !== tpId
+          );
+        }
+      }
+
+      saveDB(db);
+      return new Response(JSON.stringify({ message: "TP berhasil dihapus." }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // 6.5 GET /api/settings
@@ -1033,6 +1066,56 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         saveDB(db);
       }
       return new Response(JSON.stringify({ message: "Ekskul deleted" }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // GET & POST /api/ekskul/grades
+    if (path === '/api/ekskul/grades' && method === 'GET') {
+      const db = getDB();
+      return new Response(JSON.stringify(db.walikelas_notes || {}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (path === '/api/ekskul/grades' && method === 'POST') {
+      const { studentId, ekskulName, type, usaha, proses, capaian, predicate, description, deskripsi } = body || {};
+      if (!studentId || !ekskulName) {
+        return new Response(JSON.stringify({ error: "ID Siswa dan Nama Ekskul wajib diisi." }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      const db = getDB();
+      if (!db.walikelas_notes) db.walikelas_notes = {};
+      if (!db.walikelas_notes[studentId]) {
+        db.walikelas_notes[studentId] = {
+          sakit: 0, izin: 0, alpa: 0, catatan: "",
+          spiritualUsaha: "B", spiritualProses: "B", spiritualCapaian: "B", spiritualDeskripsi: "",
+          sosialUsaha: "B", sosialProses: "B", sosialCapaian: "B", sosialDeskripsi: "",
+          ekskul: []
+        };
+      }
+      if (!Array.isArray(db.walikelas_notes[studentId].ekskul)) {
+        db.walikelas_notes[studentId].ekskul = [];
+      }
+
+      const existingIdx = db.walikelas_notes[studentId].ekskul.findIndex(
+        (e: any) => e && (e.name === ekskulName || e.ekskulName === ekskulName)
+      );
+
+      const finalCapaian = capaian || predicate || "B";
+      const ekskulEntry = {
+        name: ekskulName,
+        type: type || "Pilihan",
+        usaha: usaha || "B",
+        proses: proses || "B",
+        capaian: finalCapaian,
+        predicate: finalCapaian,
+        description: description || deskripsi || "",
+      };
+
+      if (existingIdx >= 0) {
+        db.walikelas_notes[studentId].ekskul[existingIdx] = ekskulEntry;
+      } else {
+        db.walikelas_notes[studentId].ekskul.push(ekskulEntry);
+      }
+
+      saveDB(db);
+      return new Response(JSON.stringify({ success: true, studentId, ekskul: db.walikelas_notes[studentId].ekskul }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     const DEFAULT_MAIN_SUBJECTS = [
