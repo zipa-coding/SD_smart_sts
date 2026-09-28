@@ -120,52 +120,56 @@ export default function PrintRaportView({
   }, []);
 
   React.useEffect(() => {
-    fetch("/api/settings")
+    fetch("/api/settings", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
-        if (data.principalName && data.principalNip) {
-          setPrincipal({
-            name: data.principalName,
-            nip: data.principalNip,
-          });
-        }
-        if (data.format) {
-          setFormat({
-            semesterName: data.format.semesterName || "Ganjil",
-            tahunPelajaran: data.format.tahunPelajaran || "2026/2027",
-            fontSize: data.format.fontSize || "11pt",
-            showLogo: !!data.format.showLogo,
-            showSpiritual:
-              data.format.showSpiritual !== undefined
-                ? !!data.format.showSpiritual
-                : true,
-            showSosial:
-              data.format.showSosial !== undefined
-                ? !!data.format.showSosial
-                : true,
-            showAttendance:
-              data.format.showAttendance !== undefined
-                ? !!data.format.showAttendance
-                : true,
-            showCatatan:
-              data.format.showCatatan !== undefined
-                ? !!data.format.showCatatan
-                : true,
-            fontFamily: data.format.fontFamily || "Times New Roman",
-            paperSize: data.format.paperSize || "A4",
-            tanggalRaport: data.format.tanggalRaport || "17 Juni 2026",
-            signaturePosition:
-              (data.format.signaturePosition as "kanan" | "tengah" | "kiri") ||
-              "kanan",
-            watermarkSize:
-              data.format.watermarkSize !== undefined
-                ? Number(data.format.watermarkSize)
-                : 440,
-            watermarkOpacity:
-              data.format.watermarkOpacity !== undefined
-                ? Number(data.format.watermarkOpacity)
-                : 0.05,
-          });
+        const settingsData = data?.settings || data;
+        if (settingsData && typeof settingsData === "object") {
+          if (settingsData.principalName !== undefined || settingsData.principalNip !== undefined) {
+            setPrincipal((prev) => ({
+              name: settingsData.principalName !== undefined && settingsData.principalName !== null ? String(settingsData.principalName) : prev.name,
+              nip: settingsData.principalNip !== undefined && settingsData.principalNip !== null ? String(settingsData.principalNip) : prev.nip,
+            }));
+          }
+          const fmt = settingsData.format;
+          if (fmt && typeof fmt === "object") {
+            setFormat((prev) => ({
+              semesterName: fmt.semesterName || prev.semesterName,
+              tahunPelajaran: fmt.tahunPelajaran || prev.tahunPelajaran,
+              fontSize: fmt.fontSize || prev.fontSize,
+              showLogo: fmt.showLogo !== undefined ? !!fmt.showLogo : prev.showLogo,
+              showSpiritual:
+                fmt.showSpiritual !== undefined
+                  ? !!fmt.showSpiritual
+                  : prev.showSpiritual,
+              showSosial:
+                fmt.showSosial !== undefined
+                  ? !!fmt.showSosial
+                  : prev.showSosial,
+              showAttendance:
+                fmt.showAttendance !== undefined
+                  ? !!fmt.showAttendance
+                  : prev.showAttendance,
+              showCatatan:
+                fmt.showCatatan !== undefined
+                  ? !!fmt.showCatatan
+                  : prev.showCatatan,
+              fontFamily: fmt.fontFamily || prev.fontFamily,
+              paperSize: fmt.paperSize || prev.paperSize,
+              tanggalRaport: fmt.tanggalRaport || prev.tanggalRaport,
+              signaturePosition:
+                (fmt.signaturePosition as "kanan" | "tengah" | "kiri") ||
+                prev.signaturePosition,
+              watermarkSize:
+                fmt.watermarkSize !== undefined
+                  ? Number(fmt.watermarkSize)
+                  : prev.watermarkSize,
+              watermarkOpacity:
+                fmt.watermarkOpacity !== undefined
+                  ? Number(fmt.watermarkOpacity)
+                  : prev.watermarkOpacity,
+            }));
+          }
         }
       })
       .catch((err) => console.error("Error loading principal settings:", err));
@@ -490,13 +494,13 @@ export default function PrintRaportView({
               format.showLogo
                 ? `
               <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: ${isA4 ? "6px" : "15px"}; width: 100%; border-bottom: ${isA4 ? "2.5px" : "3px"} double #000000; padding-bottom: ${isA4 ? "6px" : "12px"};">
-                <!-- Left Side: Yayasan Cahaya Amal and JSIT logos -->
+                <!-- Left Side: JSIT and Yayasan Cahaya Amal logos -->
                 <div style="width: ${isA4 ? "110px" : "165px"}; flex-shrink: 0; display: flex; align-items: center; justify-content: flex-start; gap: ${isA4 ? "6px" : "10px"};">
                   <div style="width: ${isA4 ? "48px" : "75px"}; height: ${isA4 ? "48px" : "75px"}; display: flex; align-items: center; justify-content: center; background-color: #ffffff; box-sizing: border-box;">
-                    <img src="${cahayaAmalLogoSrc}" style="width: 100%; height: 100%; object-fit: contain;" />
+                    <img src="${jsitLogoSrc}" style="width: 100%; height: 100%; object-fit: contain;" />
                   </div>
                   <div style="width: ${isA4 ? "48px" : "75px"}; height: ${isA4 ? "48px" : "75px"}; display: flex; align-items: center; justify-content: center; background-color: #ffffff; box-sizing: border-box;">
-                    <img src="${jsitLogoSrc}" style="width: 100%; height: 100%; object-fit: contain;" />
+                    <img src="${cahayaAmalLogoSrc}" style="width: 100%; height: 100%; object-fit: contain;" />
                   </div>
                 </div>
                 <!-- Center: School name and report metadata -->
@@ -1212,8 +1216,8 @@ export default function PrintRaportView({
           <tr>
             <!-- Left Side Logos -->
             <td style="width: 25%; text-align: left; vertical-align: middle; border: none; padding-bottom: ${isA4 ? "8px" : "12px"};">
-              <img src="${absLogoCahayaAmalUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block; margin-right: 5px;" />
-              <img src="${absLogoJsitUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block;" />
+              <img src="${absLogoJsitUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block; margin-right: 5px;" />
+              <img src="${absLogoCahayaAmalUrl}" style="width: ${isA4 ? "50px" : "55px"}; height: ${isA4 ? "50px" : "55px"}; display: inline-block;" />
             </td>
             <!-- Center Title and Info -->
             <td style="width: 50%; text-align: center; vertical-align: middle; border: none; padding-bottom: ${isA4 ? "8px" : "12px"}; font-family: 'Times New Roman', Times, serif;">
@@ -1997,16 +2001,16 @@ export default function PrintRaportView({
               <div className={`flex items-center gap-1.5 md:gap-2 shrink-0 justify-start ${format.paperSize === "F4" ? "w-32 md:w-44" : "w-24 md:w-32"}`}>
                 <div className={`${format.paperSize === "F4" ? "w-14 h-14 md:w-18 md:h-18" : "w-10 h-10 md:w-13 md:h-13"} select-none bg-white flex items-center justify-center p-0.5`}>
                   <img
-                    src={logoCahayaAmalUrl}
-                    alt="Yayasan Logo"
+                    src={logoJsitUrl}
+                    alt="JSIT Logo"
                     className="w-full h-full object-contain"
                     referrerPolicy="no-referrer"
                   />
                 </div>
                 <div className={`${format.paperSize === "F4" ? "w-14 h-14 md:w-18 md:h-18" : "w-10 h-10 md:w-13 md:h-13"} select-none bg-white flex items-center justify-center p-0.5`}>
                   <img
-                    src={logoJsitUrl}
-                    alt="JSIT Logo"
+                    src={logoCahayaAmalUrl}
+                    alt="Yayasan Logo"
                     className="w-full h-full object-contain"
                     referrerPolicy="no-referrer"
                   />

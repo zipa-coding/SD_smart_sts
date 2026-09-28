@@ -98,6 +98,21 @@ app.post("/api/login", async (req, res) => {
       .json({ error: "Kombinasi pengguna dan kata sandi salah." });
   }
 
+  const assignedEks = Array.isArray(db.ekskul)
+    ? db.ekskul.find(
+        (e: any) =>
+          (e.teacherId && String(e.teacherId) === String(teacher.id)) ||
+          (teacher.isEkskulTeacher && teacher.ekskulName && (
+            e.name.toLowerCase() === teacher.ekskulName.toLowerCase() ||
+            e.name.toLowerCase().includes(teacher.ekskulName.toLowerCase()) ||
+            teacher.ekskulName.toLowerCase().includes(e.name.toLowerCase())
+          ))
+      )
+    : null;
+
+  const isEkskulTeacher = Boolean(teacher.isEkskulTeacher || assignedEks);
+  const ekskulName = assignedEks ? assignedEks.name : (teacher.ekskulName || "");
+
   res.json({
     id: teacher.id,
     name: teacher.name,
@@ -105,6 +120,8 @@ app.post("/api/login", async (req, res) => {
     subject: teacher.subject,
     isWaliKelas: teacher.isWaliKelas || false,
     kelas: teacher.kelas || "",
+    isEkskulTeacher,
+    ekskulName,
   });
 });
 
@@ -126,6 +143,17 @@ app.post("/api/verify-session", async (req, res) => {
     return res.status(401).json({ error: "Sesi tidak valid." });
   }
 
+  const assignedEks = Array.isArray(db.ekskul)
+    ? db.ekskul.find(
+        (e: any) =>
+          (e.teacherId && String(e.teacherId) === String(teacher.id)) ||
+          (teacher.isEkskulTeacher && teacher.ekskulName && e.name.toLowerCase().trim() === teacher.ekskulName.toLowerCase().trim())
+      )
+    : null;
+
+  const isEkskulTeacher = Boolean(teacher.isEkskulTeacher || assignedEks);
+  const ekskulName = assignedEks ? assignedEks.name : (teacher.ekskulName || "");
+
   res.json({
     id: teacher.id,
     name: teacher.name,
@@ -133,22 +161,49 @@ app.post("/api/verify-session", async (req, res) => {
     subject: teacher.subject,
     isWaliKelas: teacher.isWaliKelas || false,
     kelas: teacher.kelas || "",
+    isEkskulTeacher,
+    ekskulName,
   });
 });
 
 // 2. Teachers CRUD
 app.get("/api/teachers", async (req, res) => {
   const db = await readDB();
-  res.json(db.teachers);
+  if (!Array.isArray(db.teachers)) db.teachers = [];
+  if (!Array.isArray(db.ekskul)) db.ekskul = [];
+
+  const list = db.teachers.map((t: any) => {
+    const eks = db.ekskul.find(
+      (e: any) =>
+        (e.teacherId && String(e.teacherId) === String(t.id)) ||
+        (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
+    );
+    if (eks) {
+      return {
+        ...t,
+        isEkskulTeacher: true,
+        ekskulName: eks.name,
+      };
+    }
+    return {
+      ...t,
+      isEkskulTeacher: Boolean(t.isEkskulTeacher),
+      ekskulName: t.ekskulName || "",
+    };
+  });
+
+  res.json(list);
 });
 
 app.post("/api/teachers", async (req, res) => {
-  const { name, username, password, subject, isWaliKelas, kelas } = req.body;
+  const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = req.body;
   if (!name || !username || !password || !subject) {
     return res.status(400).json({ error: "Data guru kurang lengkap." });
   }
 
   const db = await readDB();
+  if (!Array.isArray(db.teachers)) db.teachers = [];
+  if (!Array.isArray(db.ekskul)) db.ekskul = [];
 
   // Check unique username
   const exists = db.teachers.some(
@@ -158,26 +213,57 @@ app.post("/api/teachers", async (req, res) => {
     return res.status(400).json({ error: "Username sudah digunakan." });
   }
 
+  const isEks = Boolean(isEkskulTeacher);
+  const cleanEkskulName = isEks ? String(ekskulName || "").trim() : "";
+
   const newTeacher = {
     id: "t_" + Date.now(),
-    name,
-    username,
-    password,
-    subject,
-    isWaliKelas: !!isWaliKelas,
-    kelas: kelas || "",
+    name: String(name || "").trim(),
+    username: String(username || "").trim().toLowerCase(),
+    password: String(password || "123").trim(),
+    subject: String(subject || "PAI").trim(),
+    isWaliKelas: Boolean(isWaliKelas),
+    kelas: isWaliKelas ? String(kelas || "").trim() : "",
+    isEkskulTeacher: isEks,
+    ekskulName: cleanEkskulName,
   };
 
   db.teachers.push(newTeacher);
+
+  // Sync with db.ekskul
+  if (isEks && cleanEkskulName) {
+    let matchedEks = db.ekskul.find(
+      (e: any) => e.name.toLowerCase().trim() === cleanEkskulName.toLowerCase().trim()
+    );
+
+    if (!matchedEks) {
+      matchedEks = {
+        id: "e_" + Date.now(),
+        name: cleanEkskulName,
+        type: "Pilihan",
+        teacherId: newTeacher.id,
+        teacherName: newTeacher.name,
+      };
+      db.ekskul.push(matchedEks);
+    } else {
+      matchedEks.teacherId = newTeacher.id;
+      matchedEks.teacherName = newTeacher.name;
+      newTeacher.ekskulName = matchedEks.name;
+    }
+  }
+
   await writeDB(db);
   res.status(201).json(newTeacher);
 });
 
 app.put("/api/teachers/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, username, password, subject, isWaliKelas, kelas } = req.body;
+  const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = req.body;
 
   const db = await readDB();
+  if (!Array.isArray(db.teachers)) db.teachers = [];
+  if (!Array.isArray(db.ekskul)) db.ekskul = [];
+
   const index = db.teachers.findIndex((t: any) => t.id === id);
   if (index === -1) {
     return res.status(404).json({ error: "Guru tidak ditemukan." });
@@ -192,15 +278,54 @@ app.put("/api/teachers/:id", async (req, res) => {
     return res.status(400).json({ error: "Username sudah digunakan." });
   }
 
+  const isEks = Boolean(isEkskulTeacher);
+  const cleanEkskulName = isEks ? String(ekskulName || "").trim() : "";
+
   db.teachers[index] = {
     ...db.teachers[index],
-    name,
-    username,
-    password,
-    subject,
-    isWaliKelas: !!isWaliKelas,
-    kelas: kelas || "",
+    name: String(name || "").trim(),
+    username: String(username || "").trim().toLowerCase(),
+    password: String(password || "123").trim(),
+    subject: String(subject || "PAI").trim(),
+    isWaliKelas: Boolean(isWaliKelas),
+    kelas: isWaliKelas ? String(kelas || "").trim() : "",
+    isEkskulTeacher: isEks,
+    ekskulName: cleanEkskulName,
   };
+
+  // Synchronize db.ekskul
+  let matchedEks = null;
+  if (isEks && cleanEkskulName) {
+    matchedEks = db.ekskul.find(
+      (e: any) => e.name.toLowerCase().trim() === cleanEkskulName.toLowerCase().trim()
+    );
+
+    if (!matchedEks) {
+      matchedEks = {
+        id: "e_" + Date.now(),
+        name: cleanEkskulName,
+        type: "Pilihan",
+        teacherId: id,
+        teacherName: db.teachers[index].name,
+      };
+      db.ekskul.push(matchedEks);
+    } else {
+      matchedEks.teacherId = id;
+      matchedEks.teacherName = db.teachers[index].name;
+      db.teachers[index].ekskulName = matchedEks.name;
+    }
+  }
+
+  // Clear teacher from any other ekskul
+  db.ekskul.forEach((e: any) => {
+    if (matchedEks && e.id !== matchedEks.id && String(e.teacherId) === String(id)) {
+      e.teacherId = "";
+      e.teacherName = "";
+    } else if (!isEks && String(e.teacherId) === String(id)) {
+      e.teacherId = "";
+      e.teacherName = "";
+    }
+  });
 
   await writeDB(db);
   res.json(db.teachers[index]);
@@ -612,10 +737,14 @@ app.delete("/api/tp/:subject/:tpId", deleteTpHandler);
 
 // 6.5. School Settings API (Principal, NIP & Raport Format config)
 app.get("/api/settings", async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   const db = await readDB();
   const principalName =
     db.settings?.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-  const principalNip = db.settings?.principalNip || "19780512 200501 1 002";
+  const principalNip =
+    db.settings?.principalNip !== undefined
+      ? db.settings.principalNip
+      : "19780512 200501 1 002";
   const format = {
     semesterName: "Ganjil",
     tahunPelajaran: "2026/2027",
@@ -628,22 +757,27 @@ app.get("/api/settings", async (req, res) => {
     fontFamily: "Times New Roman",
     paperSize: "A4",
     tanggalRaport: "17 Juni 2026",
+    signaturePosition: "kanan",
     watermarkSize: 440,
     watermarkOpacity: 0.05,
     ...(db.settings?.format || {}),
   };
-  res.json({ principalName, principalNip, format });
+  res.json({ principalName, principalNip, format, settings: { principalName, principalNip, format } });
 });
 
 app.post("/api/settings", async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   const { principalName, principalNip, format } = req.body;
   const db = await readDB();
   if (!db.settings) {
     db.settings = {};
   }
-  db.settings.principalName =
-    principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-  db.settings.principalNip = principalNip || "19780512 200501 1 002";
+  if (principalName !== undefined) {
+    db.settings.principalName = principalName;
+  }
+  if (principalNip !== undefined) {
+    db.settings.principalNip = principalNip;
+  }
 
   if (format) {
     db.settings.format = {
@@ -660,6 +794,7 @@ app.post("/api/settings", async (req, res) => {
       fontFamily: format.fontFamily || "Times New Roman",
       paperSize: format.paperSize || "A4",
       tanggalRaport: format.tanggalRaport || "17 Juni 2026",
+      signaturePosition: format.signaturePosition || "kanan",
       watermarkSize:
         format.watermarkSize !== undefined ? format.watermarkSize : 440,
       watermarkOpacity:
@@ -668,62 +803,316 @@ app.post("/api/settings", async (req, res) => {
   }
 
   await writeDB(db);
-  res.json({ success: true, settings: db.settings });
+  res.json({ success: true, settings: db.settings, principalName: db.settings.principalName, principalNip: db.settings.principalNip, format: db.settings.format });
 });
 
 // 6.6. Extracurricular List API
 app.get("/api/ekskul", async (req, res) => {
   const db = await readDB();
   const defaultEkskul = [
-    { id: "e1", name: "Pramuka", type: "Wajib" },
-    { id: "e2", name: "Mentoring", type: "Wajib" },
-    { id: "e3", name: "Futsal", type: "Pilihan" },
-    { id: "e4", name: "Voli", type: "Pilihan" },
-    { id: "e5", name: "Panahan", type: "Pilihan" },
-    { id: "e6", name: "Study Club", type: "Pilihan" },
+    { id: "e1", name: "Pramuka Siaga & Penggalang", type: "Wajib" },
+    { id: "e2", name: "Mentoring & Bina Pribadi Islami", type: "Wajib" },
+    { id: "e3", name: "Futsal Kids", type: "Pilihan" },
+    { id: "e4", name: "Bulu Tangkis", type: "Pilihan" },
+    { id: "e5", name: "Panahan Tradisional", type: "Pilihan" },
+    { id: "e6", name: "Klub Sains & Matematika Cilik", type: "Pilihan" },
   ];
-  const ekskul = db.ekskul || defaultEkskul;
-  if (!db.ekskul) {
+  if (!Array.isArray(db.ekskul) || db.ekskul.length === 0) {
     db.ekskul = defaultEkskul;
     await writeDB(db);
   }
-  res.json(ekskul);
+
+  // Enrich each ekskul with assigned teacher if available
+  const enriched = db.ekskul.map((e: any) => {
+    const assignedTeacher = Array.isArray(db.teachers)
+      ? db.teachers.find(
+          (t: any) =>
+            t.isEkskulTeacher &&
+            t.ekskulName &&
+            t.ekskulName.toLowerCase() === e.name.toLowerCase(),
+        )
+      : null;
+
+    return {
+      ...e,
+      teacherId: assignedTeacher ? assignedTeacher.id : (e.teacherId || ""),
+      teacherName: assignedTeacher ? assignedTeacher.name : (e.teacherName || ""),
+    };
+  });
+
+  res.json(enriched);
 });
 
 app.post("/api/ekskul", async (req, res) => {
-  const { name, type } = req.body;
-  if (!name || !type) {
+  const { name, type, teacherId } = req.body;
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName || !type) {
     return res.status(400).json({ error: "Nama dan tipe ekskul wajib diisi." });
   }
   const db = await readDB();
-  if (!db.ekskul) {
-    db.ekskul = [
-      { id: "e1", name: "Pramuka", type: "Wajib" },
-      { id: "e2", name: "Mentoring", type: "Wajib" },
-      { id: "e3", name: "Futsal", type: "Pilihan" },
-      { id: "e4", name: "Voli", type: "Pilihan" },
-      { id: "e5", name: "Panahan", type: "Pilihan" },
-      { id: "e6", name: "Study Club", type: "Pilihan" },
-    ];
+  if (!Array.isArray(db.ekskul)) {
+    db.ekskul = [];
   }
-  const newEkskul = {
-    id: "e_" + Date.now(),
-    name,
-    type,
-  };
-  db.ekskul.push(newEkskul);
+  if (!Array.isArray(db.teachers)) {
+    db.teachers = [];
+  }
+
+  // Check if ekskul with exact same name exists
+  const existingIdx = db.ekskul.findIndex(
+    (e: any) => e.name.toLowerCase().trim() === trimmedName.toLowerCase().trim()
+  );
+
+  let targetEkskul: any;
+
+  if (existingIdx !== -1) {
+    // Update existing ekskul
+    targetEkskul = db.ekskul[existingIdx];
+    targetEkskul.name = trimmedName;
+    targetEkskul.type = type === "Wajib" ? "Wajib" : "Pilihan";
+  } else {
+    // Create new ekskul
+    targetEkskul = {
+      id: "e_" + Date.now(),
+      name: trimmedName,
+      type: type === "Wajib" ? "Wajib" : "Pilihan",
+      teacherId: "",
+      teacherName: "",
+    };
+    db.ekskul.push(targetEkskul);
+  }
+
+  const oldTeacherId = targetEkskul.teacherId;
+
+  let assignedTeacherName = "";
+  if (teacherId) {
+    const tIdx = db.teachers.findIndex((t: any) => String(t.id) === String(teacherId));
+    if (tIdx !== -1) {
+      assignedTeacherName = db.teachers[tIdx].name;
+      db.teachers[tIdx].isEkskulTeacher = true;
+      db.teachers[tIdx].ekskulName = targetEkskul.name;
+    }
+  }
+
+  // Clear previous teacher if changed
+  if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+    const prevTIdx = db.teachers.findIndex((t: any) => String(t.id) === String(oldTeacherId));
+    if (prevTIdx !== -1) {
+      db.teachers[prevTIdx].isEkskulTeacher = false;
+      db.teachers[prevTIdx].ekskulName = "";
+    }
+  }
+
+  // Clear any other ekskul that had this new teacher
+  if (teacherId) {
+    db.ekskul.forEach((e: any) => {
+      if (e.id !== targetEkskul.id && String(e.teacherId) === String(teacherId)) {
+        e.teacherId = "";
+        e.teacherName = "";
+      }
+    });
+  }
+
+  targetEkskul.teacherId = teacherId || "";
+  targetEkskul.teacherName = assignedTeacherName;
+
   await writeDB(db);
-  res.status(201).json(newEkskul);
+  res.status(existingIdx !== -1 ? 200 : 201).json(targetEkskul);
+});
+
+app.put("/api/ekskul/:id", async (req, res) => {
+  const { id } = req.params;
+  const { name, type, teacherId } = req.body;
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName || !type) {
+    return res.status(400).json({ error: "Nama dan tipe ekskul wajib diisi." });
+  }
+  const db = await readDB();
+  if (!Array.isArray(db.ekskul)) {
+    db.ekskul = [];
+  }
+  if (!Array.isArray(db.teachers)) {
+    db.teachers = [];
+  }
+  const idx = db.ekskul.findIndex((e: any) => e.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Ekstrakurikuler tidak ditemukan." });
+  }
+
+  const oldName = db.ekskul[idx].name;
+  const oldTeacherId = db.ekskul[idx].teacherId;
+
+  let assignedTeacherName = "";
+  if (teacherId) {
+    const tIdx = db.teachers.findIndex((t: any) => String(t.id) === String(teacherId));
+    if (tIdx !== -1) {
+      assignedTeacherName = db.teachers[tIdx].name;
+      db.teachers[tIdx].isEkskulTeacher = true;
+      db.teachers[tIdx].ekskulName = trimmedName;
+    }
+  }
+
+  // If previous teacher was removed or replaced
+  if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+    const prevTIdx = db.teachers.findIndex((t: any) => String(t.id) === String(oldTeacherId));
+    if (prevTIdx !== -1) {
+      db.teachers[prevTIdx].isEkskulTeacher = false;
+      db.teachers[prevTIdx].ekskulName = "";
+    }
+  }
+
+  // Clear any other ekskul that had this new teacher
+  if (teacherId) {
+    db.ekskul.forEach((e: any) => {
+      if (e.id !== id && String(e.teacherId) === String(teacherId)) {
+        e.teacherId = "";
+        e.teacherName = "";
+      }
+    });
+  }
+
+  // Synchronize any teachers who have this ekskul assigned if name changed
+  if (oldName !== trimmedName) {
+    db.teachers.forEach((t: any) => {
+      if (t.isEkskulTeacher && t.ekskulName === oldName) {
+        t.ekskulName = trimmedName;
+      }
+    });
+  }
+
+  db.ekskul[idx] = {
+    ...db.ekskul[idx],
+    name: trimmedName,
+    type: type === "Wajib" ? "Wajib" : "Pilihan",
+    teacherId: teacherId || "",
+    teacherName: assignedTeacherName,
+  };
+
+  await writeDB(db);
+  res.json(db.ekskul[idx]);
+});
+
+// Quick assignment endpoint
+app.post("/api/ekskul/:id/assign-teacher", async (req, res) => {
+  const { id } = req.params;
+  const { teacherId } = req.body;
+  const db = await readDB();
+  if (!Array.isArray(db.ekskul)) {
+    db.ekskul = [];
+  }
+  if (!Array.isArray(db.teachers)) {
+    db.teachers = [];
+  }
+  const idx = db.ekskul.findIndex((e: any) => e.id === id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Ekstrakurikuler tidak ditemukan." });
+  }
+
+  const ekskul = db.ekskul[idx];
+  const oldTeacherId = ekskul.teacherId;
+
+  let assignedTeacherName = "";
+  if (teacherId) {
+    const tIdx = db.teachers.findIndex((t: any) => String(t.id) === String(teacherId));
+    if (tIdx !== -1) {
+      assignedTeacherName = db.teachers[tIdx].name;
+      db.teachers[tIdx].isEkskulTeacher = true;
+      db.teachers[tIdx].ekskulName = ekskul.name;
+    }
+  }
+
+  // Clear previous teacher if replaced or unset
+  if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+    const prevTIdx = db.teachers.findIndex((t: any) => String(t.id) === String(oldTeacherId));
+    if (prevTIdx !== -1) {
+      db.teachers[prevTIdx].isEkskulTeacher = false;
+      db.teachers[prevTIdx].ekskulName = "";
+    }
+  }
+
+  // Clear any other ekskul that had this teacher
+  if (teacherId) {
+    db.ekskul.forEach((e: any) => {
+      if (e.id !== id && String(e.teacherId) === String(teacherId)) {
+        e.teacherId = "";
+        e.teacherName = "";
+      }
+    });
+  }
+
+  db.ekskul[idx].teacherId = teacherId || "";
+  db.ekskul[idx].teacherName = assignedTeacherName;
+
+  await writeDB(db);
+  res.json({ ekskul: db.ekskul[idx], teachers: db.teachers });
 });
 
 app.delete("/api/ekskul/:id", async (req, res) => {
   const { id } = req.params;
   const db = await readDB();
-  if (db.ekskul) {
+  if (Array.isArray(db.ekskul)) {
     db.ekskul = db.ekskul.filter((e: any) => e.id !== id);
     await writeDB(db);
   }
   res.json({ message: "Ekskul berhasil dihapus." });
+});
+
+// 6.6.1 Ekskul Grades API
+app.get("/api/ekskul/grades", async (req, res) => {
+  const db = await readDB();
+  const notes = db.walikelas_notes || {};
+  res.json(notes);
+});
+
+app.post("/api/ekskul/grades", async (req, res) => {
+  const { studentId, ekskulName, type, predicate, description } = req.body;
+  if (!studentId || !ekskulName) {
+    return res.status(400).json({ error: "ID Siswa dan Nama Ekskul wajib diisi." });
+  }
+
+  const db = await readDB();
+  if (!db.walikelas_notes) {
+    db.walikelas_notes = {};
+  }
+  if (!db.walikelas_notes[studentId]) {
+    db.walikelas_notes[studentId] = {
+      sakit: 0,
+      izin: 0,
+      alpa: 0,
+      catatan: "",
+      spiritualUsaha: "B",
+      spiritualProses: "B",
+      spiritualCapaian: "B",
+      spiritualDeskripsi: "",
+      sosialUsaha: "B",
+      sosialProses: "B",
+      sosialCapaian: "B",
+      sosialDeskripsi: "",
+      ekskul: [],
+    };
+  }
+  if (!Array.isArray(db.walikelas_notes[studentId].ekskul)) {
+    db.walikelas_notes[studentId].ekskul = [];
+  }
+
+  const existingIdx = db.walikelas_notes[studentId].ekskul.findIndex(
+    (e: any) => e && (e.name === ekskulName || e.ekskulName === ekskulName)
+  );
+
+  const ekskulEntry = {
+    name: ekskulName,
+    type: type || "Pilihan",
+    predicate: predicate || "Baik",
+    description: description || "",
+  };
+
+  if (existingIdx >= 0) {
+    db.walikelas_notes[studentId].ekskul[existingIdx] = ekskulEntry;
+  } else {
+    db.walikelas_notes[studentId].ekskul.push(ekskulEntry);
+  }
+
+  await writeDB(db);
+  res.json({ success: true, studentId, ekskul: db.walikelas_notes[studentId].ekskul });
 });
 
 // 6.7. Subjects (Mata Pelajaran) API
@@ -739,6 +1128,7 @@ const DEFAULT_SUBJECTS = [
   "Prakarya",
   "Informatika",
   "Bahasa Arab",
+  "Keislaman",
   "Tahsin ABaTaTsa",
   "Tahfizh Al-Qur’an",
   "Do’a Harian dan Hadits",

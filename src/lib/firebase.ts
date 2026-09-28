@@ -44,7 +44,29 @@ export function getLocalFallbackData() {
       const raw = localStorage.getItem("smart_sts_db");
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') return parsed;
+        if (parsed && typeof parsed === 'object') {
+          let updated = false;
+          if (Array.isArray(parsed.ekskul)) {
+            parsed.ekskul.forEach((e: any) => {
+              if (e.name === "Futsal Kids") {
+                e.name = "Futsal";
+                updated = true;
+              }
+            });
+          }
+          if (Array.isArray(parsed.teachers)) {
+            parsed.teachers.forEach((t: any) => {
+              if (t.ekskulName === "Futsal Kids") {
+                t.ekskulName = "Futsal";
+                updated = true;
+              }
+            });
+          }
+          if (updated) {
+            localStorage.setItem("smart_sts_db", JSON.stringify(parsed));
+          }
+          return parsed;
+        }
       }
     }
   } catch (e) {}
@@ -464,17 +486,47 @@ export const firebaseApi = {
     return fallback;
   },
   postTeacher: async (body: any) => {
-    const { name, username, password, subject, isWaliKelas, kelas } = body;
+    const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
     const fallback = getLocalFallbackData();
     const exists = (fallback.teachers || []).some((t: any) => t.username.toLowerCase() === username.toLowerCase());
     if (exists) throw new Error("Username sudah digunakan.");
 
     const id = "t_" + Date.now();
-    const newTeacher = { id, name, username, password, subject, isWaliKelas: !!isWaliKelas, kelas: kelas || "" };
+    const isEks = Boolean(isEkskulTeacher);
+    const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+    const newTeacher = {
+      id,
+      name,
+      username,
+      password,
+      subject,
+      isWaliKelas: !!isWaliKelas,
+      kelas: kelas || "",
+      isEkskulTeacher: isEks,
+      ekskulName: cleanEksName
+    };
     
     unmarkDeletedId('teachers', [id, username]);
     // Always persist to local cache immediately
     updateLocalFallbackItem('teachers', newTeacher);
+
+    if (isEks && cleanEksName) {
+      if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+      let matchedEks = fallback.ekskul.find(
+        (e: any) => e.name.toLowerCase().trim() === cleanEksName.toLowerCase().trim()
+      );
+      if (!matchedEks) {
+        matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: id, teacherName: name };
+        fallback.ekskul.push(matchedEks);
+      } else {
+        matchedEks.teacherId = id;
+        matchedEks.teacherName = name;
+        newTeacher.ekskulName = matchedEks.name;
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+      }
+    }
 
     if (db) {
       try {
@@ -486,13 +538,65 @@ export const firebaseApi = {
     return newTeacher;
   },
   putTeacher: async (id: string, body: any) => {
-    const { name, username, password, subject, isWaliKelas, kelas } = body;
-    const updated = { id, name, username, password, subject, isWaliKelas: !!isWaliKelas, kelas: kelas || "" };
+    const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
+    const isEks = Boolean(isEkskulTeacher);
+    const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+    const updated = {
+      id,
+      name,
+      username,
+      password,
+      subject,
+      isWaliKelas: !!isWaliKelas,
+      kelas: kelas || "",
+      isEkskulTeacher: isEks,
+      ekskulName: cleanEksName
+    };
     updateLocalFallbackItem('teachers', updated);
+
+    const fallback = getLocalFallbackData();
+    if (isEks && cleanEksName) {
+      if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+      let matchedEks = fallback.ekskul.find(
+        (e: any) =>
+          e.name.toLowerCase() === cleanEksName.toLowerCase() ||
+          cleanEksName.toLowerCase().includes(e.name.toLowerCase()) ||
+          e.name.toLowerCase().includes(cleanEksName.toLowerCase())
+      );
+      if (!matchedEks) {
+        matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: id, teacherName: name };
+        fallback.ekskul.push(matchedEks);
+      } else {
+        matchedEks.teacherId = id;
+        matchedEks.teacherName = name;
+        updated.ekskulName = matchedEks.name;
+      }
+      fallback.ekskul.forEach((e: any) => {
+        if (matchedEks && e.id !== matchedEks.id && String(e.teacherId) === String(id)) {
+          e.teacherId = "";
+          e.teacherName = "";
+        }
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+      }
+    } else {
+      if (Array.isArray(fallback.ekskul)) {
+        fallback.ekskul.forEach((e: any) => {
+          if (String(e.teacherId) === String(id)) {
+            e.teacherId = "";
+            e.teacherName = "";
+          }
+        });
+        if (typeof window !== 'undefined') {
+          localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+        }
+      }
+    }
 
     if (db) {
       try {
-        await withTimeout(updateDoc(doc(db, "teachers", id), updated), 4000);
+        await withTimeout(setDoc(doc(db, "teachers", id), updated), 4000);
       } catch (err) {
         console.warn("Firestore putTeacher write error:", err);
       }
@@ -966,9 +1070,11 @@ export const firebaseApi = {
   },
   postSettings: async (body: any) => {
     const { principalName, principalNip, format } = body;
+    const fallback = getLocalFallbackData();
+    const prevSettings = fallback.settings || {};
     const settingsData = {
-      principalName: principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd",
-      principalNip: principalNip || "19780512 200501 1 002",
+      principalName: principalName !== undefined ? principalName : (prevSettings.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd"),
+      principalNip: principalNip !== undefined ? principalNip : (prevSettings.principalNip || "19780512 200501 1 002"),
       format: format ? {
         semesterName: format.semesterName || "Ganjil",
         tahunPelajaran: format.tahunPelajaran || "2026/2027",
@@ -984,7 +1090,7 @@ export const firebaseApi = {
         signaturePosition: format.signaturePosition || "kanan",
         watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : 440,
         watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : 0.05
-      } : {}
+      } : (prevSettings.format || {})
     };
 
     // Update local
@@ -1004,7 +1110,7 @@ export const firebaseApi = {
         console.warn("Firestore postSettings error:", err);
       }
     }
-    return { success: true, settings: settingsData };
+    return { success: true, settings: settingsData, principalName: settingsData.principalName, principalNip: settingsData.principalNip, format: settingsData.format };
   },
 
   // 8. GET /api/summary
@@ -1134,39 +1240,212 @@ export const firebaseApi = {
     };
   },
 
-  // 9. GET, POST, DELETE /api/ekskul
+  // 9. GET, POST, PUT, DELETE /api/ekskul
   getEkskul: async (): Promise<any[]> => {
-    const fallback = getLocalFallbackData().ekskul || [
-      { "id": "e1", "name": "Pramuka", "type": "Wajib" },
-      { "id": "e2", "name": "Mentoring", "type": "Wajib" },
-      { "id": "e3", "name": "Futsal", "type": "Pilihan" },
-      { "id": "e4", "name": "Voli", "type": "Pilihan" },
-      { "id": "e5", "name": "Panahan", "type": "Pilihan" },
-      { "id": "e6", "name": "Study Club", "type": "Pilihan" }
-    ];
-    if (!db) return fallback;
-    try {
-      const snap = await withTimeout(getDocs(collection(db, "ekskul")), 2500);
-      if (snap && !snap.empty) {
-        return snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-      }
-    } catch (e) {}
-    return fallback;
-  },
-  postEkskul: async (body: any) => {
-    const { name, type } = body;
-    const id = "e_" + Date.now();
-    const newE = { id, name, type };
-    updateLocalFallbackItem('ekskul', newE);
+    const fallback = getLocalFallbackData();
+    let ekskulList = Array.isArray(fallback.ekskul) && fallback.ekskul.length > 0
+      ? fallback.ekskul
+      : [
+          { "id": "e1", "name": "Pramuka Siaga & Penggalang", "type": "Wajib" },
+          { "id": "e2", "name": "Mentoring & Bina Pribadi Islami", "type": "Wajib" },
+          { "id": "e3", "name": "Futsal", "type": "Pilihan" },
+          { "id": "e4", "name": "Bulu Tangkis", "type": "Pilihan" },
+          { "id": "e5", "name": "Panahan Tradisional", "type": "Pilihan" },
+          { "id": "e6", "name": "Klub Sains & Matematika Cilik", "type": "Pilihan" }
+        ];
 
     if (db) {
       try {
-        await withTimeout(setDoc(doc(db, "ekskul", id), newE), 2500);
+        const snap = await withTimeout(getDocs(collection(db, "ekskul")), 2500);
+        if (snap && !snap.empty) {
+          ekskulList = snap.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        }
+      } catch (e) {}
+    }
+
+    // Enrich with teachers
+    const teachersList = Array.isArray(fallback.teachers) ? fallback.teachers : [];
+    return ekskulList.map((e: any) => {
+      const assignedTeacher = teachersList.find(
+        (t: any) =>
+          (e.teacherId && String(e.teacherId) === String(t.id)) ||
+          (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
+      );
+      return {
+        ...e,
+        teacherId: assignedTeacher ? assignedTeacher.id : (e.teacherId || ""),
+        teacherName: assignedTeacher ? assignedTeacher.name : (e.teacherName || "")
+      };
+    });
+  },
+  postEkskul: async (body: any) => {
+    const { name, type, teacherId } = body;
+    const trimmedName = String(name || "").trim();
+    const fallback = getLocalFallbackData();
+    if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+    if (!Array.isArray(fallback.teachers)) fallback.teachers = [];
+
+    let target = fallback.ekskul.find(
+      (e: any) => e.name.toLowerCase().trim() === trimmedName.toLowerCase().trim()
+    );
+
+    let assignedTeacherName = "";
+    if (teacherId) {
+      const t = fallback.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+      if (t) {
+        assignedTeacherName = t.name;
+        t.isEkskulTeacher = true;
+        t.ekskulName = trimmedName;
+      }
+    }
+
+    if (!target) {
+      target = {
+        id: "e_" + Date.now(),
+        name: trimmedName,
+        type: type || "Pilihan",
+        teacherId: teacherId || "",
+        teacherName: assignedTeacherName
+      };
+      fallback.ekskul.push(target);
+    } else {
+      target.name = trimmedName;
+      target.type = type || target.type;
+      target.teacherId = teacherId || "";
+      target.teacherName = assignedTeacherName;
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+    }
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "ekskul", target.id), target), 2500);
       } catch (err) {
         console.warn("Firestore postEkskul error:", err);
       }
     }
-    return newE;
+    return target;
+  },
+  putEkskul: async (id: string, body: any) => {
+    const { name, type, teacherId } = body;
+    const trimmedName = String(name || "").trim();
+    const fallback = getLocalFallbackData();
+    if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+    if (!Array.isArray(fallback.teachers)) fallback.teachers = [];
+
+    const idx = fallback.ekskul.findIndex((e: any) => String(e.id) === String(id));
+    let target = idx !== -1 ? fallback.ekskul[idx] : null;
+
+    let assignedTeacherName = "";
+    if (teacherId) {
+      const t = fallback.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+      if (t) {
+        assignedTeacherName = t.name;
+        t.isEkskulTeacher = true;
+        t.ekskulName = trimmedName || (target ? target.name : "");
+      }
+    }
+
+    if (target) {
+      const oldTeacherId = target.teacherId;
+      if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+        const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+        if (prevT) {
+          prevT.isEkskulTeacher = false;
+          prevT.ekskulName = "";
+        }
+      }
+      target.name = trimmedName || target.name;
+      target.type = type || target.type;
+      target.teacherId = teacherId || "";
+      target.teacherName = assignedTeacherName;
+    } else {
+      target = {
+        id,
+        name: trimmedName,
+        type: type || "Pilihan",
+        teacherId: teacherId || "",
+        teacherName: assignedTeacherName
+      };
+      fallback.ekskul.push(target);
+    }
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+    }
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "ekskul", id), target), 2500);
+      } catch (err) {
+        console.warn("Firestore putEkskul error:", err);
+      }
+    }
+    return target;
+  },
+  assignTeacherEkskul: async (id: string, teacherId: string) => {
+    const fallback = getLocalFallbackData();
+    if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+    if (!Array.isArray(fallback.teachers)) fallback.teachers = [];
+
+    let target = fallback.ekskul.find((e: any) => String(e.id) === String(id));
+    if (!target) {
+      target = {
+        id,
+        name: "Ekskul",
+        type: "Pilihan",
+        teacherId: "",
+        teacherName: ""
+      };
+      fallback.ekskul.push(target);
+    }
+
+    const oldTeacherId = target.teacherId;
+    let assignedTeacherName = "";
+    if (teacherId) {
+      const t = fallback.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+      if (t) {
+        assignedTeacherName = t.name;
+        t.isEkskulTeacher = true;
+        t.ekskulName = target.name;
+      }
+    }
+
+    if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+      const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+      if (prevT) {
+        prevT.isEkskulTeacher = false;
+        prevT.ekskulName = "";
+      }
+    }
+
+    // Clear any other ekskul having this teacher
+    if (teacherId) {
+      fallback.ekskul.forEach((e: any) => {
+        if (e.id !== id && String(e.teacherId) === String(teacherId)) {
+          e.teacherId = "";
+          e.teacherName = "";
+        }
+      });
+    }
+
+    target.teacherId = teacherId || "";
+    target.teacherName = assignedTeacherName;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
+    }
+
+    if (db) {
+      try {
+        await withTimeout(setDoc(doc(db, "ekskul", id), target), 2500);
+      } catch (err) {
+        console.warn("Firestore assignTeacherEkskul error:", err);
+      }
+    }
+    return { ekskul: target, teachers: fallback.teachers };
   },
   deleteEkskul: async (id: string) => {
     deleteLocalFallbackItem('ekskul', id);

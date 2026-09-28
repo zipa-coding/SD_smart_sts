@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Teacher, Student, Grade, TPItem } from "../types";
 import {
   BookOpen,
@@ -10,6 +10,9 @@ import {
   RefreshCw,
   Plus,
   Trash2,
+  Award,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 
 interface TeacherPanelProps {
@@ -18,6 +21,33 @@ interface TeacherPanelProps {
   refreshTrigger?: number;
 }
 
+const KEISLAMAN_SUB_SUBJECTS = [
+  {
+    id: "Tahsin ABaTaTsa",
+    label: "Tahsin ABaTaTsa",
+    short: "Tahsin",
+    description: "Kaidah membaca, makhorijul huruf, dan kelancaran tilawah",
+  },
+  {
+    id: "Tahfizh Al-Qur’an",
+    label: "Tahfizh Al-Qur’an",
+    short: "Tahfidz",
+    description: "Hafalan surat-surat pendek juz 30 & mutqin hafalan",
+  },
+  {
+    id: "Do’a Harian dan Hadits",
+    label: "Do’a Harian dan Hadits",
+    short: "Doa & Hadist",
+    description: "Hafalan doa-doa harian & matan hadits pilihan",
+  },
+  {
+    id: "Wudhu dan Sholat",
+    label: "Wudhu dan Sholat",
+    short: "Wudhu & Sholat",
+    description: "Praktik tata cara thaharah, wudhu, gerakan dan bacaan sholat",
+  },
+] as const;
+
 export default function TeacherPanel({
   user,
   onRefreshTrigger,
@@ -25,21 +55,49 @@ export default function TeacherPanel({
 }: TeacherPanelProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [grades, setGrades] = useState<Grade[]>([]);
-  const [tpTemplates, setTpTemplates] = useState<
-    { id: string; text: string }[]
-  >([]);
+  const [allTpObj, setAllTpObj] = useState<{ [subject: string]: any[] }>({});
+  const [allNotes, setAllNotes] = useState<{ [studentId: string]: any }>({});
+  const [ekskulList, setEkskulList] = useState<any[]>([]);
 
-  // View state tab: grades (pengisian nilai) or tps (kelola TP)
-  const [activeViewTab, setActiveViewTab] = useState<"grades" | "tps">(
-    "grades",
-  );
+  // Determine if this teacher is assigned to Keislaman
+  const isKeislamanTeacher = useMemo(() => {
+    return (
+      user.subject === "Keislaman" ||
+      user.subject === "Pendidikan Keislaman" ||
+      user.subject === "Agama Islam / Keislaman" ||
+      KEISLAMAN_SUB_SUBJECTS.some((k) => k.id === user.subject) ||
+      user.subject === "Admin"
+    );
+  }, [user.subject]);
+
+  // Current active subject being graded
+  const [activeSubject, setActiveSubject] = useState<string>(() => {
+    if (user.subject === "Keislaman" || user.subject === "Admin") {
+      return "Tahsin ABaTaTsa";
+    }
+    return user.subject || "PAI";
+  });
+
+  // Current ekskul being handled if user is an ekskul teacher
+  const [selectedEkskulName, setSelectedEkskulName] = useState<string>(() => {
+    const raw = user.ekskulName || "Pramuka";
+    return raw === "Futsal Kids" ? "Futsal" : raw;
+  });
+
+  // View state tab: grades (pengisian nilai), tps (kelola TP), or ekskul (pengisian nilai ekskul)
+  const [activeViewTab, setActiveViewTab] = useState<"grades" | "tps" | "ekskul">(() => {
+    if (user.isEkskulTeacher && (user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Ekskul")) {
+      return "ekskul";
+    }
+    return "grades";
+  });
 
   // Class selection state (1, 2, 3, 4, 5, 6)
   const [selectedClass, setSelectedClass] = useState("1");
   // Student selection state
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
-  // Form states
+  // Form states for subject grades
   const [score, setScore] = useState<string>("");
   const [usaha, setUsaha] = useState<string>("B");
   const [proses, setProses] = useState<string>("B");
@@ -51,6 +109,11 @@ export default function TeacherPanel({
   const [customDescription, setCustomDescription] = useState<string>("");
   const [isCustomDescActive, setIsCustomDescActive] = useState<boolean>(false);
 
+  // Form states for ekskul grading
+  const [ekskulPredicate, setEkskulPredicate] = useState<string>("Baik");
+  const [ekskulDescription, setEkskulDescription] = useState<string>("");
+  const [ekskulSaveLoading, setEkskulSaveLoading] = useState<boolean>(false);
+
   // Manage TP template state for teacher
   const [newTpText, setNewTpText] = useState("");
   const [tpSubmitLoading, setTpSubmitLoading] = useState(false);
@@ -60,42 +123,63 @@ export default function TeacherPanel({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Filter TP templates specifically for activeSubject and selectedClass
+  const tpTemplates = useMemo(() => {
+    const allSubjectTps = Array.isArray(allTpObj[activeSubject])
+      ? allTpObj[activeSubject]
+      : [];
+    return allSubjectTps.filter(
+      (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
+    );
+  }, [allTpObj, activeSubject, selectedClass]);
+
   const fetchData = async () => {
     setLoading(true);
     setError("");
     try {
-      const [resS, resG, resTp] = await Promise.all([
+      const [resS, resG, resTp, resN, resEks] = await Promise.all([
         fetch("/api/students"),
         fetch("/api/grades"),
         fetch("/api/tps"),
+        fetch("/api/walikelas/notes"),
+        fetch("/api/ekskul"),
       ]);
 
       const sData = await resS.json();
       const gData = await resG.json();
       const tpData = await resTp.json();
+      const nData = await resN.json();
+      const eksData = await resEks.json();
 
       const sArr = Array.isArray(sData) ? sData : [];
       const gArr = Array.isArray(gData) ? gData : [];
       const tpObj = tpData && typeof tpData === "object" ? tpData : {};
+      const nObj = nData && typeof nData === "object" ? nData : {};
+      const eksArr = Array.isArray(eksData) ? eksData : [];
 
       setStudents(sArr);
       setGrades(gArr);
+      setAllTpObj(tpObj);
+      setAllNotes(nObj);
+      setEkskulList(eksArr);
 
-      // Filter TP templates specifically for this teacher's subject and the selected class
-      const allSubjectTps = Array.isArray(tpObj[user.subject])
-        ? tpObj[user.subject]
+      // Filter TP templates for activeSubject & selectedClass
+      const allSubjectTps = Array.isArray(tpObj[activeSubject])
+        ? tpObj[activeSubject]
         : [];
       const classTps = allSubjectTps.filter(
         (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
       );
-      setTpTemplates(classTps);
 
       // Auto-select first student in this class if available
       const classStudents = sArr.filter(
         (s: Student) => s.kelas === selectedClass,
       );
       if (classStudents.length > 0) {
-        handleStudentSelect(classStudents[0], gArr, classTps);
+        const studentToSelect = selectedStudent
+          ? classStudents.find((s) => s.id === selectedStudent.id) || classStudents[0]
+          : classStudents[0];
+        handleStudentSelect(studentToSelect, gArr, classTps, activeSubject, nObj);
       } else {
         setSelectedStudent(null);
         setScore("");
@@ -115,7 +199,7 @@ export default function TeacherPanel({
 
   useEffect(() => {
     fetchData();
-  }, [selectedClass, user.subject, refreshTrigger]);
+  }, [selectedClass, activeSubject, selectedEkskulName, refreshTrigger]);
 
   // Helper function to generate narrative description based on Kurikulum Merdeka standards
   const generateNarrativeDescription = (
@@ -167,6 +251,8 @@ export default function TeacherPanel({
     student: Student,
     allGrades: Grade[] = grades,
     templates: { id: string; text: string }[] = tpTemplates,
+    subj: string = activeSubject,
+    notesMap: { [studentId: string]: any } = allNotes,
   ) => {
     try {
       setSelectedStudent(student);
@@ -176,9 +262,9 @@ export default function TeacherPanel({
       const safeGrades = Array.isArray(allGrades) ? allGrades : [];
       const safeTemplates = Array.isArray(templates) ? templates : [];
 
-      // Look up if this student already has a grade for this teacher's subject
+      // Look up if this student already has a grade for this activeSubject
       const existingGrade = safeGrades.find(
-        (g) => g && g.studentId === student?.id && g.subject === user.subject,
+        (g) => g && g.studentId === student?.id && g.subject === subj,
       );
 
       if (existingGrade) {
@@ -200,7 +286,7 @@ export default function TeacherPanel({
             const found = Array.isArray(existingGrade.tps)
               ? existingGrade.tps.find((t: any) => t && t.id === tmpl.id)
               : null;
-            achievedMap[tmpl.id] = found ? !!found.achieved : true; // Default to true mapped
+            achievedMap[tmpl.id] = found ? !!found.achieved : true;
           }
         });
         setTpAchievements(achievedMap);
@@ -211,7 +297,7 @@ export default function TeacherPanel({
         } else if (safeTemplates.length > 0) {
           const auto = generateNarrativeDescription(
             student,
-            user.subject,
+            subj,
             safeTemplates,
             achievedMap,
           );
@@ -239,7 +325,7 @@ export default function TeacherPanel({
         if (safeTemplates.length > 0) {
           const auto = generateNarrativeDescription(
             student,
-            user.subject,
+            subj,
             safeTemplates,
             defaultMap,
           );
@@ -249,9 +335,43 @@ export default function TeacherPanel({
         }
         setIsCustomDescActive(false);
       }
+
+      // Load ekskul grade for this student
+      const currentEkskul = selectedEkskulName || user.ekskulName || "Pramuka";
+      const studentNote = notesMap[student.id];
+      const studentEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+      const foundEks = studentEkskuls.find(
+        (e: any) => e && (e.name === currentEkskul || e.ekskulName === currentEkskul)
+      );
+
+      if (foundEks) {
+        setEkskulPredicate(foundEks.predicate || foundEks.capaian || "Baik");
+        setEkskulDescription(foundEks.description || foundEks.deskripsi || "");
+      } else {
+        setEkskulPredicate("Baik");
+        setEkskulDescription(`Aktif dan disiplin dalam mengikuti latihan ${currentEkskul} serta menunjukkan penguasaan teknik dasar yang baik.`);
+      }
     } catch (e: any) {
       console.error("Error in handleStudentSelect:", e);
       setError("Terjadi kesalahan memproses data siswa terpilih.");
+    }
+  };
+
+  // Switch Keislaman sub-aspect seamlessly
+  const handleSwitchKeislamanSub = (subId: string) => {
+    setActiveSubject(subId);
+    setSuccess("");
+    setError("");
+
+    const allSubjectTps = Array.isArray(allTpObj[subId])
+      ? allTpObj[subId]
+      : [];
+    const classTps = allSubjectTps.filter(
+      (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
+    );
+
+    if (selectedStudent) {
+      handleStudentSelect(selectedStudent, grades, classTps, subId, allNotes);
     }
   };
 
@@ -280,11 +400,10 @@ export default function TeacherPanel({
     };
     setTpAchievements(nextMap);
 
-    // Otomatis memperbarui deskripsi sesuai status TP terbaru & menyertakan nama siswa
     if (selectedStudent && tpTemplates.length > 0) {
       const updatedDesc = generateNarrativeDescription(
         selectedStudent,
-        user.subject,
+        activeSubject,
         tpTemplates,
         nextMap,
       );
@@ -303,7 +422,7 @@ export default function TeacherPanel({
     if (selectedStudent && tpTemplates.length > 0) {
       const updatedDesc = generateNarrativeDescription(
         selectedStudent,
-        user.subject,
+        activeSubject,
         tpTemplates,
         nextMap,
       );
@@ -320,23 +439,13 @@ export default function TeacherPanel({
     }
     const updatedDesc = generateNarrativeDescription(
       selectedStudent,
-      user.subject,
+      activeSubject,
       tpTemplates,
       tpAchievements,
     );
     setCustomDescription(updatedDesc);
     setSuccess("Deskripsi berhasil diperbarui otomatis dari ceklist TP.");
     setTimeout(() => setSuccess(""), 3000);
-  };
-
-  // Auto generate narrative description (used as fallback)
-  const getAutoDescription = () => {
-    return generateNarrativeDescription(
-      selectedStudent,
-      user.subject,
-      tpTemplates,
-      tpAchievements,
-    );
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -358,7 +467,6 @@ export default function TeacherPanel({
 
     setSaveLoading(true);
 
-    // Format TP list for post payload (supports empty TP list)
     const safeTemplates = Array.isArray(tpTemplates) ? tpTemplates : [];
     const formattedTps: TPItem[] = safeTemplates.map((tp) => ({
       id: tp.id,
@@ -366,7 +474,6 @@ export default function TeacherPanel({
       achieved: tpAchievements[tp.id] ?? true,
     }));
 
-    // Description is taken directly from the textarea (supports both auto from TP and purely manual)
     const finalDescription = customDescription.trim();
 
     try {
@@ -375,7 +482,7 @@ export default function TeacherPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           studentId: selectedStudent.id,
-          subject: user.subject,
+          subject: activeSubject,
           score: parsedScore,
           tps: formattedTps,
           usaha,
@@ -390,9 +497,9 @@ export default function TeacherPanel({
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan nilai.");
 
       setSuccess(
-        `Nilai ${user.subject} untuk ${selectedStudent.name} berhasil disimpan!`,
+        `Nilai ${activeSubject} untuk ${selectedStudent.name} berhasil disimpan!`,
       );
-      onRefreshTrigger(); // trigger live stats update in index
+      onRefreshTrigger();
 
       // Refresh grades silently
       const getGrades = await fetch("/api/grades");
@@ -402,6 +509,47 @@ export default function TeacherPanel({
       setError(err.message || "Gagal menyimpan.");
     } finally {
       setSaveLoading(false);
+    }
+  };
+
+  // Save Ekskul Grade directly by Ekskul Teacher
+  const handleSaveEkskul = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    setError("");
+    setSuccess("");
+
+    const ekskulName = selectedEkskulName || user.ekskulName || "Pramuka";
+    const foundEks = ekskulList.find((e) => e.name === ekskulName);
+
+    setEkskulSaveLoading(true);
+    try {
+      const response = await fetch("/api/ekskul/grades", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: selectedStudent.id,
+          ekskulName,
+          type: foundEks ? foundEks.type : "Pilihan",
+          predicate: ekskulPredicate,
+          description: ekskulDescription.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Gagal menyimpan nilai ekskul.");
+
+      setSuccess(`Nilai ekskul ${ekskulName} untuk ${selectedStudent.name} berhasil disimpan!`);
+      onRefreshTrigger();
+
+      // Refresh notes silently
+      const resN = await fetch("/api/walikelas/notes");
+      const updatedNotes = await resN.json();
+      setAllNotes(updatedNotes);
+    } catch (err: any) {
+      setError(err.message || "Gagal menyimpan nilai ekskul.");
+    } finally {
+      setEkskulSaveLoading(false);
     }
   };
 
@@ -418,7 +566,7 @@ export default function TeacherPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject: user.subject,
+          subject: activeSubject,
           tpText: newTpText.trim(),
           kelas: selectedClass,
         }),
@@ -428,22 +576,13 @@ export default function TeacherPanel({
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan TP.");
 
       setNewTpText("");
-      setSuccess(`Tujuan Pembelajaran untuk Kelas ${selectedClass} berhasil ditambahkan!`);
+      setSuccess(`Tujuan Pembelajaran ${activeSubject} Kelas ${selectedClass} berhasil ditambahkan!`);
 
-      // Reload TP templates for this subject and selected class
-      const resTp = await fetch(`/api/tps?kelas=${selectedClass}`);
+      // Reload TP templates
+      const resTp = await fetch("/api/tps");
       const tpData = await resTp.json();
-      const allSubjectTps = Array.isArray(tpData[user.subject])
-        ? tpData[user.subject]
-        : Array.isArray(tpData)
-        ? tpData
-        : [];
-      const classTps = allSubjectTps.filter(
-        (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
-      );
-      setTpTemplates(classTps);
+      setAllTpObj(tpData);
 
-      // Default the new TP as achieved in state
       setTpAchievements((prev) => ({
         ...prev,
         [data.id]: true,
@@ -459,7 +598,7 @@ export default function TeacherPanel({
   const handleDeleteLocalTp = async (tpId: string) => {
     if (
       !confirm(
-        "Apakah Anda yakin ingin menghapus Tujuan Pembelajaran (TP) ini?",
+        `Apakah Anda yakin ingin menghapus Tujuan Pembelajaran (${activeSubject}) ini?`,
       )
     )
       return;
@@ -467,7 +606,7 @@ export default function TeacherPanel({
     setSuccess("");
 
     try {
-      const response = await fetch(`/api/tps/${encodeURIComponent(user.subject)}/${tpId}`, {
+      const response = await fetch(`/api/tps/${encodeURIComponent(activeSubject)}/${tpId}`, {
         method: "DELETE",
       });
 
@@ -476,18 +615,9 @@ export default function TeacherPanel({
 
       setSuccess("Tujuan Pembelajaran berhasil dihapus.");
 
-      // Reload TP templates for selected class
-      const resTp = await fetch(`/api/tps?kelas=${selectedClass}`);
+      const resTp = await fetch("/api/tps");
       const tpData = await resTp.json();
-      const allSubjectTps = Array.isArray(tpData[user.subject])
-        ? tpData[user.subject]
-        : Array.isArray(tpData)
-        ? tpData
-        : [];
-      const classTps = allSubjectTps.filter(
-        (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
-      );
-      setTpTemplates(classTps);
+      setAllTpObj(tpData);
     } catch (err: any) {
       setError(err.message || "Gagal menghapus TP.");
     }
@@ -498,13 +628,21 @@ export default function TeacherPanel({
   const classStudents = safeStudents.filter(
     (s) => s && s.kelas === selectedClass,
   );
-  const filledCount = Array.isArray(grades)
+
+  const filledSubjectCount = Array.isArray(grades)
     ? classStudents.filter((s) =>
         grades.some(
-          (g) => g && g.studentId === s.id && g.subject === user.subject,
+          (g) => g && g.studentId === s.id && g.subject === activeSubject,
         ),
       ).length
     : 0;
+
+  const currentEkskul = selectedEkskulName || user.ekskulName || "Pramuka";
+  const filledEkskulCount = classStudents.filter((s) => {
+    const studentNote = allNotes[s.id];
+    const sEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+    return sEkskuls.some((e: any) => e.name === currentEkskul || e.ekskulName === currentEkskul);
+  }).length;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" id="teacher-panel">
@@ -532,12 +670,14 @@ export default function TeacherPanel({
             Daftar Siswa ({classStudents.length})
           </h3>
           <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded border border-emerald-100">
-            Terisi: {filledCount}/{classStudents.length}
+            {activeViewTab === "ekskul"
+              ? `Ekskul: ${filledEkskulCount}/${classStudents.length}`
+              : `Terisi: ${filledSubjectCount}/${classStudents.length}`}
           </span>
         </div>
 
         <div
-          className="space-y-1 max-h-[350px] overflow-y-auto pr-1"
+          className="space-y-1 max-h-[380px] overflow-y-auto pr-1"
           id="student-vertical-list"
         >
           {loading ? (
@@ -550,17 +690,26 @@ export default function TeacherPanel({
             </p>
           ) : (
             classStudents.map((s) => {
-              const isFilled =
+              const isFilledSubject =
                 Array.isArray(grades) &&
                 grades.some(
                   (g) =>
-                    g && g.studentId === s.id && g.subject === user.subject,
+                    g && g.studentId === s.id && g.subject === activeSubject,
                 );
+
+              const studentNote = allNotes[s.id];
+              const sEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+              const isFilledEkskul = sEkskuls.some(
+                (e: any) => e.name === currentEkskul || e.ekskulName === currentEkskul
+              );
+
+              const isFilled = activeViewTab === "ekskul" ? isFilledEkskul : isFilledSubject;
               const isSelected = selectedStudent?.id === s.id;
+
               return (
                 <button
                   key={s.id}
-                  onClick={() => handleStudentSelect(s)}
+                  onClick={() => handleStudentSelect(s, grades, tpTemplates, activeSubject, allNotes)}
                   className={`w-full p-2 rounded text-left text-xs transition flex items-center justify-between gap-2 border cursor-pointer ${isSelected ? "bg-emerald-50/70 border-emerald-400 font-bold text-emerald-900" : "bg-white border-slate-150 text-slate-700 hover:bg-slate-50"}`}
                 >
                   <span className="truncate">{s.name || "N/A"}</span>
@@ -584,40 +733,154 @@ export default function TeacherPanel({
       <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm p-4">
         {/* Navigation Tab Headers */}
         <div
-          className="flex border-b border-slate-200 gap-1 mb-4"
+          className="flex border-b border-slate-200 gap-1 mb-4 flex-wrap"
           id="teacher-view-tabs"
         >
           <button
             onClick={() => setActiveViewTab("grades")}
             className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "grades" ? "border-emerald-800 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-800"}`}
           >
-            <ClipboardPlus className="w-3.5 h-3.5" /> Pengisian Nilai &
-            Deskripsi
+            <ClipboardPlus className="w-3.5 h-3.5" /> Pengisian Nilai Raport
           </button>
           <button
             onClick={() => setActiveViewTab("tps")}
             className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "tps" ? "border-emerald-800 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-800"}`}
           >
-            <BookOpen className="w-3.5 h-3.5" /> Kelola TP ({user.subject})
+            <BookOpen className="w-3.5 h-3.5" /> Kelola TP ({activeSubject})
           </button>
+
+          {/* Ekskul Tab (Shown for Ekskul Teachers or Admin) */}
+          {(Boolean(user.isEkskulTeacher) || user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Admin") && (
+            <button
+              onClick={() => setActiveViewTab("ekskul")}
+              className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "ekskul" ? "border-amber-600 text-amber-900 bg-amber-50/60 font-black" : "border-transparent text-amber-700 hover:text-amber-900"}`}
+            >
+              <Award className="w-3.5 h-3.5 text-amber-600" />
+              <span>Nilai Ekskul: {currentEkskul}</span>
+            </button>
+          )}
         </div>
 
-        <div className="pb-2.5 mb-4 flex items-center justify-between">
-          <div>
-            <span className="px-2 py-0.5 bg-emerald-800 text-white rounded text-[10px] uppercase tracking-wider font-extrabold mr-2">
-              Mapel {user.subject}
+        {/* TOP STATUS BAR & KEISLAMAN UNIFIED BAR */}
+        <div className="pb-2.5 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 bg-emerald-800 text-white rounded text-[10px] uppercase tracking-wider font-extrabold">
+              {activeViewTab === "ekskul" ? `Pembina Ekskul: ${currentEkskul}` : `Mapel: ${activeSubject}`}
             </span>
-            <span className="text-[11px] text-slate-400 italic">
+            <span className="text-[11px] text-slate-500 italic">
               Pengampu: {user.name}
             </span>
           </div>
-          <button
-            onClick={fetchData}
-            className="p-1 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] font-bold rounded transition text-slate-600 cursor-pointer flex items-center gap-1"
-          >
-            <RefreshCw className="w-3 h-3" /> Sinkronkan DB
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* If Admin, let them switch ekskul in ekskul tab */}
+            {activeViewTab === "ekskul" && user.subject === "Admin" && ekskulList.length > 0 && (
+              <select
+                value={selectedEkskulName}
+                onChange={(e) => setSelectedEkskulName(e.target.value)}
+                className="text-xs bg-amber-50 border border-amber-300 text-amber-950 font-bold rounded px-2 py-1 focus:outline-none"
+              >
+                {ekskulList.map((eks) => (
+                  <option key={eks.id} value={eks.name}>
+                    ⚽ {eks.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <button
+              onClick={fetchData}
+              className="p-1 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] font-bold rounded transition text-slate-600 cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Sinkronkan DB
+            </button>
+          </div>
         </div>
+
+        {/* UNIFIED KEISLAMAN NAVIGATION BAR (1 AKUN UNTUK SEMUA BAGIAN KEISLAMAN) */}
+        {isKeislamanTeacher && activeViewTab !== "ekskul" && (
+          <div className="mb-4 bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 p-3 rounded-xl shadow-md border border-emerald-700/50 text-white animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-emerald-800/80">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-100">
+                  Panel Terpadu Rapor Keislaman
+                </h4>
+                <p className="text-[10px] text-emerald-200/80 leading-tight">
+                  Satu akun untuk menginput seluruh 4 aspek keislaman: Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat.
+                </p>
+              </div>
+
+              {selectedStudent && (
+                <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                  <span className="text-[10px] text-emerald-300 font-medium">Status {selectedStudent.name.split(" ")[0]}:</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 border border-emerald-500/50 text-emerald-300">
+                    {KEISLAMAN_SUB_SUBJECTS.filter((k) =>
+                      grades.some(
+                        (g) => g.studentId === selectedStudent.id && g.subject === k.id
+                      )
+                    ).length} / 4 Aspek Terisi
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Sub-Aspects Buttons Switcher */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5" id="keislaman-sub-selectors">
+              {KEISLAMAN_SUB_SUBJECTS.map((k, idx) => {
+                const isCurrentActive = activeSubject === k.id;
+                const isFilledForStudent =
+                  selectedStudent &&
+                  grades.some(
+                    (g) => g.studentId === selectedStudent.id && g.subject === k.id
+                  );
+
+                return (
+                  <button
+                    key={k.id}
+                    type="button"
+                    onClick={() => handleSwitchKeislamanSub(k.id)}
+                    className={`p-2.5 rounded-lg text-left transition cursor-pointer flex flex-col justify-between gap-1.5 border ${
+                      isCurrentActive
+                        ? "bg-white text-emerald-950 font-bold shadow-lg border-white scale-[1.02]"
+                        : "bg-emerald-950/60 hover:bg-emerald-900/80 text-white border-emerald-700/60"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[11px] font-extrabold uppercase tracking-wide">
+                        Bagian {idx + 1}
+                      </span>
+                      <span
+                        className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                          isFilledForStudent
+                            ? isCurrentActive
+                              ? "bg-emerald-100 text-emerald-900 font-bold"
+                              : "bg-emerald-500/30 text-emerald-300 border border-emerald-400/40"
+                            : isCurrentActive
+                            ? "bg-slate-100 text-slate-500"
+                            : "bg-black/30 text-slate-400"
+                        }`}
+                      >
+                        {isFilledForStudent ? "Terisi ✓" : "Belum"}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="text-xs font-extrabold leading-tight">
+                        {k.short}
+                      </div>
+                      <div
+                        className={`text-[9px] leading-tight line-clamp-1 mt-0.5 ${
+                          isCurrentActive ? "text-emerald-800" : "text-emerald-300/70"
+                        }`}
+                      >
+                        {k.label}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="p-2.5 bg-red-50 text-red-700 text-xs rounded border border-red-250 flex items-start gap-2 mb-3">
@@ -633,23 +896,31 @@ export default function TeacherPanel({
           </div>
         )}
 
-        {/* INPUT GRADING TAB */}
+        {/* ======================================================== */}
+        {/* 1. INPUT SUBJECT GRADING TAB                             */}
+        {/* ======================================================== */}
         {activeViewTab === "grades" &&
           (selectedStudent ? (
             <form onSubmit={handleSave} className="space-y-4">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-3">
-                <div className="w-8 h-8 rounded bg-emerald-800 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                  {selectedStudent.name?.charAt(0) || "?"}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-emerald-800 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                    {selectedStudent.name?.charAt(0) || "?"}
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-xs text-slate-800 uppercase">
+                      {selectedStudent.name || "N/A"}
+                    </h3>
+                    <p className="text-[10px] text-slate-400">
+                      NISN: {selectedStudent.nisn || "-"} • Kelas{" "}
+                      {selectedStudent.kelas || "-"}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-extrabold text-xs text-slate-800 uppercase">
-                    {selectedStudent.name || "N/A"}
-                  </h3>
-                  <p className="text-[10px] text-slate-400">
-                    NISN: {selectedStudent.nisn || "-"} • Kelas{" "}
-                    {selectedStudent.kelas || "-"}
-                  </p>
-                </div>
+
+                <span className="px-2.5 py-1 bg-emerald-50 text-emerald-850 font-extrabold text-[11px] rounded-lg border border-emerald-200">
+                  {activeSubject}
+                </span>
               </div>
 
               {/* THREE-GRADE EVALUATION CRITERIA + NUMERIC SCORE */}
@@ -657,7 +928,7 @@ export default function TeacherPanel({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-200">
                   <div>
                     <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-widest block mb-0.5">
-                      Input Nilai & Kriteria Evaluasi
+                      Input Nilai & Kriteria Evaluasi ({activeSubject})
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                       <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -676,15 +947,17 @@ export default function TeacherPanel({
                       <label className="text-[11px] font-bold text-slate-700 block">
                         Nilai Akhir:
                       </label>
-                      <span className={`text-[10px] font-extrabold font-mono block ${
-                        score !== ""
-                          ? Number(score) > 91
-                            ? "text-emerald-600"
-                            : Number(score) >= 80
-                            ? "text-cyan-600"
-                            : "text-amber-600"
-                          : "text-slate-400"
-                      }`}>
+                      <span
+                        className={`text-[10px] font-extrabold font-mono block ${
+                          score !== ""
+                            ? Number(score) > 91
+                              ? "text-emerald-600"
+                              : Number(score) >= 80
+                              ? "text-cyan-600"
+                              : "text-amber-600"
+                            : "text-slate-400"
+                        }`}
+                      >
                         {score !== "" ? (
                           Number(score) > 91
                             ? "Predikat A"
@@ -761,11 +1034,11 @@ export default function TeacherPanel({
               </div>
 
               {/* TP Objectives Checklist (Tujuan Pembelajaran) */}
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+              <div className="border-t border-slate-100 pt-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
                   <div>
-                    <h4 className="font-extrabold text-[10px] text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                      Tujuan Pembelajaran (TP) untuk Anak Ini
+                    <h4 className="font-extrabold text-[10px] text-slate-700 uppercase tracking-wider">
+                      Tujuan Pembelajaran ({activeSubject}) untuk Siswa Ini
                     </h4>
                     <p className="text-[10px] text-slate-400 leading-tight">
                       Centang jika anak sudah optimal (Sangat Baik). Un-centang jika masih butuh bimbingan.
@@ -776,14 +1049,14 @@ export default function TeacherPanel({
                       <button
                         type="button"
                         onClick={() => setAllTpStatus(true)}
-                        className="px-2 py-0.5 text-[9px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded transition cursor-pointer"
+                        className="px-2 py-0.5 text-[9px] font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded transition cursor-pointer"
                       >
                         Semua Optimal ✓
                       </button>
                       <button
                         type="button"
                         onClick={() => setAllTpStatus(false)}
-                        className="px-2 py-0.5 text-[9px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:hover:bg-amber-900/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded transition cursor-pointer"
+                        className="px-2 py-0.5 text-[9px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded transition cursor-pointer"
                       >
                         Semua Butuh Bimbingan ⚠️
                       </button>
@@ -796,11 +1069,11 @@ export default function TeacherPanel({
                   id="tp-grading-list"
                 >
                   {!Array.isArray(tpTemplates) || tpTemplates.length === 0 ? (
-                    <div className="p-3 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs rounded border border-slate-200 dark:border-slate-700 text-center">
-                      <p className="font-semibold text-slate-700 dark:text-slate-200 mb-0.5">
-                        Belum ada template Tujuan Pembelajaran (TP) Kelas {selectedClass}
+                    <div className="p-3 bg-slate-50 text-slate-600 text-xs rounded border border-slate-200 text-center">
+                      <p className="font-semibold text-slate-700 mb-0.5">
+                        Belum ada template Tujuan Pembelajaran (TP) {activeSubject} Kelas {selectedClass}
                       </p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <p className="text-[11px] text-slate-500">
                         Anda tetap dapat menyimpan nilai serta menuliskan narasi deskripsi raport secara manual pada kolom di bawah.
                       </p>
                     </div>
@@ -816,8 +1089,8 @@ export default function TeacherPanel({
                             onClick={() => toggleTp(tp.id)}
                             className={`p-2 rounded-lg border text-[11px] transition cursor-pointer select-none flex items-start gap-2.5 ${
                               isChecked
-                                ? "bg-emerald-50/20 border-emerald-200/80 hover:bg-emerald-50/50 dark:border-emerald-900/60 dark:bg-emerald-950/20"
-                                : "bg-amber-50/20 border-amber-200/80 hover:bg-amber-50/50 dark:border-amber-900/40 dark:bg-amber-950/10"
+                                ? "bg-emerald-50/20 border-emerald-200/80 hover:bg-emerald-50/50"
+                                : "bg-amber-50/20 border-amber-200/80 hover:bg-amber-50/50"
                             }`}
                           >
                             <input
@@ -825,17 +1098,17 @@ export default function TeacherPanel({
                               checked={isChecked}
                               onChange={() => toggleTp(tp.id)}
                               onClick={(e) => e.stopPropagation()}
-                              className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer mt-0.5 dark:bg-slate-900 dark:border-slate-700"
+                              className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer mt-0.5"
                             />
                             <div className="flex-1">
-                              <p className="text-slate-800 dark:text-slate-200 leading-normal font-medium">
+                              <p className="text-slate-800 leading-normal font-medium">
                                 {tp.text}
                               </p>
                               <span
                                 className={`text-[9px] font-bold tracking-wide mt-1 inline-flex items-center gap-1 uppercase px-1.5 py-0.5 rounded ${
                                   isChecked
-                                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300"
-                                    : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : "bg-amber-100 text-amber-800"
                                 }`}
                               >
                                 {isChecked
@@ -851,29 +1124,28 @@ export default function TeacherPanel({
               </div>
 
               {/* NARRATIVE DESCRIPTION PREVIEW / MANUAL INPUT */}
-              <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
+              <div className="border-t border-slate-100 pt-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
                   <div>
-                    <h4 className="font-extrabold text-[10px] text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                      <span>Narasi Deskripsi Raport</span>
+                    <h4 className="font-extrabold text-[10px] text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>Narasi Deskripsi Raport ({activeSubject})</span>
                       {tpTemplates.length > 0 && (
-                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded text-[9px] font-semibold lowercase">
+                        <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-semibold lowercase">
                           otomatis memuat nama siswa
                         </span>
                       )}
                     </h4>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                    <p className="text-[10px] text-slate-500">
                       {tpTemplates.length > 0
-                        ? `Deskripsi otomatis langsung diperbarui saat ceklist TP diubah (termasuk nama ananda ${selectedStudent.name}). Tetap bisa diedit manual langsung di kolom ini.`
-                        : `Ketik narasi deskripsi capaian raport ananda ${selectedStudent.name} secara manual di bawah (dapat disimpan tanpa TP).`}
+                        ? `Deskripsi otomatis diperbarui saat ceklist TP diubah (untuk ananda ${selectedStudent.name}). Tetap bisa diedit manual langsung di kolom ini.`
+                        : `Ketik narasi deskripsi capaian raport ananda ${selectedStudent.name} secara manual di bawah.`}
                     </p>
                   </div>
                   {tpTemplates.length > 0 && (
                     <button
                       type="button"
                       onClick={handleRegenerateFromTp}
-                      title="Klik untuk menyinkronkan atau menghasilkan ulang narasi deskripsi dari ceklist TP saat ini"
-                      className="px-2.5 py-1 text-[10px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 rounded border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 transition self-start sm:self-auto cursor-pointer shadow-xs"
+                      className="px-2.5 py-1 text-[10px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-200 flex items-center gap-1.5 transition self-start sm:self-auto cursor-pointer shadow-xs"
                     >
                       <RefreshCw className="w-3 h-3 text-emerald-600" />
                       <span>Sinkronkan dari TP</span>
@@ -890,7 +1162,7 @@ export default function TeacherPanel({
                       ? `Ketik deskripsi capaian rapor untuk ananda ${selectedStudent.name} di sini...`
                       : "Ketik deskripsi capaian nilai rapor secara manual di sini..."
                   }
-                  className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-lg text-xs bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  className="w-full p-2.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 leading-relaxed font-sans focus:outline-none focus:ring-2 focus:ring-emerald-600"
                 />
               </div>
 
@@ -906,7 +1178,7 @@ export default function TeacherPanel({
                     <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   ) : (
                     <>
-                      <Save className="w-3.5 h-3.5" /> Simpan Nilai & Deskripsi
+                      <Save className="w-3.5 h-3.5" /> Simpan Nilai {activeSubject}
                     </>
                   )}
                 </button>
@@ -919,7 +1191,121 @@ export default function TeacherPanel({
             </div>
           ))}
 
-        {/* LOCAL TP MANAGEMENT TAB */}
+        {/* ======================================================== */}
+        {/* 2. DEDICATED EKSKUL GRADING TAB                          */}
+        {/* ======================================================== */}
+        {activeViewTab === "ekskul" &&
+          (selectedStudent ? (
+            <form onSubmit={handleSaveEkskul} className="space-y-4 animate-fade-in">
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-amber-700 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                    ⚽
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-xs text-slate-900 uppercase">
+                      {selectedStudent.name || "N/A"}
+                    </h3>
+                    <p className="text-[10px] text-amber-900">
+                      NISN: {selectedStudent.nisn || "-"} • Kelas {selectedStudent.kelas || "-"}
+                    </p>
+                  </div>
+                </div>
+
+                <span className="px-3 py-1 bg-amber-700 text-white font-black text-xs rounded-lg shadow-xs">
+                  Ekstrakurikuler: {currentEkskul}
+                </span>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Evaluasi & Capaian Ekstrakurikuler
+                    </h4>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Berikan predikat dan narasi keterangan kegiatan ekskul {currentEkskul} untuk dicetak pada rapor ananda {selectedStudent.name}.
+                    </p>
+                  </div>
+
+                  <div className="w-full sm:w-48">
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                      Predikat Capaian:
+                    </label>
+                    <select
+                      value={ekskulPredicate}
+                      onChange={(e) => setEkskulPredicate(e.target.value)}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:border-amber-600"
+                    >
+                      <option value="Sangat Baik">Sangat Baik (A)</option>
+                      <option value="Baik">Baik (B)</option>
+                      <option value="Cukup">Cukup (C)</option>
+                      <option value="Kurang">Kurang (D)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Quick narrative suggestions */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1 flex items-center justify-between">
+                    <span>Keterangan / Deskripsi Kegiatan Ekskul:</span>
+                    <span className="text-slate-400 font-normal lowercase text-[10px]">
+                      klik opsi cepat di bawah untuk mengisi otomatis
+                    </span>
+                  </label>
+
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {[
+                      `Sangat aktif, disiplin, dan menunjukkan penguasaan teknik serta kekompakan yang sangat baik dalam kegiatan ${currentEkskul}.`,
+                      `Aktif dan bersemangat mengikuti latihan rutin ${currentEkskul} serta menunjukkan peningkatan keterampilan yang baik.`,
+                      `Cukup aktif dalam kegiatan ${currentEkskul}, terus tingkatkan kedisiplinan dan semangat berlatih.`,
+                    ].map((snippet, sIdx) => (
+                      <button
+                        key={sIdx}
+                        type="button"
+                        onClick={() => setEkskulDescription(snippet)}
+                        className="text-[10px] bg-white hover:bg-amber-50 text-slate-700 hover:text-amber-900 border border-slate-200 hover:border-amber-300 rounded px-2 py-1 transition cursor-pointer text-left"
+                      >
+                        Opsi {sIdx + 1}: &quot;{snippet.substring(0, 38)}...&quot;
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={ekskulDescription}
+                    onChange={(e) => setEkskulDescription(e.target.value)}
+                    rows={3}
+                    placeholder={`Contoh: Ananda ${selectedStudent.name} sangat aktif dalam latihan ${currentEkskul} dan memiliki kedisiplinan yang tinggi...`}
+                    className="w-full p-2.5 border border-slate-300 rounded-lg text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed font-sans"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-slate-150 pt-3 text-right">
+                <button
+                  type="submit"
+                  disabled={ekskulSaveLoading}
+                  className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto shadow-md transition disabled:opacity-50 cursor-pointer"
+                >
+                  {ekskulSaveLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" /> Simpan Nilai Ekskul ({currentEkskul})
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="p-12 text-center text-slate-400 italic text-xs">
+              Pilihlah salah satu siswa di bar sebelah kiri untuk mengisi nilai ekskul.
+            </div>
+          ))}
+
+        {/* ======================================================== */}
+        {/* 3. LOCAL TP MANAGEMENT TAB                               */}
+        {/* ======================================================== */}
         {activeViewTab === "tps" && (
           <div
             className="space-y-4 animate-fade-in"
@@ -928,13 +1314,13 @@ export default function TeacherPanel({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-xs text-slate-800 uppercase flex items-center gap-2">
-                  <span>Kelola Tujuan Pembelajaran (TP) - {user.subject}</span>
+                  <span>Kelola Tujuan Pembelajaran (TP) - {activeSubject}</span>
                   <span className="px-2 py-0.5 bg-emerald-800 text-white rounded text-[10px] font-bold">
                     Kelas {selectedClass}
                   </span>
                 </h3>
                 <p className="text-[10px] text-slate-400 mt-0.5">
-                  Tujuan pembelajaran otomatis disesuaikan secara spesifik untuk tingkat Kelas {selectedClass}. Anda dapat menambah atau memperbarui sesuai kebutuhan materi.
+                  Tujuan pembelajaran otomatis disesuaikan secara spesifik untuk materi {activeSubject} Kelas {selectedClass}.
                 </p>
               </div>
             </div>
@@ -946,7 +1332,7 @@ export default function TeacherPanel({
             >
               <div className="flex-1">
                 <label className="block text-[9px] font-bold text-emerald-900 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                  <span>Tambah Tujuan Pembelajaran Baru:</span>
+                  <span>Tambah TP Baru ({activeSubject}):</span>
                   <span className="text-emerald-700 font-extrabold">(Tingkat Kelas {selectedClass})</span>
                 </label>
                 <input
@@ -954,7 +1340,7 @@ export default function TeacherPanel({
                   required
                   value={newTpText}
                   onChange={(e) => setNewTpText(e.target.value)}
-                  placeholder={`Contoh: Menguasai kompetensi dasar materi kelas ${selectedClass}...`}
+                  placeholder={`Contoh: Menguasai kompetensi dasar materi ${activeSubject} kelas ${selectedClass}...`}
                   className="w-full p-1.5 bg-white border border-emerald-250 rounded text-xs focus:outline-none focus:border-emerald-700"
                 />
               </div>
@@ -976,7 +1362,7 @@ export default function TeacherPanel({
             <div className="border border-slate-200 rounded-lg overflow-hidden">
               <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center justify-between">
                 <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                  <span>Daftar TP Kelas {selectedClass}</span>
+                  <span>Daftar TP ({activeSubject}) - Kelas {selectedClass}</span>
                   <span className="bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded font-mono">
                     {!Array.isArray(tpTemplates) ? 0 : tpTemplates.length} TP
                   </span>
@@ -988,7 +1374,7 @@ export default function TeacherPanel({
               <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
                 {!Array.isArray(tpTemplates) || tpTemplates.length === 0 ? (
                   <p className="p-4 text-center text-xs text-slate-400 italic">
-                    Belum ada Tujuan Pembelajaran untuk Kelas {selectedClass}. Silakan tambahkan pada form di atas.
+                    Belum ada Tujuan Pembelajaran untuk {activeSubject} Kelas {selectedClass}. Silakan tambahkan pada form di atas.
                   </p>
                 ) : (
                   tpTemplates

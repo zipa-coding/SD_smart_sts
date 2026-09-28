@@ -48,9 +48,32 @@ function initializeLocalStorage() {
           return;
         }
 
+        // Normalize legacy ekskul names (e.g. Futsal Kids -> Futsal)
+        let changed = false;
+        if (Array.isArray(clientDbCache.ekskul)) {
+          clientDbCache.ekskul.forEach((e: any) => {
+            if (e.name === "Futsal Kids") {
+              e.name = "Futsal";
+              changed = true;
+            }
+          });
+        }
+        if (Array.isArray(clientDbCache.teachers)) {
+          clientDbCache.teachers.forEach((t: any) => {
+            if (t.ekskulName === "Futsal Kids") {
+              t.ekskulName = "Futsal";
+              changed = true;
+            }
+          });
+        }
+
         // Initialize TP templates if completely missing
         if (!clientDbCache.tujuan_pembelajaran_templates || typeof clientDbCache.tujuan_pembelajaran_templates !== 'object') {
           clientDbCache.tujuan_pembelajaran_templates = dbData.tujuan_pembelajaran_templates;
+          changed = true;
+        }
+
+        if (changed) {
           localStorage.setItem('smart_sts_db', JSON.stringify(clientDbCache));
         }
       } catch (e) {
@@ -294,7 +317,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           return new Response(JSON.stringify(sum), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
-        // 9. GET, POST, DELETE /api/ekskul for Firebase
+        // 9. GET, POST, PUT, DELETE /api/ekskul for Firebase
         if (path === '/api/ekskul' && method === 'GET') {
           const e = await firebaseApi.getEkskul();
           return new Response(JSON.stringify(e), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -303,6 +326,18 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         if (path === '/api/ekskul' && method === 'POST') {
           const e = await firebaseApi.postEkskul(body);
           return new Response(JSON.stringify(e), { status: 201, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (path.startsWith('/api/ekskul/') && path.endsWith('/assign-teacher') && method === 'POST') {
+          const id = path.replace('/api/ekskul/', '').replace('/assign-teacher', '');
+          const res = await firebaseApi.assignTeacherEkskul(id, body?.teacherId);
+          return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (path.startsWith('/api/ekskul/') && method === 'PUT') {
+          const id = path.split('/').pop() || "";
+          const res = await firebaseApi.putEkskul(id, body);
+          return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
         if (path.startsWith('/api/ekskul/') && method === 'DELETE') {
@@ -339,13 +374,22 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           headers: { 'Content-Type': 'application/json' }
         });
       }
+      const assignedEks = Array.isArray(db.ekskul)
+        ? db.ekskul.find(
+            (e: any) =>
+              (e.teacherId && String(e.teacherId) === String(teacher.id)) ||
+              (teacher.isEkskulTeacher && teacher.ekskulName && e.name.toLowerCase().trim() === teacher.ekskulName.toLowerCase().trim())
+          )
+        : null;
       return new Response(JSON.stringify({
         id: teacher.id,
         name: teacher.name,
         username: teacher.username,
         subject: teacher.subject,
         isWaliKelas: teacher.isWaliKelas || false,
-        kelas: teacher.kelas || ""
+        kelas: teacher.kelas || "",
+        isEkskulTeacher: Boolean(teacher.isEkskulTeacher || assignedEks),
+        ekskulName: assignedEks ? assignedEks.name : (teacher.ekskulName || "")
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -362,30 +406,64 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           headers: { 'Content-Type': 'application/json' }
         });
       }
+      const assignedEks = Array.isArray(db.ekskul)
+        ? db.ekskul.find(
+            (e: any) =>
+              (e.teacherId && String(e.teacherId) === String(teacher.id)) ||
+              (teacher.isEkskulTeacher && teacher.ekskulName && e.name.toLowerCase().trim() === teacher.ekskulName.toLowerCase().trim())
+          )
+        : null;
       return new Response(JSON.stringify({
         id: teacher.id,
         name: teacher.name,
         username: teacher.username,
         subject: teacher.subject,
         isWaliKelas: teacher.isWaliKelas || false,
-        kelas: teacher.kelas || ""
+        kelas: teacher.kelas || "",
+        isEkskulTeacher: Boolean(teacher.isEkskulTeacher || assignedEks),
+        ekskulName: assignedEks ? assignedEks.name : (teacher.ekskulName || "")
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // 2. GET /api/teachers
     if (path === '/api/teachers' && method === 'GET') {
       const db = getDB();
-      return new Response(JSON.stringify(db.teachers), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      if (!Array.isArray(db.teachers)) db.teachers = [];
+      if (!Array.isArray(db.ekskul)) db.ekskul = [];
+
+      const list = db.teachers.map((t: any) => {
+        const eks = db.ekskul.find(
+          (e: any) =>
+            (e.teacherId && String(e.teacherId) === String(t.id)) ||
+            (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
+        );
+        if (eks) {
+          return {
+            ...t,
+            isEkskulTeacher: true,
+            ekskulName: eks.name,
+          };
+        }
+        return {
+          ...t,
+          isEkskulTeacher: Boolean(t.isEkskulTeacher),
+          ekskulName: t.ekskulName || "",
+        };
+      });
+
+      return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // POST /api/teachers
     if (path === '/api/teachers' && method === 'POST') {
-      const { name, username, password, subject, isWaliKelas, kelas } = body || {};
+      const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
       const db = getDB();
       const exists = db.teachers.some((t: any) => t.username.toLowerCase() === username?.toLowerCase());
       if (exists) {
         return new Response(JSON.stringify({ error: "Username sudah digunakan." }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
+      const isEks = Boolean(isEkskulTeacher);
+      const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
       const newTeacher = {
         id: "t_" + Date.now(),
         name,
@@ -393,9 +471,27 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         password,
         subject,
         isWaliKelas: !!isWaliKelas,
-        kelas: kelas || ""
+        kelas: kelas || "",
+        isEkskulTeacher: isEks,
+        ekskulName: cleanEksName
       };
       db.teachers.push(newTeacher);
+
+      if (isEks && cleanEksName) {
+        if (!Array.isArray(db.ekskul)) db.ekskul = [];
+        let matchedEks = db.ekskul.find(
+          (e: any) => e.name.toLowerCase().trim() === cleanEksName.toLowerCase().trim()
+        );
+        if (!matchedEks) {
+          matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: newTeacher.id, teacherName: newTeacher.name };
+          db.ekskul.push(matchedEks);
+        } else {
+          matchedEks.teacherId = newTeacher.id;
+          matchedEks.teacherName = newTeacher.name;
+          newTeacher.ekskulName = matchedEks.name;
+        }
+      }
+
       saveDB(db);
       return new Response(JSON.stringify(newTeacher), { status: 201, headers: { 'Content-Type': 'application/json' } });
     }
@@ -403,13 +499,53 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // PUT /api/teachers/:id
     if (path.startsWith('/api/teachers/') && method === 'PUT') {
       const id = path.split('/').pop();
-      const { name, username, password, subject, isWaliKelas, kelas } = body || {};
+      const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
       const db = getDB();
       const index = db.teachers.findIndex((t: any) => t.id === id);
       if (index === -1) {
         return new Response(JSON.stringify({ error: "Guru tidak ditemukan." }), { status: 404, headers: { 'Content-Type': 'application/json' } });
       }
-      db.teachers[index] = { ...db.teachers[index], name, username, password, subject, isWaliKelas: !!isWaliKelas, kelas: kelas || "" };
+      const isEks = Boolean(isEkskulTeacher);
+      const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+
+      db.teachers[index] = {
+        ...db.teachers[index],
+        name,
+        username,
+        password,
+        subject,
+        isWaliKelas: !!isWaliKelas,
+        kelas: kelas || "",
+        isEkskulTeacher: isEks,
+        ekskulName: cleanEksName
+      };
+
+      if (!Array.isArray(db.ekskul)) db.ekskul = [];
+      let matchedEks = null;
+      if (isEks && cleanEksName) {
+        matchedEks = db.ekskul.find(
+          (e: any) => e.name.toLowerCase().trim() === cleanEksName.toLowerCase().trim()
+        );
+        if (!matchedEks) {
+          matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: id, teacherName: db.teachers[index].name };
+          db.ekskul.push(matchedEks);
+        } else {
+          matchedEks.teacherId = id;
+          matchedEks.teacherName = db.teachers[index].name;
+          db.teachers[index].ekskulName = matchedEks.name;
+        }
+      }
+
+      db.ekskul.forEach((e: any) => {
+        if (matchedEks && e.id !== matchedEks.id && String(e.teacherId) === String(id)) {
+          e.teacherId = "";
+          e.teacherName = "";
+        } else if (!isEks && String(e.teacherId) === String(id)) {
+          e.teacherId = "";
+          e.teacherName = "";
+        }
+      });
+
       saveDB(db);
       return new Response(JSON.stringify(db.teachers[index]), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
@@ -664,8 +800,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     if (path === '/api/settings' && method === 'GET') {
       const db = getDB();
       const principalName = db.settings?.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-      const principalNip = db.settings?.principalNip || "19780512 200501 1 002";
-      const format = db.settings?.format || {
+      const principalNip = db.settings?.principalNip !== undefined ? db.settings.principalNip : "19780512 200501 1 002";
+      const format = {
         semesterName: "Ganjil",
         tahunPelajaran: "2026/2027",
         fontSize: "11pt",
@@ -679,16 +815,10 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         tanggalRaport: "17 Juni 2026",
         signaturePosition: "kanan",
         watermarkSize: 440,
-        watermarkOpacity: 0.05
+        watermarkOpacity: 0.05,
+        ...(db.settings?.format || {})
       };
-      // If format doesn't have tanggalRaport or signaturePosition, default it
-      if (format) {
-        if (!format.tanggalRaport) format.tanggalRaport = "17 Juni 2026";
-        if (!format.signaturePosition) format.signaturePosition = "kanan";
-        if (format.watermarkSize === undefined) format.watermarkSize = 440;
-        if (format.watermarkOpacity === undefined) format.watermarkOpacity = 0.05;
-      }
-      return new Response(JSON.stringify({ principalName, principalNip, format }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ principalName, principalNip, format, settings: { principalName, principalNip, format } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // POST /api/settings
@@ -696,8 +826,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const { principalName, principalNip, format } = body || {};
       const db = getDB();
       if (!db.settings) db.settings = {};
-      db.settings.principalName = principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-      db.settings.principalNip = principalNip || "19780512 200501 1 002";
+      if (principalName !== undefined) db.settings.principalName = principalName;
+      if (principalNip !== undefined) db.settings.principalNip = principalNip;
       if (format) {
         db.settings.format = {
           semesterName: format.semesterName || "Ganjil",
@@ -717,45 +847,181 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         };
       }
       saveDB(db);
-      return new Response(JSON.stringify({ success: true, settings: db.settings }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ success: true, settings: db.settings, principalName: db.settings.principalName, principalNip: db.settings.principalNip, format: db.settings.format }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // GET /api/ekskul
     if (path === '/api/ekskul' && method === 'GET') {
       const db = getDB();
       const defaultEkskul = [
-        { "id": "e1", "name": "Pramuka", "type": "Wajib" },
-        { "id": "e2", "name": "Mentoring", "type": "Wajib" },
+        { "id": "e1", "name": "Pramuka Siaga & Penggalang", "type": "Wajib" },
+        { "id": "e2", "name": "Mentoring & Bina Pribadi Islami", "type": "Wajib" },
         { "id": "e3", "name": "Futsal", "type": "Pilihan" },
-        { "id": "e4", "name": "Voli", "type": "Pilihan" },
-        { "id": "e5", "name": "Panahan", "type": "Pilihan" },
-        { "id": "e6", "name": "Study Club", "type": "Pilihan" }
+        { "id": "e4", "name": "Bulu Tangkis", "type": "Pilihan" },
+        { "id": "e5", "name": "Panahan Tradisional", "type": "Pilihan" },
+        { "id": "e6", "name": "Klub Sains & Matematika Cilik", "type": "Pilihan" }
       ];
-      if (!db.ekskul) {
+      if (!Array.isArray(db.ekskul) || db.ekskul.length === 0) {
         db.ekskul = defaultEkskul;
         saveDB(db);
       }
-      return new Response(JSON.stringify(db.ekskul), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+      const teachersList = Array.isArray(db.teachers) ? db.teachers : [];
+      const enriched = db.ekskul.map((e: any) => {
+        const assignedTeacher = teachersList.find(
+          (t: any) =>
+            (e.teacherId && String(e.teacherId) === String(t.id)) ||
+            (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
+        );
+        return {
+          ...e,
+          teacherId: assignedTeacher ? assignedTeacher.id : (e.teacherId || ""),
+          teacherName: assignedTeacher ? assignedTeacher.name : (e.teacherName || "")
+        };
+      });
+
+      return new Response(JSON.stringify(enriched), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // POST /api/ekskul
     if (path === '/api/ekskul' && method === 'POST') {
-      const { name, type } = body || {};
+      const { name, type, teacherId } = body || {};
+      const trimmedName = String(name || "").trim();
       const db = getDB();
-      if (!db.ekskul) {
-        db.ekskul = [
-          { "id": "e1", "name": "Pramuka", "type": "Wajib" },
-          { "id": "e2", "name": "Mentoring", "type": "Wajib" },
-          { "id": "e3", "name": "Futsal", "type": "Pilihan" },
-          { "id": "e4", "name": "Voli", "type": "Pilihan" },
-          { "id": "e5", "name": "Panahan", "type": "Pilihan" },
-          { "id": "e6", "name": "Study Club", "type": "Pilihan" }
-        ];
+      if (!Array.isArray(db.ekskul)) db.ekskul = [];
+      if (!Array.isArray(db.teachers)) db.teachers = [];
+
+      let target = db.ekskul.find(
+        (e: any) => e.name.toLowerCase().trim() === trimmedName.toLowerCase().trim()
+      );
+
+      let assignedTeacherName = "";
+      if (teacherId) {
+        const t = db.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+        if (t) {
+          assignedTeacherName = t.name;
+          t.isEkskulTeacher = true;
+          t.ekskulName = trimmedName;
+        }
       }
-      const newE = { id: "e_" + Date.now(), name, type };
-      db.ekskul.push(newE);
+
+      if (!target) {
+        target = {
+          id: "e_" + Date.now(),
+          name: trimmedName,
+          type: type || "Pilihan",
+          teacherId: teacherId || "",
+          teacherName: assignedTeacherName
+        };
+        db.ekskul.push(target);
+      } else {
+        target.name = trimmedName;
+        target.type = type || target.type;
+        target.teacherId = teacherId || "";
+        target.teacherName = assignedTeacherName;
+      }
+
       saveDB(db);
-      return new Response(JSON.stringify(newE), { status: 201, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(target), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // POST /api/ekskul/:id/assign-teacher
+    if (path.startsWith('/api/ekskul/') && path.endsWith('/assign-teacher') && method === 'POST') {
+      const id = path.replace('/api/ekskul/', '').replace('/assign-teacher', '');
+      const { teacherId } = body || {};
+      const db = getDB();
+      if (!Array.isArray(db.ekskul)) db.ekskul = [];
+      if (!Array.isArray(db.teachers)) db.teachers = [];
+
+      let target = db.ekskul.find((e: any) => String(e.id) === String(id));
+      if (!target) {
+        target = { id, name: "Ekskul", type: "Pilihan", teacherId: "", teacherName: "" };
+        db.ekskul.push(target);
+      }
+
+      const oldTeacherId = target.teacherId;
+      let assignedTeacherName = "";
+      if (teacherId) {
+        const t = db.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+        if (t) {
+          assignedTeacherName = t.name;
+          t.isEkskulTeacher = true;
+          t.ekskulName = target.name;
+        }
+      }
+
+      if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+        const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+        if (prevT) {
+          prevT.isEkskulTeacher = false;
+          prevT.ekskulName = "";
+        }
+      }
+
+      if (teacherId) {
+        db.ekskul.forEach((e: any) => {
+          if (e.id !== id && String(e.teacherId) === String(teacherId)) {
+            e.teacherId = "";
+            e.teacherName = "";
+          }
+        });
+      }
+
+      target.teacherId = teacherId || "";
+      target.teacherName = assignedTeacherName;
+
+      saveDB(db);
+      return new Response(JSON.stringify({ ekskul: target, teachers: db.teachers }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // PUT /api/ekskul/:id
+    if (path.startsWith('/api/ekskul/') && method === 'PUT') {
+      const id = path.split('/').pop() || "";
+      const { name, type, teacherId } = body || {};
+      const trimmedName = String(name || "").trim();
+      const db = getDB();
+      if (!Array.isArray(db.ekskul)) db.ekskul = [];
+      if (!Array.isArray(db.teachers)) db.teachers = [];
+
+      const idx = db.ekskul.findIndex((e: any) => String(e.id) === String(id));
+      let target = idx !== -1 ? db.ekskul[idx] : null;
+
+      let assignedTeacherName = "";
+      if (teacherId) {
+        const t = db.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+        if (t) {
+          assignedTeacherName = t.name;
+          t.isEkskulTeacher = true;
+          t.ekskulName = trimmedName || (target ? target.name : "");
+        }
+      }
+
+      if (target) {
+        const oldTeacherId = target.teacherId;
+        if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+          const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+          if (prevT) {
+            prevT.isEkskulTeacher = false;
+            prevT.ekskulName = "";
+          }
+        }
+        target.name = trimmedName || target.name;
+        target.type = type || target.type;
+        target.teacherId = teacherId || "";
+        target.teacherName = assignedTeacherName;
+      } else {
+        target = {
+          id,
+          name: trimmedName,
+          type: type || "Pilihan",
+          teacherId: teacherId || "",
+          teacherName: assignedTeacherName
+        };
+        db.ekskul.push(target);
+      }
+
+      saveDB(db);
+      return new Response(JSON.stringify(target), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // DELETE /api/ekskul/:id

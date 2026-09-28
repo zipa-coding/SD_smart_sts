@@ -6,6 +6,8 @@ export interface Teacher {
   subject: string;
   isWaliKelas: boolean;
   kelas: string;
+  isEkskulTeacher?: boolean;
+  ekskulName?: string;
 }
 
 export interface Student {
@@ -116,8 +118,25 @@ export const SUBJECT_LIST = [
   // C. Muatan Lokal
   "Bahasa Arab",
   // D. Keislaman
+  "Keislaman",
   "Tahsin ABaTaTsa",
   "Tahfizh Al-Qur’an",
   "Do’a Harian dan Hadits",
   "Wudhu dan Sholat"
 ];
+
+export const KEISLAMAN_SUB_SUBJECTS = [
+  { id: "Tahsin ABaTaTsa", label: "Tahsin ABaTaTsa", short: "Tahsin" },
+  { id: "Tahfizh Al-Qur’an", label: "Tahfizh Al-Qur’an", short: "Tahfidz" },
+  { id: "Do’a Harian dan Hadits", label: "Do’a Harian dan Hadits", short: "Doa & Hadist" },
+  { id: "Wudhu dan Sholat", label: "Wudhu dan Sholat", short: "Wudhu & Sholat" }
+] as const;
+
+export interface EkskulItem {
+  id: string;
+  name: string;
+  type: "Wajib" | "Pilihan";
+  teacherId?: string;
+  teacherName?: string;
+}
+
