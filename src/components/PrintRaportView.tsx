@@ -198,22 +198,130 @@ export default function PrintRaportView({
     "Wudhu dan Sholat",
   ];
 
+  const normalizeSub = (str: string) => {
+    return (str || "")
+      .replace(/[’'`]/g, "'")
+      .replace(/\s*&\s*/g, " dan ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  };
+
+  const findGradeForSubject = (gradesList: Grade[], targetSub: string): Grade | undefined => {
+    if (!Array.isArray(gradesList) || !targetSub) return undefined;
+
+    // 1. Direct match
+    const direct = gradesList.find((g) => g && g.subject === targetSub);
+    if (direct) return direct;
+
+    // 2. Normalized match (ignoring apostrophe variants and case)
+    const normTarget = normalizeSub(targetSub);
+    const normMatch = gradesList.find(
+      (g) => g && normalizeSub(g.subject) === normTarget
+    );
+    if (normMatch) return normMatch;
+
+    // 3. Known aliases map
+    const aliases: Record<string, string[]> = {
+      PAI: ["pai", "pendidikan agama islam", "agama islam", "agama"],
+      PPKN: [
+        "ppkn",
+        "pkn",
+        "pendidikan pancasila",
+        "pendidikan pancasila dan kewarganegaraan",
+      ],
+      "Bahasa Indonesia": ["bahasa indonesia", "b. indonesia", "b indonesia", "bindo"],
+      Matematika: ["matematika", "mtk", "math"],
+      IPA: ["ipa", "ilmu pengetahuan alam", "sains"],
+      IPS: ["ips", "ilmu pengetahuan sosial", "sosial"],
+      "Bahasa Inggris": ["bahasa inggris", "b. inggris", "b inggris", "english", "bing"],
+      PJOK: [
+        "pjok",
+        "penjas",
+        "penjaskes",
+        "pendidikan jasmani olahraga dan kesehatan",
+        "olahraga",
+      ],
+      Prakarya: ["prakarya", "prakarya dan kewirausahaan", "sbk", "seni budaya"],
+      Informatika: ["informatika", "tik", "komputer"],
+      "Bahasa Arab": ["bahasa arab", "b. arab", "b arab", "arab"],
+      "Tahsin ABaTaTsa": [
+        "tahsin abatatsa",
+        "tahsin",
+        "tahsin al-qur'an",
+        "tahsin al-quran",
+        "tahsin al qur'an",
+      ],
+      "Tahfizh Al-Qur’an": [
+        "tahfizh al-qur'an",
+        "tahfizh al-quran",
+        "tahfidz al-qur'an",
+        "tahfidz al-quran",
+        "tahfizh",
+        "tahfidz",
+        "tahfizh al qur'an",
+      ],
+      "Do’a Harian dan Hadits": [
+        "do'a harian dan hadits",
+        "doa harian dan hadits",
+        "do'a dan hadits",
+        "doa dan hadist",
+        "doa & hadist",
+        "doa dan hadits",
+        "do'a harian & hadits",
+      ],
+      "Wudhu dan Sholat": [
+        "wudhu dan sholat",
+        "wudhu dan shalat",
+        "wudhu & sholat",
+        "wudhu & shalat",
+        "sholat dan wudhu",
+        "shalat dan wudhu",
+        "wudhu",
+        "sholat",
+        "shalat",
+      ],
+    };
+
+    for (const [key, aliasList] of Object.entries(aliases)) {
+      const normKey = normalizeSub(key);
+      if (normTarget === normKey || aliasList.includes(normTarget)) {
+        const found = gradesList.find((g) => {
+          const normG = normalizeSub(g.subject);
+          return normG === normKey || aliasList.includes(normG);
+        });
+        if (found) return found;
+      }
+    }
+
+    // 4. Substring fallback
+    return gradesList.find((g) => {
+      const normG = normalizeSub(g.subject);
+      return (
+        normG.length >= 4 &&
+        (normG.includes(normTarget) || normTarget.includes(normG))
+      );
+    });
+  };
+
   const activeUmum = React.useMemo(() => {
     if (allSubjects.length === 0) return umumSubjects;
     return allSubjects.filter(
-      (s) => !mulokSubjects.includes(s) && !keislamanSubjects.includes(s)
+      (s) =>
+        !mulokSubjects.some((m) => normalizeSub(m) === normalizeSub(s)) &&
+        !keislamanSubjects.some((k) => normalizeSub(k) === normalizeSub(s)) &&
+        normalizeSub(s) !== "keislaman" &&
+        normalizeSub(s) !== "pendidikan keislaman"
     );
   }, [allSubjects]);
 
   const activeMulok = React.useMemo(() => {
-    if (allSubjects.length === 0) return mulokSubjects;
-    return mulokSubjects.filter((s) => allSubjects.includes(s));
-  }, [allSubjects]);
+    return mulokSubjects;
+  }, []);
 
   const activeKeislaman = React.useMemo(() => {
-    if (allSubjects.length === 0) return keislamanSubjects;
-    return keislamanSubjects.filter((s) => allSubjects.includes(s));
-  }, [allSubjects]);
+    return keislamanSubjects;
+  }, []);
 
   // Helper with beautiful full human readable subject names
   const getOfficialSubjectName = (sub: string, index: number) => {
@@ -231,9 +339,17 @@ export default function PrintRaportView({
       "Bahasa Arab": "Bahasa Arab",
       "Tahsin ABaTaTsa": "Tahsin ABaTaTsa",
       "Tahfizh Al-Qur’an": "Tahfizh Al-Qur’an",
+      "Tahfizh Al-Qur'an": "Tahfizh Al-Qur’an",
       "Do’a Harian dan Hadits": "Do’a Harian dan Hadits",
+      "Do'a Harian dan Hadits": "Do’a Harian dan Hadits",
       "Wudhu dan Sholat": "Wudhu dan Sholat",
     };
+    const normSub = normalizeSub(sub);
+    for (const [k, v] of Object.entries(map)) {
+      if (normalizeSub(k) === normSub) {
+        return `${index + 1}. ${v}`;
+      }
+    }
     return `${index + 1}. ${map[sub] || sub}`;
   };
 
@@ -296,11 +412,31 @@ export default function PrintRaportView({
 
   // Generate automated narrative backup fallback if subject deskripsi is empty
   const generateDescription = (g: Grade | undefined) => {
-    if (!g || !g.tps || !Array.isArray(g.tps) || g.tps.length === 0) {
-      return "";
-    }
+    if (!g) return "";
 
     const name = student?.name ? student.name.trim() : "Siswa";
+    const sub = g.subject || "mata pelajaran ini";
+
+    if (g.deskripsi && g.deskripsi.trim() !== "") {
+      return g.deskripsi.trim();
+    }
+    if ((g as any).description && String((g as any).description).trim() !== "") {
+      return String((g as any).description).trim();
+    }
+
+    if (!g.tps || !Array.isArray(g.tps) || g.tps.length === 0) {
+      const cap = g.capaian || (g.score && g.score >= 90 ? "A" : g.score && g.score >= 80 ? "B" : "C") || "B";
+      if (cap === "A" || cap === "Sangat Baik") {
+        return `Alhamdulillah, ananda ${name} dalam pembelajaran ${sub} menunjukkan penguasaan yang optimal dan sangat baik pada seluruh capaian kompetensi pembelajaran. Pertahankan prestasimu, teruslah bertumbuh dengan rendah hati, dan tetap bersemangat.`;
+      } else if (cap === "B" || cap === "Baik") {
+        return `Alhamdulillah, ananda ${name} dalam pembelajaran ${sub} menunjukkan penguasaan yang baik dalam memahami dan menguasai materi pembelajaran. Teruslah rajin berlatih untuk mencapai hasil yang semakin optimal.`;
+      } else if (cap === "C" || cap === "Cukup") {
+        return `Ananda ${name} dalam pembelajaran ${sub} menunjukkan penguasaan yang cukup dan perlu terus meningkatkan keaktifan serta ketekunan belajar di kelas dan di rumah.`;
+      } else {
+        return `Ananda ${name} dalam pembelajaran ${sub} masih memerlukan bimbingan dan pendampingan lebih lanjut. Tetaplah bersemangat dan jangan ragu untuk terus bertanya dan belajar.`;
+      }
+    }
+
     const achieved = g.tps
       .filter((tp) => tp.achieved)
       .map((tp) => (tp.text || "").trim())
@@ -318,7 +454,6 @@ export default function PrintRaportView({
       return `${cleaned.slice(0, -1).join(", ")}, dan ${cleaned[cleaned.length - 1]}`;
     };
 
-    const sub = g.subject || "mata pelajaran ini";
     let desc = "";
     if (achieved.length > 0 && needImprovement.length === 0) {
       desc = `Alhamdulillah, ananda ${name} dalam pembelajaran ${sub} menunjukkan penguasaan yang optimal dalam ${joinItems(achieved)}. Pertahankan prestasimu, teruslah bertumbuh dengan rendah hati, dan yakinlah setiap ikhtiar baikmu hari ini akan membuka pintu masa depan yang indah.`;
@@ -326,42 +461,45 @@ export default function PrintRaportView({
       desc = `Alhamdulillah, ananda ${name} dalam pembelajaran ${sub} menunjukkan penguasaan yang optimal dalam ${joinItems(achieved)}. Namun masih memerlukan bimbingan dan pendampingan lebih lanjut dalam ${joinItems(needImprovement)}. Tetaplah bersemangat, jangan pernah lelah untuk mencoba karena setiap proses belajarmu sangatlah berharga.`;
     } else if (needImprovement.length > 0) {
       desc = `Ananda ${name} dalam pembelajaran ${sub} masih memerlukan bimbingan dan pendampingan lebih lanjut dalam ${joinItems(needImprovement)}. Jangan berkecil hati, percayalah pada kemampuan dirimu; dengan kesabaran, doa, dan usaha yang tekun, ananda pasti mampu meraih hal yang lebih baik.`;
+    } else {
+      desc = `Alhamdulillah, ananda ${name} dalam pembelajaran ${sub} telah mengikuti proses pembelajaran dengan baik.`;
     }
 
     return desc.trim();
   };
 
   const getSubjectScore = (sub: string) => {
-    const g = grades.find((x) => x.subject === sub);
+    const g = findGradeForSubject(grades, sub);
     if (g && g.score !== undefined && g.score !== null) return g.score;
     return "";
   };
 
   const getSubjectUsaha = (sub: string) => {
-    const g = grades.find((x) => x.subject === sub);
+    const g = findGradeForSubject(grades, sub);
     if (g && g.usaha) return g.usaha;
     return "-";
   };
 
   const getSubjectProses = (sub: string) => {
-    const g = grades.find((x) => x.subject === sub);
+    const g = findGradeForSubject(grades, sub);
     if (g && g.proses) return g.proses;
     return "-";
   };
 
   const getSubjectCapaian = (sub: string) => {
-    const g = grades.find((x) => x.subject === sub);
-    if (g && g.capaian) return g.capaian;
+    const g = findGradeForSubject(grades, sub);
+    if (g && (g.capaian || (g as any).predicate)) return g.capaian || (g as any).predicate;
     return "-";
   };
 
   const getSubjectDescription = (sub: string) => {
-    const g = grades.find((x) => x.subject === sub);
+    const g = findGradeForSubject(grades, sub);
     if (g) {
       if (g.deskripsi && g.deskripsi.trim() !== "") return g.deskripsi.trim();
+      if ((g as any).description && String((g as any).description).trim() !== "") return String((g as any).description).trim();
       return generateDescription(g);
     }
-    return "";
+    return "-";
   };
 
   const handlePrint = () => {
@@ -2277,7 +2415,7 @@ export default function PrintRaportView({
               C. Muatan Lokal
             </h4>
 
-            {mulokSubjects.map((sub, idx) => {
+            {activeMulok.map((sub, idx) => {
               const name = getOfficialSubjectName(sub, idx);
               const usahaGrade = getSubjectUsaha(sub);
               const prosesGrade = getSubjectProses(sub);
@@ -2345,7 +2483,7 @@ export default function PrintRaportView({
               D. Keislaman
             </h4>
 
-            {keislamanSubjects.map((sub, idx) => {
+            {activeKeislaman.map((sub, idx) => {
               const name = getOfficialSubjectName(sub, idx);
               const usahaGrade = getSubjectUsaha(sub);
               const prosesGrade = getSubjectProses(sub);
