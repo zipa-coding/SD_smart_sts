@@ -167,10 +167,36 @@ app.post("/api/verify-session", async (req, res) => {
 });
 
 // 2. Teachers CRUD
+const DUMMY_TEACHER_IDS = ['t2', 't3', 't4', 't5', 't6', 't7'];
+const DUMMY_TEACHER_USERNAMES = ['fatimah', 'ahmad', 'lukman', 'khadijah', 'yusuf', 'aisyah'];
+
+function isDummyTeacherServer(t: any): boolean {
+  if (!t) return false;
+  const id = String(t.id || '').toLowerCase().trim();
+  const u = String(t.username || '').toLowerCase().trim();
+  const n = String(t.name || '').toLowerCase().trim();
+  return (
+    DUMMY_TEACHER_IDS.includes(id) ||
+    DUMMY_TEACHER_USERNAMES.includes(u) ||
+    n.includes('ustadzah fatimah') ||
+    n.includes('ustadz ahmad') ||
+    n.includes('ustadz lukman') ||
+    n.includes('ustadzah khadijah') ||
+    n.includes('ustadz yusuf') ||
+    n.includes('ustadzah aisyah')
+  );
+}
+
 app.get("/api/teachers", async (req, res) => {
   const db = await readDB();
   if (!Array.isArray(db.teachers)) db.teachers = [];
   if (!Array.isArray(db.ekskul)) db.ekskul = [];
+
+  const initialCount = db.teachers.length;
+  db.teachers = db.teachers.filter((t: any) => !isDummyTeacherServer(t));
+  if (db.teachers.length !== initialCount) {
+    await writeDB(db);
+  }
 
   const list = db.teachers.map((t: any) => {
     const eks = db.ekskul.find(
@@ -351,10 +377,29 @@ app.delete("/api/teachers/:id", async (req, res) => {
   res.json({ message: "Guru berhasil dihapus." });
 });
 
+function formatTitleCase(str: string) {
+  if (!str) return "";
+  return str
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : ""))
+        .join("-")
+    )
+    .join(" ");
+}
+
 // 3. Students CRUD
 app.get("/api/students", async (req, res) => {
   const db = await readDB();
-  res.json(db.students);
+  const formatted = (db.students || []).map((s: any) => ({
+    ...s,
+    name: formatTitleCase(s.name),
+  }));
+  res.json(formatted);
 });
 
 app.post("/api/students", async (req, res) => {
@@ -378,7 +423,7 @@ app.post("/api/students", async (req, res) => {
   const newStudent = {
     id: "s_" + Date.now(),
     nisn,
-    name,
+    name: formatTitleCase(name),
     kelas,
   };
 

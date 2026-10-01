@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import dbData from './data/db.json';
-import { isFirebaseConfigured, firebaseApi } from './lib/firebase';
+import { isFirebaseConfigured, firebaseApi, isDummyTeacher } from './lib/firebase';
 import { registerSW } from 'virtual:pwa-register';
 
 // Automatically register and update PWA service worker in production
@@ -48,8 +48,17 @@ function initializeLocalStorage() {
           return;
         }
 
-        // Normalize legacy ekskul names (e.g. Futsal Kids -> Futsal)
+        // Purge dummy sample teachers (t2-t7) if present
         let changed = false;
+        if (Array.isArray(clientDbCache.teachers)) {
+          const prevCount = clientDbCache.teachers.length;
+          clientDbCache.teachers = clientDbCache.teachers.filter((t: any) => !isDummyTeacher(t));
+          if (clientDbCache.teachers.length !== prevCount) {
+            changed = true;
+          }
+        }
+
+        // Normalize legacy ekskul names (e.g. Futsal Kids -> Futsal)
         if (Array.isArray(clientDbCache.ekskul)) {
           clientDbCache.ekskul.forEach((e: any) => {
             if (e.name === "Futsal Kids") {
@@ -102,11 +111,18 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         const raw = localStorage.getItem('smart_sts_db');
         if (raw) {
           clientDbCache = JSON.parse(raw);
+          if (Array.isArray(clientDbCache.teachers)) {
+            clientDbCache.teachers = clientDbCache.teachers.filter((t: any) => !isDummyTeacher(t));
+          }
           return clientDbCache;
         }
       }
     } catch (e) {}
-    return clientDbCache || JSON.parse(JSON.stringify(dbData));
+    const db = clientDbCache || JSON.parse(JSON.stringify(dbData));
+    if (Array.isArray(db.teachers)) {
+      db.teachers = db.teachers.filter((t: any) => !isDummyTeacher(t));
+    }
+    return db;
   };
   const saveDB = (data: any) => {
     clientDbCache = data;
@@ -442,7 +458,9 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       if (!Array.isArray(db.teachers)) db.teachers = [];
       if (!Array.isArray(db.ekskul)) db.ekskul = [];
 
-      const list = db.teachers.map((t: any) => {
+      const list = db.teachers
+        .filter((t: any) => !isDummyTeacher(t))
+        .map((t: any) => {
         const eks = db.ekskul.find(
           (e: any) =>
             (e.teacherId && String(e.teacherId) === String(t.id)) ||
@@ -1309,8 +1327,8 @@ const customFetch = async function (input: RequestInfo | URL, init?: RequestInit
     return originalFetch(input, init);
   }
 
-  // If Firebase is configured or on static hosting without backend, route directly to Firestore / client database
-  if (isFirebaseConfigured || isStaticHost) {
+  // Only route directly to local interception if on static hosts (e.g. github.io without backend)
+  if (isStaticHost) {
     return localFetchInterception(input, init);
   }
 

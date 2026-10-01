@@ -796,7 +796,44 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       const eksData = await resEks.json();
       const subData = await resSub.json();
 
-      if (Array.isArray(tData)) setTeachers(tData);
+      if (Array.isArray(tData)) {
+        const isDummy = (t: any) => {
+          const id = String(t.id || '').toLowerCase().trim();
+          const u = String(t.username || '').toLowerCase().trim();
+          const n = String(t.name || '').toLowerCase().trim();
+          return (
+            ['t2', 't3', 't4', 't5', 't6', 't7'].includes(id) ||
+            ['fatimah', 'ahmad', 'lukman', 'khadijah', 'yusuf', 'aisyah'].includes(u) ||
+            n.includes('ustadzah fatimah') ||
+            n.includes('ustadz ahmad') ||
+            n.includes('ustadz lukman') ||
+            n.includes('ustadzah khadijah') ||
+            n.includes('ustadz yusuf') ||
+            n.includes('ustadzah aisyah')
+          );
+        };
+        const cleaned = tData.filter((t: any) => !isDummy(t));
+        setTeachers(cleaned);
+
+        // Also clean up local storage if user had old stored data
+        try {
+          const raw = localStorage.getItem('smart_sts_db');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.teachers)) {
+              const origLen = parsed.teachers.length;
+              parsed.teachers = parsed.teachers.filter((t: any) => !isDummy(t));
+              if (parsed.teachers.length !== origLen) {
+                localStorage.setItem('smart_sts_db', JSON.stringify(parsed));
+              }
+            }
+          }
+          const delRaw = localStorage.getItem('smart_sts_deleted_teachers');
+          const delSet = new Set(delRaw ? JSON.parse(delRaw) : []);
+          ['t2', 't3', 't4', 't5', 't6', 't7', 'fatimah', 'ahmad', 'lukman', 'khadijah', 'yusuf', 'aisyah'].forEach((k) => delSet.add(k));
+          localStorage.setItem('smart_sts_deleted_teachers', JSON.stringify(Array.from(delSet)));
+        } catch (e) {}
+      }
       if (Array.isArray(sData)) setStudents(sData);
       if (Array.isArray(subData)) setSubjectsList(subData);
       if (tpData && typeof tpData === "object" && !Array.isArray(tpData)) setTpsTemplates(tpData);
@@ -1016,6 +1053,53 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         showSuccess("Guru berhasil dihapus.");
       },
     });
+  };
+
+  // Handler to explicitly purge any dummy sample teachers (wali kelas 1-6) across API and storage
+  const handlePurgeDummyTeachers = async () => {
+    setLoading(true);
+    try {
+      const dummyIds = ['t2', 't3', 't4', 't5', 't6', 't7'];
+      for (const id of dummyIds) {
+        await fetch(`/api/teachers/${id}`, { method: "DELETE" }).catch(() => {});
+      }
+      try {
+        const raw = localStorage.getItem('smart_sts_db');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.teachers)) {
+            parsed.teachers = parsed.teachers.filter((t: any) => {
+              const id = String(t.id || '').toLowerCase().trim();
+              const u = String(t.username || '').toLowerCase().trim();
+              const n = String(t.name || '').toLowerCase().trim();
+              return !(
+                ['t2', 't3', 't4', 't5', 't6', 't7'].includes(id) ||
+                ['fatimah', 'ahmad', 'lukman', 'khadijah', 'yusuf', 'aisyah'].includes(u) ||
+                n.includes('ustadzah fatimah') ||
+                n.includes('ustadz ahmad') ||
+                n.includes('ustadz lukman') ||
+                n.includes('ustadzah khadijah') ||
+                n.includes('ustadz yusuf') ||
+                n.includes('ustadzah aisyah')
+              );
+            });
+            localStorage.setItem('smart_sts_db', JSON.stringify(parsed));
+          }
+        }
+        const delRaw = localStorage.getItem('smart_sts_deleted_teachers');
+        const delSet = new Set(delRaw ? JSON.parse(delRaw) : []);
+        ['t2', 't3', 't4', 't5', 't6', 't7', 'fatimah', 'ahmad', 'lukman', 'khadijah', 'yusuf', 'aisyah'].forEach((k) => delSet.add(k));
+        localStorage.setItem('smart_sts_deleted_teachers', JSON.stringify(Array.from(delSet)));
+      } catch (e) {}
+
+      await fetchAllData();
+      onRefreshTrigger();
+      showSuccess("Data akun wali kelas 1 sampai 6 bawaan berhasil dibersihkan tuntas!");
+    } catch (err: any) {
+      showSuccess("Pembersihan selesai.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // STUDENT CRUD
@@ -1502,6 +1586,16 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   </button>
                 )}
               </div>
+
+              {/* Purge Dummy Teachers Button */}
+              <button
+                type="button"
+                onClick={handlePurgeDummyTeachers}
+                className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 border border-rose-700/60 text-rose-200 text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm cursor-pointer transition whitespace-nowrap"
+                title="Bersihkan akun wali kelas 1-6 bawaan jika masih tersimpan di cache"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Bersihkan Wali Kelas 1-6 Bawaan
+              </button>
 
               {/* Add Teacher Button */}
               <button

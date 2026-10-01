@@ -198,6 +198,23 @@ export default function PrintRaportView({
     "Wudhu dan Sholat",
   ];
 
+  const formatTitleCase = (str: string) => {
+    if (!str) return "";
+    return str
+      .toLowerCase()
+      .trim()
+      .split(/\s+/)
+      .map((word) =>
+        word
+          .split("-")
+          .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : ""))
+          .join("-")
+      )
+      .join(" ");
+  };
+
+  const formattedStudentName = formatTitleCase(student?.name || "");
+
   const normalizeSub = (str: string) => {
     return (str || "")
       .replace(/[’'`]/g, "'")
@@ -414,7 +431,7 @@ export default function PrintRaportView({
   const generateDescription = (g: Grade | undefined) => {
     if (!g) return "";
 
-    const name = student?.name ? student.name.trim() : "Siswa";
+    const name = student?.name ? formatTitleCase(student.name) : "Siswa";
     const sub = g.subject || "mata pelajaran ini";
 
     if (g.deskripsi && g.deskripsi.trim() !== "") {
@@ -669,7 +686,7 @@ export default function PrintRaportView({
             <tr>
               <td style="width: 15%; font-weight: normal;">Nama</td>
               <td style="width: 2%;">:</td>
-              <td style="width: 35%; font-weight: bold;">${student.name}</td>
+              <td style="width: 35%; font-weight: bold;">${formattedStudentName}</td>
               <td style="width: 18%; font-weight: normal;">Fase/Kelas</td>
               <td style="width: 2%;">:</td>
               <td style="width: 28%; font-weight: bold;">${formatFaseKelas(student.kelas)}</td>
@@ -1269,7 +1286,7 @@ export default function PrintRaportView({
       }
 
       // Download file directly via Blob URL — exactly identical to Word (.doc) download!
-      const fileName = `Raport_STS_${student.name.replace(/\s+/g, "_")}.pdf`;
+      const fileName = `Raport_STS_${formattedStudentName.replace(/\s+/g, "_")}.pdf`;
       const pdfBlob = pdf.output("blob");
       const blobUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement("a");
@@ -1300,7 +1317,7 @@ export default function PrintRaportView({
   const handleDownloadWord = () => {
     const isF4 = format.paperSize === "F4";
     const isA4 = !isF4;
-    const title = `Raport_STS_${student.name.replace(/\s+/g, "_")}`;
+    const title = `Raport_STS_${formattedStudentName.replace(/\s+/g, "_")}`;
 
     const makeAbsoluteUrl = (url: string) => {
       if (!url) return "";
@@ -1388,7 +1405,7 @@ export default function PrintRaportView({
         <tr>
           <td style="width: 15%; padding: 2px 4px; vertical-align: middle; border: none; font-weight: normal; color: #000000;">Nama</td>
           <td style="width: 2%; padding: 2px 4px; vertical-align: middle; border: none; color: #000000;">:</td>
-          <td style="width: 35%; padding: 2px 4px; vertical-align: middle; border: none; font-weight: bold; color: #000000;">${student.name}</td>
+          <td style="width: 35%; padding: 2px 4px; vertical-align: middle; border: none; font-weight: bold; color: #000000;">${formattedStudentName}</td>
           <td style="width: 18%; padding: 2px 4px; vertical-align: middle; border: none; font-weight: normal; color: #000000;">Fase/Kelas</td>
           <td style="width: 2%; padding: 2px 4px; vertical-align: middle; border: none; color: #000000;">:</td>
           <td style="width: 28%; padding: 2px 4px; vertical-align: middle; border: none; font-weight: bold; color: #000000;">${formatFaseKelas(student.kelas)}</td>
@@ -2195,7 +2212,7 @@ export default function PrintRaportView({
                   </td>
                   <td className="w-4 py-0.5 text-gray-450">:</td>
                   <td className="py-0.5 font-bold text-black">
-                    {student.name}
+                    {formattedStudentName}
                   </td>
                 </tr>
                 <tr>

@@ -37,6 +37,31 @@ export const isFirebaseConfigured = !!(
 let app: any = null;
 let db: any = null;
 
+// Dummy sample teachers (wali kelas 1-6) that must NEVER appear in teacher management
+export const DUMMY_TEACHER_IDS = ['t2', 't3', 't4', 't5', 't6', 't7'];
+export const DUMMY_TEACHER_USERNAMES = ['fatimah', 'ahmad', 'lukman', 'khadijah', 'yusuf', 'aisyah'];
+
+export function isDummyTeacher(t: any): boolean {
+  if (!t) return false;
+  const id = String(t.id || '').toLowerCase().trim();
+  const user = String(t.username || t.user || '').toLowerCase().trim();
+  const name = String(t.name || t.nama || t.namaGuru || t.nama_lengkap || '').toLowerCase().trim();
+
+  if (DUMMY_TEACHER_IDS.includes(id)) return true;
+  if (DUMMY_TEACHER_USERNAMES.includes(user)) return true;
+  if (
+    name.includes('ustadzah fatimah') ||
+    name.includes('ustadz ahmad') ||
+    name.includes('ustadz lukman') ||
+    name.includes('ustadzah khadijah') ||
+    name.includes('ustadz yusuf') ||
+    name.includes('ustadzah aisyah')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 // Helpers to guarantee data is NEVER lost and immediately persists
 export function getLocalFallbackData() {
   try {
@@ -55,6 +80,11 @@ export function getLocalFallbackData() {
             });
           }
           if (Array.isArray(parsed.teachers)) {
+            const prevLen = parsed.teachers.length;
+            parsed.teachers = parsed.teachers.filter((t: any) => !isDummyTeacher(t));
+            if (parsed.teachers.length !== prevLen) {
+              updated = true;
+            }
             parsed.teachers.forEach((t: any) => {
               if (t.ekskulName === "Futsal Kids") {
                 t.ekskulName = "Futsal";
@@ -74,15 +104,21 @@ export function getLocalFallbackData() {
 }
 
 export function getDeletedSet(key: string): Set<string> {
+  const set = new Set<string>();
+  if (key === 'teachers') {
+    DUMMY_TEACHER_IDS.forEach((id) => set.add(id));
+    DUMMY_TEACHER_USERNAMES.forEach((u) => set.add(u));
+  }
   try {
-    if (typeof window === 'undefined') return new Set();
-    const raw = localStorage.getItem(`smart_sts_deleted_${key}`);
-    if (raw) {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) return new Set(arr.map(String));
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(`smart_sts_deleted_${key}`);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) arr.forEach((x) => set.add(String(x)));
+      }
     }
   } catch (e) {}
-  return new Set();
+  return set;
 }
 
 export function recordDeletedId(key: string, id: string | string[]) {
@@ -202,6 +238,7 @@ export async function seedFirestoreIfEmpty() {
 
     // 1. Teachers
     for (const t of (sourceData.teachers || [])) {
+      if (isDummyTeacher(t)) continue;
       writePromises.push(setDoc(doc(db, "teachers", t.id), t));
     }
 
@@ -461,9 +498,10 @@ export const firebaseApi = {
         try {
           const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
           if (snap && !snap.empty) {
-            const list = snap.docs.map(docSnap => {
+            const list: any[] = [];
+            for (const docSnap of snap.docs) {
               const d = docSnap.data();
-              return {
+              const teacherObj = {
                 id: docSnap.id,
                 name: d.name || d.nama || d.namaGuru || d.nama_lengkap || d.namaLengkap || d.fullname || "Guru",
                 username: d.username || d.user || d.email || docSnap.id,
@@ -473,8 +511,16 @@ export const firebaseApi = {
                 kelas: d.kelas || d.rombel || d.class || "",
                 ...d
               };
-            });
-            return list.filter((t: any) => !deleted.has(String(t.id)) && !deleted.has(String(t.username || "")));
+              if (isDummyTeacher(teacherObj)) {
+                // Permanently clean from Firestore collection
+                deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+                continue;
+              }
+              if (!deleted.has(String(teacherObj.id)) && !deleted.has(String(teacherObj.username || ""))) {
+                list.push(teacherObj);
+              }
+            }
+            return list;
           }
         } catch (err) {
           // continue

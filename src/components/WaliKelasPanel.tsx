@@ -403,7 +403,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
                   {selectedStudent.name?.charAt(0) || "?"}
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-xs text-slate-800 uppercase">{selectedStudent.name || "N/A"}</h3>
+                  <h3 className="font-extrabold text-xs text-slate-800">{selectedStudent.name || "N/A"}</h3>
                   <p className="text-[10px] text-slate-400 font-mono mt-0.5">NISN: {selectedStudent.nisn || "-"} • Kelas {selectedStudent.kelas || "-"}</p>
                 </div>
               </div>
