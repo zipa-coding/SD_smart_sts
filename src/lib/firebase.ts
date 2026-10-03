@@ -418,6 +418,10 @@ export const firebaseApi = {
     if (!username) return null;
 
     const trimmedUser = String(username).trim();
+    const cleanUser = trimmedUser.toLowerCase();
+    const normalize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const normUser = normalize(username);
+
     const teacherCollections = ["teachers", "guru", "Teachers", "Guru", "data_guru", "dataGuru", "users", "Users", "ustadz"];
 
     try {
@@ -430,12 +434,41 @@ export const firebaseApi = {
             for (const docSnap of snapshot.docs) {
               const data = docSnap.data();
               if (data.password === password || (!data.password && password === "123")) {
+                const subs = Array.isArray(data.subjects) && data.subjects.length > 0
+                  ? data.subjects
+                  : (data.subject ? String(data.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
                 return {
                   id: docSnap.id,
                   name: data.name || data.nama || data.namaGuru || data.nama_lengkap || "Guru",
                   username: data.username || data.user || trimmedUser,
                   password: data.password || password,
                   subject: data.subject || data.mapel || data.mataPelajaran || data.mata_pelajaran || "Guru",
+                  subjects: subs.length > 0 ? subs : [data.subject || "PAI"],
+                  isWaliKelas: !!(data.isWaliKelas || data.waliKelas || data.is_wali_kelas || data.isWali),
+                  kelas: data.kelas || data.rombel || data.class || "",
+                  ...data
+                };
+              }
+            }
+          }
+
+          // Check query by name
+          const qName = query(collection(db, colName), where("name", "==", trimmedUser));
+          const snapName = await withTimeout(getDocs(qName), 3000).catch(() => null);
+          if (snapName && !snapName.empty) {
+            for (const docSnap of snapName.docs) {
+              const data = docSnap.data();
+              if (data.password === password || (!data.password && password === "123")) {
+                const subs = Array.isArray(data.subjects) && data.subjects.length > 0
+                  ? data.subjects
+                  : (data.subject ? String(data.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+                return {
+                  id: docSnap.id,
+                  name: data.name || data.nama || data.namaGuru || data.nama_lengkap || "Guru",
+                  username: data.username || data.user || trimmedUser,
+                  password: data.password || password,
+                  subject: data.subject || data.mapel || data.mataPelajaran || data.mata_pelajaran || "Guru",
+                  subjects: subs.length > 0 ? subs : [data.subject || "PAI"],
                   isWaliKelas: !!(data.isWaliKelas || data.waliKelas || data.is_wali_kelas || data.isWali),
                   kelas: data.kelas || data.rombel || data.class || "",
                   ...data
@@ -459,6 +492,43 @@ export const firebaseApi = {
                 kelas: data.kelas || data.rombel || data.class || "",
                 ...data
               };
+            }
+          }
+
+          // Case-insensitive & alias fallback scan on the collection
+          const allDocs = await withTimeout(getDocs(collection(db, colName)), 3000).catch(() => null);
+          if (allDocs && !allDocs.empty) {
+            for (const docSnap of allDocs.docs) {
+              const data = docSnap.data();
+              const passMatch = data.password === password || (!data.password && password === "123");
+              if (!passMatch) continue;
+
+              const docUser = String(data.username || data.user || '').trim().toLowerCase();
+              const docName = String(data.name || data.nama || '').trim().toLowerCase();
+              const aliases = Array.isArray(data.aliases) ? data.aliases : [];
+
+              const isMatch =
+                docUser === cleanUser ||
+                docName === cleanUser ||
+                (normUser && (normalize(docUser) === normUser || normalize(docName) === normUser)) ||
+                aliases.some((a: string) => String(a).toLowerCase().trim() === cleanUser || (normUser && normalize(a) === normUser));
+
+              if (isMatch) {
+                const subs = Array.isArray(data.subjects) && data.subjects.length > 0
+                  ? data.subjects
+                  : (data.subject ? String(data.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+                return {
+                  id: docSnap.id,
+                  name: data.name || data.nama || data.namaGuru || data.nama_lengkap || "Guru",
+                  username: data.username || data.user || trimmedUser,
+                  password: data.password || password,
+                  subject: data.subject || data.mapel || data.mataPelajaran || data.mata_pelajaran || "Guru",
+                  subjects: subs.length > 0 ? subs : [data.subject || "PAI"],
+                  isWaliKelas: !!(data.isWaliKelas || data.waliKelas || data.is_wali_kelas || data.isWali),
+                  kelas: data.kelas || data.rombel || data.class || "",
+                  ...data
+                };
+              }
             }
           }
         } catch (colErr) {
@@ -501,18 +571,27 @@ export const firebaseApi = {
             const list: any[] = [];
             for (const docSnap of snap.docs) {
               const d = docSnap.data();
+              const subs = Array.isArray(d.subjects) && d.subjects.length > 0
+                ? d.subjects
+                : (d.subject ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
               const teacherObj = {
                 id: docSnap.id,
                 name: d.name || d.nama || d.namaGuru || d.nama_lengkap || d.namaLengkap || d.fullname || "Guru",
                 username: d.username || d.user || d.email || docSnap.id,
                 password: d.password || d.pass || "123",
                 subject: d.subject || d.mapel || d.mataPelajaran || d.mata_pelajaran || "Guru",
+                subjects: subs.length > 0 ? subs : [d.subject || "PAI"],
                 isWaliKelas: !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali),
                 kelas: d.kelas || d.rombel || d.class || "",
                 ...d
               };
               if (isDummyTeacher(teacherObj)) {
                 // Permanently clean from Firestore collection
+                deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+                continue;
+              }
+              const purgedIds = ["t_1790913955043", "t_1790914206952", "t_1790914287812", "t_1790914329138"];
+              if (purgedIds.includes(String(teacherObj.id))) {
                 deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
                 continue;
               }
@@ -532,10 +611,19 @@ export const firebaseApi = {
     return fallback;
   },
   postTeacher: async (body: any) => {
-    const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
+    const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
     const fallback = getLocalFallbackData();
     const exists = (fallback.teachers || []).some((t: any) => t.username.toLowerCase() === username.toLowerCase());
     if (exists) throw new Error("Username sudah digunakan.");
+
+    let finalSubjects: string[] = [];
+    if (Array.isArray(subjects) && subjects.length > 0) {
+      finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
+    } else if (subject) {
+      finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+    }
+    if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
+    const finalSubjectStr = finalSubjects.join(", ");
 
     const id = "t_" + Date.now();
     const isEks = Boolean(isEkskulTeacher);
@@ -545,7 +633,8 @@ export const firebaseApi = {
       name,
       username,
       password,
-      subject,
+      subject: finalSubjectStr,
+      subjects: finalSubjects,
       isWaliKelas: !!isWaliKelas,
       kelas: kelas || "",
       isEkskulTeacher: isEks,
@@ -584,15 +673,26 @@ export const firebaseApi = {
     return newTeacher;
   },
   putTeacher: async (id: string, body: any) => {
-    const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
+    const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
     const isEks = Boolean(isEkskulTeacher);
     const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+
+    let finalSubjects: string[] = [];
+    if (Array.isArray(subjects) && subjects.length > 0) {
+      finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
+    } else if (subject) {
+      finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+    }
+    if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
+    const finalSubjectStr = finalSubjects.join(", ");
+
     const updated = {
       id,
       name,
       username,
       password,
-      subject,
+      subject: finalSubjectStr,
+      subjects: finalSubjects,
       isWaliKelas: !!isWaliKelas,
       kelas: kelas || "",
       isEkskulTeacher: isEks,
@@ -1100,9 +1200,18 @@ export const firebaseApi = {
 
   // 7. GET & POST /api/settings
   getSettings: async () => {
+    let explicitName: string | null = null;
+    let explicitNip: string | null = null;
+    try {
+      if (typeof window !== 'undefined') {
+        explicitName = localStorage.getItem("smart_sts_principal_name");
+        explicitNip = localStorage.getItem("smart_sts_principal_nip");
+      }
+    } catch {}
+
     const fallback = getLocalFallbackData().settings || {
-      principalName: "Ustadz H. Ir. Abdul Muhyi, M.Pd",
-      principalNip: "19780512 200501 1 002",
+      principalName: (explicitName && explicitName.trim()) || "Ustadz H. Ir. Abdul Muhyi, M.Pd",
+      principalNip: (explicitNip && explicitNip.trim()) || "19780512 200501 1 002",
       format: {
         semesterName: "Ganjil",
         tahunPelajaran: "2026/2027",
@@ -1131,7 +1240,7 @@ export const firebaseApi = {
     }
     try {
       const ref = doc(db, "settings", "app");
-      const docSnap = await withTimeout(getDoc(ref), 2500);
+      const docSnap = await withTimeout(getDoc(ref), 3500);
       if (docSnap && docSnap.exists()) {
         const data = docSnap.data();
         if (data.format) {
@@ -1139,6 +1248,13 @@ export const firebaseApi = {
           if (!data.format.signaturePosition) data.format.signaturePosition = "kanan";
           if (data.format.watermarkSize === undefined) data.format.watermarkSize = 440;
           if (data.format.watermarkOpacity === undefined) data.format.watermarkOpacity = 0.05;
+        }
+        if (data.principalName) {
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem("smart_sts_principal_name", String(data.principalName).trim());
+            }
+          } catch {}
         }
         return data;
       }
@@ -1149,9 +1265,30 @@ export const firebaseApi = {
     const { principalName, principalNip, format } = body;
     const fallback = getLocalFallbackData();
     const prevSettings = fallback.settings || {};
+    
+    let savedPrincipalName = prevSettings.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
+    if (principalName !== undefined && typeof principalName === 'string' && principalName.trim() !== '') {
+      savedPrincipalName = principalName.trim();
+    } else {
+      try {
+        const explicitName = typeof window !== 'undefined' ? localStorage.getItem("smart_sts_principal_name") : null;
+        if (explicitName && explicitName.trim()) savedPrincipalName = explicitName.trim();
+      } catch {}
+    }
+
+    let savedPrincipalNip = prevSettings.principalNip || "19780512 200501 1 002";
+    if (principalNip !== undefined && typeof principalNip === 'string') {
+      savedPrincipalNip = principalNip.trim();
+    } else {
+      try {
+        const explicitNip = typeof window !== 'undefined' ? localStorage.getItem("smart_sts_principal_nip") : null;
+        if (explicitNip && explicitNip.trim()) savedPrincipalNip = explicitNip.trim();
+      } catch {}
+    }
+
     const settingsData = {
-      principalName: principalName !== undefined ? principalName : (prevSettings.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd"),
-      principalNip: principalNip !== undefined ? principalNip : (prevSettings.principalNip || "19780512 200501 1 002"),
+      principalName: savedPrincipalName,
+      principalNip: savedPrincipalNip,
       format: format ? {
         semesterName: format.semesterName || "Ganjil",
         tahunPelajaran: format.tahunPelajaran || "2026/2027",
@@ -1170,19 +1307,21 @@ export const firebaseApi = {
       } : (prevSettings.format || {})
     };
 
-    // Update local
+    // Update local storage
     try {
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem("smart_sts_db");
         const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
         dbObj.settings = settingsData;
         localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        localStorage.setItem("smart_sts_principal_name", savedPrincipalName);
+        localStorage.setItem("smart_sts_principal_nip", savedPrincipalNip);
       }
     } catch (e) {}
 
     if (db) {
       try {
-        await withTimeout(setDoc(doc(db, "settings", "app"), settingsData), 2500);
+        await withTimeout(setDoc(doc(db, "settings", "app"), settingsData, { merge: true }), 3500);
       } catch (err) {
         console.warn("Firestore postSettings error:", err);
       }

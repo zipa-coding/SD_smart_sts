@@ -217,12 +217,8 @@ export default function App() {
     sessionStorage.setItem("smp_islam_smart_user", JSON.stringify(user));
     sessionStorage.setItem("smp_islam_smart_last_active", Date.now().toString());
     
-    // Default tabs depending on role
-    if (user.subject === "Admin") {
-      setActiveTab("progress");
-    } else if (user.subject !== "Admin") {
-      setActiveTab("progress");
-    }
+    // The first page shown after login is always the main Dashboard
+    setActiveTab("progress");
   };
 
   const handleLogout = () => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Teacher, Student, SUBJECT_LIST, EkskulItem } from "../types";
+import { isFirebaseConfigured, firebaseApi } from "../lib/firebase";
 import {
   Users,
   GraduationCap,
@@ -29,6 +30,7 @@ import {
   Sparkles,
   CheckSquare,
   Square,
+  RefreshCw,
 } from "lucide-react";
 
 interface AdminPanelProps {
@@ -72,10 +74,30 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
   const [subjectSearchQuery, setSubjectSearchQuery] = useState("");
 
   // Principal settings state
-  const [principalName, setPrincipalName] = useState(
-    "Ustadz H. Ir. Abdul Muhyi, M.Pd",
-  );
-  const [principalNip, setPrincipalNip] = useState("19780512 200501 1 002");
+  const [principalName, setPrincipalName] = useState(() => {
+    try {
+      const explicitName = localStorage.getItem("smart_sts_principal_name");
+      if (explicitName && explicitName.trim()) return explicitName.trim();
+      const raw = localStorage.getItem("smart_sts_db");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.settings?.principalName) return p.settings.principalName;
+      }
+    } catch (e) {}
+    return "Ustadz H. Ir. Abdul Muhyi, M.Pd";
+  });
+  const [principalNip, setPrincipalNip] = useState(() => {
+    try {
+      const explicitNip = localStorage.getItem("smart_sts_principal_nip");
+      if (explicitNip && explicitNip.trim()) return explicitNip.trim();
+      const raw = localStorage.getItem("smart_sts_db");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.settings?.principalNip) return p.settings.principalNip;
+      }
+    } catch (e) {}
+    return "19780512 200501 1 002";
+  });
   const [settingsLoading, setSettingsLoading] = useState(false);
 
   // Raport formatting settings state
@@ -96,6 +118,23 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
+
+  const handleSyncDatabase = async () => {
+    setIsSyncingDb(true);
+    setError("");
+    try {
+      const res = await fetch("/api/sync-database", { method: "POST" });
+      const data = await res.json();
+      await fetchAllData();
+      onRefreshTrigger();
+      showSuccess(`Sinkronisasi selesai! Data website cocok dengan Database (${data.teachersCount || teachers.length} Guru, ${data.studentsCount || students.length} Siswa).`);
+    } catch (e: any) {
+      setError("Gagal menyinkronkan database: " + (e.message || "Koneksi terputus"));
+    } finally {
+      setIsSyncingDb(false);
+    }
+  };
   const [successMsg, setSuccessMsg] = useState("");
 
   // Modals / Form States
@@ -107,7 +146,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     name: "",
     username: "",
     password: "",
-    subject: "IPA",
+    subject: "PAI",
+    subjects: ["PAI"] as string[],
     isWaliKelas: false,
     kelas: "",
     isEkskulTeacher: false,
@@ -157,6 +197,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         t.name.toLowerCase().includes(q) ||
         t.username.toLowerCase().includes(q) ||
         t.subject.toLowerCase().includes(q) ||
+        (Array.isArray(t.subjects) && t.subjects.some((s) => s.toLowerCase().includes(q))) ||
         (t.kelas && t.kelas.toLowerCase().includes(q)) ||
         (t.ekskulName && t.ekskulName.toLowerCase().includes(q));
 
@@ -839,11 +880,21 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       if (tpData && typeof tpData === "object" && !Array.isArray(tpData)) setTpsTemplates(tpData);
       if (Array.isArray(eksData)) setEkskuls(eksData);
       if (setData && typeof setData === "object") {
-        if (setData.principalName) {
-          setPrincipalName(setData.principalName);
+        const pName = setData.principalName ?? setData.settings?.principalName;
+        const pNip = setData.principalNip ?? setData.settings?.principalNip;
+        if (typeof pName === "string" && pName.trim() !== "") {
+          const cleanName = pName.trim();
+          setPrincipalName(cleanName);
+          try {
+            localStorage.setItem("smart_sts_principal_name", cleanName);
+          } catch (e) {}
         }
-        if (setData.principalNip) {
-          setPrincipalNip(setData.principalNip);
+        if (typeof pNip === "string" && pNip.trim() !== "") {
+          const cleanNip = pNip.trim();
+          setPrincipalNip(cleanNip);
+          try {
+            localStorage.setItem("smart_sts_principal_nip", cleanNip);
+          } catch (e) {}
         }
         if (setData.format) {
           setSemesterName(setData.format.semesterName || "Ganjil");
@@ -915,12 +966,22 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       selectedEkskul = defaultEks;
     }
 
+    const chosenSubjects = Array.isArray(teacherForm.subjects) && teacherForm.subjects.length > 0
+      ? teacherForm.subjects.filter(Boolean)
+      : (teacherForm.subject ? teacherForm.subject.split(",").map(s => s.trim()).filter(Boolean) : []);
+
+    if (chosenSubjects.length === 0) {
+      setTeacherModalError("Silakan pilih setidaknya satu mata pelajaran yang diampu oleh guru.");
+      return;
+    }
+
     const payload = {
       ...teacherForm,
       name: teacherForm.name.trim(),
       username: teacherForm.username.trim().toLowerCase(),
       password: teacherForm.password.trim(),
-      subject: teacherForm.subject.trim(),
+      subject: chosenSubjects.join(", "),
+      subjects: chosenSubjects,
       kelas: teacherForm.isWaliKelas ? teacherForm.kelas : "",
       isEkskulTeacher: isEks,
       ekskulName: isEks ? selectedEkskul : "",
@@ -936,10 +997,6 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     }
     if (!payload.password) {
       setTeacherModalError("Kata sandi akun guru wajib diisi.");
-      return;
-    }
-    if (!payload.subject) {
-      setTeacherModalError("Mata pelajaran guru wajib dipilih.");
       return;
     }
     if (payload.isWaliKelas && !payload.kelas) {
@@ -984,6 +1041,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         username: "",
         password: "",
         subject: subjectsList[0] || "PAI",
+        subjects: [subjectsList[0] || "PAI"],
         isWaliKelas: false,
         kelas: "",
         isEkskulTeacher: false,
@@ -1019,11 +1077,16 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     const cleanEksName = rawEksName === "Futsal Kids" ? "Futsal" : rawEksName;
     const defaultEks = cleanEksName || (ekskuls.length > 0 ? ekskuls[0].name : "");
 
+    const subs = Array.isArray(t.subjects) && t.subjects.length > 0
+      ? t.subjects
+      : (t.subject ? t.subject.split(",").map(s => s.trim()).filter(Boolean) : [subjectsList[0] || "PAI"]);
+
     setTeacherForm({
       name: t.name || "",
       username: t.username || "",
       password: t.password || "123",
-      subject: t.subject || "PAI",
+      subject: t.subject || subs.join(", ") || "PAI",
+      subjects: subs,
       isWaliKelas: Boolean(t.isWaliKelas),
       kelas: t.kelas || "",
       isEkskulTeacher: isEks,
@@ -1298,30 +1361,35 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     setError("");
     setSettingsLoading(true);
 
+    const savedName = principalName.trim();
+    const savedNip = principalNip.trim();
+
     try {
+      const payload = {
+        principalName: savedName,
+        principalNip: savedNip,
+        format: {
+          semesterName,
+          tahunPelajaran,
+          fontSize,
+          showLogo,
+          showSpiritual,
+          showSosial,
+          showAttendance,
+          showCatatan,
+          fontFamily,
+          paperSize,
+          tanggalRaport,
+          signaturePosition,
+          watermarkSize,
+          watermarkOpacity,
+        },
+      };
+
       const response = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          principalName,
-          principalNip,
-          format: {
-            semesterName,
-            tahunPelajaran,
-            fontSize,
-            showLogo,
-            showSpiritual,
-            showSosial,
-            showAttendance,
-            showCatatan,
-            fontFamily,
-            paperSize,
-            tanggalRaport,
-            signaturePosition,
-            watermarkSize,
-            watermarkOpacity,
-          },
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -1330,9 +1398,40 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
           data.error || "Gagal menyimpan rincian kepala sekolah.",
         );
 
+      // Direct Firebase Firestore persistence
+      try {
+        if (isFirebaseConfigured && firebaseApi) {
+          await firebaseApi.postSettings(payload);
+        }
+      } catch (fbErr) {
+        console.warn("Direct Firebase postSettings:", fbErr);
+      }
+
+      // Update localStorage immediately
+      try {
+        const raw = localStorage.getItem("smart_sts_db");
+        const dbObj = raw ? JSON.parse(raw) : {};
+        if (!dbObj.settings) dbObj.settings = {};
+        dbObj.settings.principalName = savedName;
+        dbObj.settings.principalNip = savedNip;
+        dbObj.settings.format = payload.format;
+        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        localStorage.setItem("smart_sts_principal_name", savedName);
+        localStorage.setItem("smart_sts_principal_nip", savedNip);
+        window.dispatchEvent(
+          new CustomEvent("principal_updated", {
+            detail: { name: savedName, nip: savedNip },
+          })
+        );
+      } catch (e) {}
+
+      // Keep user-entered name in local state
+      setPrincipalName(savedName);
+      setPrincipalNip(savedNip);
+
       await fetchAllData();
       onRefreshTrigger();
-      showSuccess("Pengaturan Raport & Kepala Sekolah berhasil disimpan!");
+      showSuccess("Pengaturan Raport & Nama Kepala Sekolah berhasil disimpan!");
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan.");
     } finally {
@@ -1364,6 +1463,15 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleSyncDatabase}
+            disabled={isSyncingDb}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs font-mono font-bold text-emerald-300 transition cursor-pointer disabled:opacity-50 shadow-sm"
+            title="Sinkronkan data website secara langsung dengan Database Firestore & Server"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDb ? "animate-spin" : ""}`} />
+            <span>{isSyncingDb ? "Menyinkronkan..." : "Sinkronkan Database"}</span>
+          </button>
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#080e1c] border border-[#1a2948] text-xs font-mono font-bold text-slate-200">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             <span className="text-[11px] text-emerald-400">Mode Gelap Aktif</span>
@@ -1607,6 +1715,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     username: "",
                     password: "123",
                     subject: subjectsList[0] || "PAI",
+                    subjects: [subjectsList[0] || "PAI"],
                     isWaliKelas: false,
                     kelas: "",
                     isEkskulTeacher: false,
@@ -1683,17 +1792,45 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                         {t.username}
                       </td>
                       <td className="p-3">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                            t.subject === "Admin"
-                              ? "bg-rose-950/80 text-rose-300 border-rose-700/60"
-                              : t.subject === "Keislaman" || ["Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"].includes(t.subject)
-                              ? "bg-teal-950/80 text-teal-300 border-teal-700/60"
-                              : "bg-emerald-950/80 text-emerald-300 border-emerald-700/60"
-                          }`}
-                        >
-                          {t.subject}
-                        </span>
+                        {(() => {
+                          if (t.subject === "Admin") {
+                            return (
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold border bg-rose-950/80 text-rose-300 border-rose-700/60">
+                                Super Admin
+                              </span>
+                            );
+                          }
+                          const subs = Array.isArray(t.subjects) && t.subjects.length > 0
+                            ? t.subjects
+                            : (t.subject ? t.subject.split(",").map((s) => s.trim()).filter(Boolean) : []);
+
+                          if (subs.length === 0) {
+                            return <span className="text-slate-500 italic text-[11px]">-</span>;
+                          }
+
+                          return (
+                            <div className="flex flex-wrap gap-1 max-w-[280px]">
+                              {subs.map((s, idx) => {
+                                const isKeisl =
+                                  s === "Keislaman" ||
+                                  ["Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"].includes(s) ||
+                                  s.toLowerCase().includes("keislaman");
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={`px-2 py-0.5 rounded-md text-[11px] font-bold border inline-flex items-center gap-1 ${
+                                      isKeisl
+                                        ? "bg-teal-950/80 text-teal-300 border-teal-700/60"
+                                        : "bg-emerald-950/80 text-emerald-300 border-emerald-700/60"
+                                    }`}
+                                  >
+                                    {s === "Keislaman" ? "Keislaman (4 Aspek)" : s}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="p-3">
                         {t.isWaliKelas ? (
@@ -2160,9 +2297,18 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 sub.toLowerCase().includes(subjectSearchQuery.toLowerCase())
               )
               .map((sub, index) => {
-                const assignedTeacher = teachers.find(
-                  (t) => t.subject === sub
-                );
+                const assignedTeacher = teachers.find((t) => {
+                  const subs = Array.isArray(t.subjects) && t.subjects.length > 0
+                    ? t.subjects
+                    : (t.subject ? t.subject.split(",").map((s) => s.trim()) : []);
+                  if (subs.includes(sub)) return true;
+                  if (t.subject === sub) return true;
+                  if (
+                    ["Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"].includes(sub) &&
+                    (t.subject === "Keislaman" || subs.includes("Keislaman") || t.subject.toLowerCase().includes("keislaman"))
+                  ) return true;
+                  return false;
+                });
                 const tpsCount = tpsTemplates[sub]?.length || 0;
                 const isDeleting = deletingSubject === sub;
 
@@ -3105,21 +3251,10 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
               {/* Petunjuk Guru Multi-Mapel */}
               <div className="bg-emerald-950/40 border-l-4 border-emerald-500 p-3 rounded-r-xl text-xs text-emerald-200 leading-relaxed space-y-1">
                 <p className="font-bold uppercase tracking-wider text-[10px] font-mono text-emerald-300">
-                  Panduan Guru Multi-Mapel:
+                  Sistem Terpadu Multi-Mapel Aktif:
                 </p>
                 <p className="text-slate-300 text-[11px]">
-                  Nama lengkap diperbolehkan sama persis. Jika guru mengampu
-                  beberapa mata pelajaran sekaligus, silakan buat akun tambahan
-                  untuk tiap mapel dengan{" "}
-                  <strong className="text-emerald-300">Login Username berbeda</strong> (contoh:{" "}
-                  <code className="bg-emerald-900/60 text-emerald-200 px-1.5 py-0.5 rounded font-mono text-[10px]">
-                    budi_ipa
-                  </code>{" "}
-                  dan{" "}
-                  <code className="bg-emerald-900/60 text-emerald-200 px-1.5 py-0.5 rounded font-mono text-[10px]">
-                    budi_ips
-                  </code>
-                  ).
+                  Satu guru kini <strong className="text-emerald-300">hanya butuh 1 akun</strong> untuk mengampu banyak mata pelajaran sekaligus. Cukup pilih dan centang semua mata pelajaran yang beliau ajarkan di bagian pilihan mapel di bawah. Di dalam dashboard, guru dapat langsung beralih mapel tanpa perlu berganti-ganti akun.
                 </p>
               </div>
 
@@ -3195,7 +3330,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-slate-200 font-mono uppercase tracking-wider">
-                    Mata Pelajaran yang Diampu
+                    Mata Pelajaran yang Diampu (Multi-Mapel)
                   </label>
                   <button
                     type="button"
@@ -3209,26 +3344,197 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     + Input Mapel Baru
                   </button>
                 </div>
-                <select
-                  value={teacherForm.subject}
-                  onChange={(e) =>
-                    setTeacherForm((prev) => ({
-                      ...prev,
-                      subject: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-emerald-500 font-medium"
-                  id="teacher-subject-select"
-                >
-                  {subjectsList.map((sub, i) => (
-                    <option key={i} value={sub}>
-                      {sub}
-                    </option>
-                  ))}
-                  <option value="Pembina Ekskul">Pembina Ekskul</option>
-                  <option value="Pelatih Ekskul">Pelatih Ekskul</option>
-                  <option value="Admin">Hanya Admin</option>
-                </select>
+
+                {/* Quick Presets */}
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const hasKeisl = teacherForm.subjects.includes("Keislaman");
+                      const next = hasKeisl
+                        ? teacherForm.subjects.filter((s) => s !== "Keislaman")
+                        : [...teacherForm.subjects, "Keislaman"];
+                      const finalSubs = next.length > 0 ? next : ["PAI"];
+                      setTeacherForm((prev) => ({
+                        ...prev,
+                        subjects: finalSubs,
+                        subject: finalSubs.join(", "),
+                      }));
+                    }}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition border flex items-center gap-1 cursor-pointer ${
+                      teacherForm.subjects.includes("Keislaman")
+                        ? "bg-teal-900/80 text-teal-200 border-teal-500 font-extrabold"
+                        : "bg-slate-900 text-slate-300 border-slate-700 hover:border-teal-500 hover:text-white"
+                    }`}
+                  >
+                    <span>✨ Paket Keislaman (4 Aspek Lengkap)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const common = ["PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS"];
+                      const union = Array.from(new Set([...teacherForm.subjects, ...common]));
+                      setTeacherForm((prev) => ({
+                        ...prev,
+                        subjects: union,
+                        subject: union.join(", "),
+                      }));
+                    }}
+                    className="px-2 py-1 text-[10px] font-medium bg-slate-900 text-slate-400 hover:text-white border border-slate-800 rounded-lg transition cursor-pointer"
+                  >
+                    + Pilih Mapel Umum
+                  </button>
+
+                  {teacherForm.subjects.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const first = teacherForm.subjects[0] || "PAI";
+                        setTeacherForm((prev) => ({
+                          ...prev,
+                          subjects: [first],
+                          subject: first,
+                        }));
+                      }}
+                      className="px-2 py-1 text-[10px] font-medium text-rose-400 hover:text-rose-300 transition cursor-pointer underline"
+                    >
+                      Reset (Pilih 1 Saja)
+                    </button>
+                  )}
+                </div>
+
+                {/* Selected Subjects Tag Bar */}
+                <div className="p-2.5 bg-[#070b14] border border-[#1e2e4a] rounded-xl mb-2.5 min-h-[44px]">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                      Terpilih ({teacherForm.subjects.length} Mapel):
+                    </span>
+                    <span className="text-[9px] text-emerald-400 font-semibold">
+                      Klik mapel di bawah untuk tambah/hapus
+                    </span>
+                  </div>
+
+                  {teacherForm.subjects.length === 0 ? (
+                    <span className="text-xs text-rose-400 italic">
+                      Belum ada mapel terpilih. Silakan pilih minimal 1 mapel di bawah.
+                    </span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {teacherForm.subjects.map((sub) => {
+                        const isKeisl = sub === "Keislaman" || sub.toLowerCase().includes("keislaman");
+                        return (
+                          <span
+                            key={sub}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border inline-flex items-center gap-1.5 shadow-xs ${
+                              isKeisl
+                                ? "bg-teal-950 text-teal-200 border-teal-600/80"
+                                : "bg-emerald-950 text-emerald-200 border-emerald-600/80"
+                            }`}
+                          >
+                            <span>{sub === "Keislaman" ? "Keislaman (4 Aspek Rapor)" : sub}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = teacherForm.subjects.filter((s) => s !== sub);
+                                setTeacherForm((prev) => ({
+                                  ...prev,
+                                  subjects: next,
+                                  subject: next.join(", "),
+                                }));
+                              }}
+                              className="w-3.5 h-3.5 rounded-full hover:bg-white/20 flex items-center justify-center text-[10px] cursor-pointer"
+                              title={`Hapus ${sub}`}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Info Note if Keislaman is selected */}
+                {teacherForm.subjects.includes("Keislaman") && (
+                  <div className="mb-2 p-2 bg-teal-950/60 border border-teal-700/60 rounded-lg text-[11px] text-teal-200 flex items-start gap-1.5 animate-fade-in">
+                    <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Paket Keislaman Aktif:</strong> Guru ini otomatis dapat menginput 4 aspek (Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat) secara langsung dalam satu akun dashboard.
+                    </span>
+                  </div>
+                )}
+
+                {/* Subject Selection Grid */}
+                <div className="max-h-[175px] overflow-y-auto p-2 bg-[#080d19] border border-[#1e2e4a] rounded-xl grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {subjectsList.map((sub) => {
+                    const isSelected = teacherForm.subjects.includes(sub);
+                    const isKeisl = sub === "Keislaman" || sub.toLowerCase().includes("keislaman");
+                    return (
+                      <button
+                        key={sub}
+                        type="button"
+                        onClick={() => {
+                          let next: string[];
+                          if (isSelected) {
+                            next = teacherForm.subjects.filter((s) => s !== sub);
+                          } else {
+                            next = [...teacherForm.subjects, sub];
+                          }
+                          setTeacherForm((prev) => ({
+                            ...prev,
+                            subjects: next,
+                            subject: next.join(", "),
+                          }));
+                        }}
+                        className={`p-2 rounded-lg text-left text-xs font-semibold transition border flex items-center justify-between gap-1 cursor-pointer ${
+                          isSelected
+                            ? isKeisl
+                              ? "bg-teal-700 text-white font-bold border-teal-400 shadow-sm"
+                              : "bg-emerald-600 text-white font-bold border-emerald-400 shadow-sm"
+                            : "bg-[#0c1424] text-slate-300 border-[#1e2e4a] hover:border-slate-600 hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">{sub}</span>
+                        <span className="text-[10px] shrink-0 font-mono">
+                          {isSelected ? "✓" : "+"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {["Pembina Ekskul", "Pelatih Ekskul", "Admin"].map((special) => {
+                    const isSelected = teacherForm.subjects.includes(special);
+                    return (
+                      <button
+                        key={special}
+                        type="button"
+                        onClick={() => {
+                          let next: string[];
+                          if (isSelected) {
+                            next = teacherForm.subjects.filter((s) => s !== special);
+                          } else {
+                            next = [...teacherForm.subjects, special];
+                          }
+                          setTeacherForm((prev) => ({
+                            ...prev,
+                            subjects: next,
+                            subject: next.join(", "),
+                          }));
+                        }}
+                        className={`p-2 rounded-lg text-left text-xs font-semibold transition border flex items-center justify-between gap-1 cursor-pointer ${
+                          isSelected
+                            ? "bg-amber-700 text-white font-bold border-amber-400 shadow-sm"
+                            : "bg-[#0c1424] text-slate-400 border-[#1e2e4a] hover:border-amber-600 hover:text-white"
+                        }`}
+                      >
+                        <span className="truncate">{special}</span>
+                        <span className="text-[10px] shrink-0 font-mono">
+                          {isSelected ? "✓" : "+"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="pt-2 border-t border-[#1e2e4a]">

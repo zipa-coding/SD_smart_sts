@@ -76,6 +76,56 @@ function initializeLocalStorage() {
           });
         }
 
+        // Purge obsolete separated duplicate teacher accounts
+        const purgedTeacherIds = new Set([
+          "t_1790913955043",
+          "t_1790914206952",
+          "t_1790914287812",
+          "t_1790914329138"
+        ]);
+        if (Array.isArray(clientDbCache.teachers)) {
+          const prevLen = clientDbCache.teachers.length;
+          clientDbCache.teachers = clientDbCache.teachers.filter(
+            (t: any) => !purgedTeacherIds.has(String(t.id)) && !isDummyTeacher(t)
+          );
+          if (clientDbCache.teachers.length !== prevLen) {
+            changed = true;
+          }
+        }
+
+        // Sync teachers from dbData into clientDbCache so newly entered or consolidated teachers are always up-to-date
+        if (Array.isArray(dbData.teachers) && Array.isArray(clientDbCache.teachers)) {
+          for (const dt of dbData.teachers) {
+            if (isDummyTeacher(dt)) continue;
+            const existingIdx = clientDbCache.teachers.findIndex((t: any) => 
+              String(t.id) === String(dt.id) || 
+              (dt.name && String(t.name).trim().toLowerCase() === String(dt.name).trim().toLowerCase())
+            );
+            if (existingIdx >= 0) {
+              clientDbCache.teachers[existingIdx] = {
+                ...clientDbCache.teachers[existingIdx],
+                ...dt
+              };
+              changed = true;
+            } else {
+              clientDbCache.teachers.push(dt);
+              changed = true;
+            }
+          }
+        }
+
+        // Apply explicit principal name if saved
+        try {
+          const explicitPrincipal = localStorage.getItem('smart_sts_principal_name');
+          const explicitNip = localStorage.getItem('smart_sts_principal_nip');
+          if (explicitPrincipal && clientDbCache.settings) {
+            clientDbCache.settings.principalName = explicitPrincipal.trim();
+          }
+          if (explicitNip && clientDbCache.settings) {
+            clientDbCache.settings.principalNip = explicitNip.trim();
+          }
+        } catch (e) {}
+
         // Initialize TP templates if completely missing
         if (!clientDbCache.tujuan_pembelajaran_templates || typeof clientDbCache.tujuan_pembelajaran_templates !== 'object') {
           clientDbCache.tujuan_pembelajaran_templates = dbData.tujuan_pembelajaran_templates;
@@ -392,9 +442,22 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     if (path === '/api/login' && method === 'POST') {
       const { username, password } = body || {};
       const db = getDB();
-      const teacher = db.teachers.find(
-        (t: any) => t.username.toLowerCase() === username?.toLowerCase() && t.password === password
-      );
+      const cleanUser = String(username || '').trim().toLowerCase();
+      const normalize = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const normUser = normalize(username);
+
+      const teacher = db.teachers.find((t: any) => {
+        const passMatch = t.password === password || (!t.password && password === "123");
+        if (!passMatch) return false;
+        const tUser = String(t.username || '').trim().toLowerCase();
+        const tName = String(t.name || '').trim().toLowerCase();
+        if (tUser === cleanUser || tName === cleanUser) return true;
+        if (normUser && (normalize(t.username) === normUser || normalize(t.name) === normUser)) return true;
+        if (Array.isArray(t.aliases)) {
+          if (t.aliases.some((a: string) => String(a).toLowerCase().trim() === cleanUser || (normUser && normalize(a) === normUser))) return true;
+        }
+        return false;
+      });
       if (!teacher) {
         return new Response(JSON.stringify({ error: "Kombinasi pengguna dan kata sandi salah." }), {
           status: 401,
@@ -408,11 +471,15 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
               (teacher.isEkskulTeacher && teacher.ekskulName && e.name.toLowerCase().trim() === teacher.ekskulName.toLowerCase().trim())
           )
         : null;
+      const teacherSubs = Array.isArray(teacher.subjects) && teacher.subjects.length > 0
+        ? teacher.subjects
+        : (teacher.subject ? String(teacher.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
       return new Response(JSON.stringify({
         id: teacher.id,
         name: teacher.name,
         username: teacher.username,
         subject: teacher.subject,
+        subjects: teacherSubs.length > 0 ? teacherSubs : [teacher.subject || "PAI"],
         isWaliKelas: teacher.isWaliKelas || false,
         kelas: teacher.kelas || "",
         isEkskulTeacher: Boolean(teacher.isEkskulTeacher || assignedEks),
@@ -424,8 +491,13 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     if (path === '/api/verify-session' && method === 'POST') {
       const { username, password } = body || {};
       const db = getDB();
+      const cleanUser = String(username || '').trim().toLowerCase();
       const teacher = db.teachers.find(
-        (t: any) => t.username.toLowerCase() === username?.toLowerCase() && t.password === password
+        (t: any) =>
+          (t.username.toLowerCase() === cleanUser ||
+           t.name.toLowerCase() === cleanUser ||
+           (Array.isArray(t.aliases) && t.aliases.some((a: string) => a.toLowerCase() === cleanUser))) &&
+          t.password === password
       );
       if (!teacher) {
         return new Response(JSON.stringify({ error: "Sesi tidak valid." }), {
@@ -440,11 +512,15 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
               (teacher.isEkskulTeacher && teacher.ekskulName && e.name.toLowerCase().trim() === teacher.ekskulName.toLowerCase().trim())
           )
         : null;
+      const teacherSubs = Array.isArray(teacher.subjects) && teacher.subjects.length > 0
+        ? teacher.subjects
+        : (teacher.subject ? String(teacher.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
       return new Response(JSON.stringify({
         id: teacher.id,
         name: teacher.name,
         username: teacher.username,
         subject: teacher.subject,
+        subjects: teacherSubs.length > 0 ? teacherSubs : [teacher.subject || "PAI"],
         isWaliKelas: teacher.isWaliKelas || false,
         kelas: teacher.kelas || "",
         isEkskulTeacher: Boolean(teacher.isEkskulTeacher || assignedEks),
@@ -466,18 +542,23 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
             (e.teacherId && String(e.teacherId) === String(t.id)) ||
             (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
         );
+        const subs = Array.isArray(t.subjects) && t.subjects.length > 0
+          ? t.subjects
+          : (t.subject ? String(t.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+        const base = {
+          ...t,
+          subjects: subs.length > 0 ? subs : [t.subject || "PAI"],
+          isEkskulTeacher: Boolean(t.isEkskulTeacher || eks),
+          ekskulName: eks ? eks.name : (t.ekskulName || ""),
+        };
         if (eks) {
           return {
-            ...t,
+            ...base,
             isEkskulTeacher: true,
             ekskulName: eks.name,
           };
         }
-        return {
-          ...t,
-          isEkskulTeacher: Boolean(t.isEkskulTeacher),
-          ekskulName: t.ekskulName || "",
-        };
+        return base;
       });
 
       return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -485,12 +566,22 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
     // POST /api/teachers
     if (path === '/api/teachers' && method === 'POST') {
-      const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
+      const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
       const db = getDB();
       const exists = db.teachers.some((t: any) => t.username.toLowerCase() === username?.toLowerCase());
       if (exists) {
         return new Response(JSON.stringify({ error: "Username sudah digunakan." }), { status: 400, headers: { 'Content-Type': 'application/json' } });
       }
+
+      let finalSubjects: string[] = [];
+      if (Array.isArray(subjects) && subjects.length > 0) {
+        finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
+      } else if (subject) {
+        finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+      }
+      if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
+      const finalSubjectStr = finalSubjects.join(", ");
+
       const isEks = Boolean(isEkskulTeacher);
       const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
       const newTeacher = {
@@ -498,7 +589,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         name,
         username,
         password,
-        subject,
+        subject: finalSubjectStr,
+        subjects: finalSubjects,
         isWaliKelas: !!isWaliKelas,
         kelas: kelas || "",
         isEkskulTeacher: isEks,
@@ -528,12 +620,22 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // PUT /api/teachers/:id
     if (path.startsWith('/api/teachers/') && method === 'PUT') {
       const id = path.split('/').pop();
-      const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
+      const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
       const db = getDB();
       const index = db.teachers.findIndex((t: any) => t.id === id);
       if (index === -1) {
         return new Response(JSON.stringify({ error: "Guru tidak ditemukan." }), { status: 404, headers: { 'Content-Type': 'application/json' } });
       }
+
+      let finalSubjects: string[] = [];
+      if (Array.isArray(subjects) && subjects.length > 0) {
+        finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
+      } else if (subject) {
+        finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+      }
+      if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
+      const finalSubjectStr = finalSubjects.join(", ");
+
       const isEks = Boolean(isEkskulTeacher);
       const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
 
@@ -542,7 +644,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         name,
         username,
         password,
-        subject,
+        subject: finalSubjectStr,
+        subjects: finalSubjects,
         isWaliKelas: !!isWaliKelas,
         kelas: kelas || "",
         isEkskulTeacher: isEks,
@@ -850,8 +953,10 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // 6.5 GET /api/settings
     if (path === '/api/settings' && method === 'GET') {
       const db = getDB();
-      const principalName = db.settings?.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-      const principalNip = db.settings?.principalNip !== undefined ? db.settings.principalNip : "19780512 200501 1 002";
+      const explicitName = typeof window !== 'undefined' ? localStorage.getItem('smart_sts_principal_name') : null;
+      const explicitNip = typeof window !== 'undefined' ? localStorage.getItem('smart_sts_principal_nip') : null;
+      const principalName = (explicitName && explicitName.trim()) || db.settings?.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
+      const principalNip = (explicitNip && explicitNip.trim()) || (db.settings?.principalNip !== undefined ? db.settings.principalNip : "19780512 200501 1 002");
       const format = {
         semesterName: "Ganjil",
         tahunPelajaran: "2026/2027",
@@ -877,24 +982,36 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const { principalName, principalNip, format } = body || {};
       const db = getDB();
       if (!db.settings) db.settings = {};
-      if (principalName !== undefined) db.settings.principalName = principalName;
-      if (principalNip !== undefined) db.settings.principalNip = principalNip;
-      if (format) {
+      if (principalName !== undefined && typeof principalName === 'string' && principalName.trim() !== '') {
+        db.settings.principalName = principalName.trim();
+        try {
+          localStorage.setItem('smart_sts_principal_name', principalName.trim());
+        } catch (e) {}
+      }
+      if (principalNip !== undefined && typeof principalNip === 'string') {
+        db.settings.principalNip = principalNip.trim();
+        try {
+          localStorage.setItem('smart_sts_principal_nip', principalNip.trim());
+        } catch (e) {}
+      }
+      if (format && typeof format === 'object') {
         db.settings.format = {
-          semesterName: format.semesterName || "Ganjil",
-          tahunPelajaran: format.tahunPelajaran || "2026/2027",
-          fontSize: format.fontSize || "11pt",
-          showLogo: format.showLogo !== undefined ? format.showLogo : false,
-          showSpiritual: format.showSpiritual !== undefined ? format.showSpiritual : true,
-          showSosial: format.showSosial !== undefined ? format.showSosial : true,
-          showAttendance: format.showAttendance !== undefined ? format.showAttendance : true,
-          showCatatan: format.showCatatan !== undefined ? format.showCatatan : true,
-          fontFamily: format.fontFamily || "Times New Roman",
-          paperSize: format.paperSize || "A4",
-          tanggalRaport: format.tanggalRaport || "17 Juni 2026",
-          signaturePosition: format.signaturePosition || "kanan",
-          watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : 440,
-          watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : 0.05
+          ...(db.settings.format || {}),
+          ...format,
+          semesterName: format.semesterName || db.settings.format?.semesterName || "Ganjil",
+          tahunPelajaran: format.tahunPelajaran || db.settings.format?.tahunPelajaran || "2026/2027",
+          fontSize: format.fontSize || db.settings.format?.fontSize || "11pt",
+          showLogo: format.showLogo !== undefined ? format.showLogo : (db.settings.format?.showLogo || false),
+          showSpiritual: format.showSpiritual !== undefined ? format.showSpiritual : (db.settings.format?.showSpiritual ?? true),
+          showSosial: format.showSosial !== undefined ? format.showSosial : (db.settings.format?.showSosial ?? true),
+          showAttendance: format.showAttendance !== undefined ? format.showAttendance : (db.settings.format?.showAttendance ?? true),
+          showCatatan: format.showCatatan !== undefined ? format.showCatatan : (db.settings.format?.showCatatan ?? true),
+          fontFamily: format.fontFamily || db.settings.format?.fontFamily || "Times New Roman",
+          paperSize: format.paperSize || db.settings.format?.paperSize || "A4",
+          tanggalRaport: format.tanggalRaport || db.settings.format?.tanggalRaport || "17 Juni 2026",
+          signaturePosition: format.signaturePosition || db.settings.format?.signaturePosition || "kanan",
+          watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : (db.settings.format?.watermarkSize ?? 440),
+          watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : (db.settings.format?.watermarkOpacity ?? 0.05)
         };
       }
       saveDB(db);

@@ -4,6 +4,7 @@ export interface Teacher {
   username: string;
   password?: string;
   subject: string;
+  subjects?: string[];
   isWaliKelas: boolean;
   kelas: string;
   isEkskulTeacher?: boolean;
@@ -139,4 +140,60 @@ export interface EkskulItem {
   teacherId?: string;
   teacherName?: string;
 }
+
+/**
+ * Extracts and normalizes all subjects taught by a teacher.
+ * If teacher has "Keislaman", expands to the 4 Keislaman aspects.
+ * If teacher is "Admin", returns all available subjects.
+ */
+export function getTeacherAssignedSubjects(
+  teacher: Partial<Teacher> | null | undefined,
+  allAvailableSubjects: string[] = []
+): string[] {
+  if (!teacher) return [];
+  if (
+    teacher.subject === "Admin" ||
+    (Array.isArray(teacher.subjects) && teacher.subjects.includes("Admin"))
+  ) {
+    return allAvailableSubjects.length > 0 ? allAvailableSubjects : SUBJECT_LIST;
+  }
+
+  let list: string[] = [];
+  if (Array.isArray(teacher.subjects) && teacher.subjects.length > 0) {
+    list = [...teacher.subjects];
+  } else if (teacher.subject) {
+    list = teacher.subject
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  // Expand "Keislaman" into 4 sub-subjects if present
+  const expanded: string[] = [];
+  for (const s of list) {
+    const sTrimmed = s.trim();
+    if (!sTrimmed) continue;
+
+    if (
+      sTrimmed === "Keislaman" ||
+      sTrimmed === "Pendidikan Keislaman" ||
+      sTrimmed === "Agama Islam / Keislaman" ||
+      sTrimmed.toLowerCase().includes("keislaman")
+    ) {
+      KEISLAMAN_SUB_SUBJECTS.forEach((k) => {
+        if (!expanded.includes(k.id)) expanded.push(k.id);
+      });
+    } else {
+      if (!expanded.includes(sTrimmed)) expanded.push(sTrimmed);
+    }
+  }
+
+  const cleanedAcademic = expanded.filter(
+    (s) => s !== "Pembina Ekskul" && s !== "Pelatih Ekskul" && s !== "Admin"
+  );
+  if (cleanedAcademic.length > 0) return cleanedAcademic;
+
+  return expanded.length > 0 ? expanded : [teacher.subject || "PAI"];
+}
+
 

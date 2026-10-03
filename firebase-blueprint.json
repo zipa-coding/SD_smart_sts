@@ -10,6 +10,7 @@
         "username": { "type": "string", "maxLength": 100 },
         "password": { "type": "string", "maxLength": 100 },
         "subject": { "type": "string", "maxLength": 100 },
+        "subjects": { "type": "array" },
         "isWaliKelas": { "type": "boolean" },
         "kelas": { "type": "string", "maxLength": 50 }
       },

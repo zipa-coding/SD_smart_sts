@@ -35,9 +35,29 @@ export default function PrintRaportView({
   const darkMode = true;
 
   // Dynamic state for Headmaster/Principal info & Raport format configurations
-  const [principal, setPrincipal] = useState({
-    name: "Ustadz H. Ir. Abdul Muhyi, M.Pd",
-    nip: "19780512 200501 1 002",
+  const [principal, setPrincipal] = useState(() => {
+    try {
+      const explicitName = localStorage.getItem("smart_sts_principal_name");
+      const explicitNip = localStorage.getItem("smart_sts_principal_nip");
+      const raw = localStorage.getItem("smart_sts_db");
+      let pName = explicitName;
+      let pNip = explicitNip;
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (!pName && p.settings?.principalName) pName = p.settings.principalName;
+        if (!pNip && p.settings?.principalNip) pNip = p.settings.principalNip;
+      }
+      if (pName && String(pName).trim() !== "") {
+        return {
+          name: String(pName).trim(),
+          nip: pNip ? String(pNip).trim() : "19780512 200501 1 002",
+        };
+      }
+    } catch (e) {}
+    return {
+      name: "Ustadz H. Ir. Abdul Muhyi, M.Pd",
+      nip: "19780512 200501 1 002",
+    };
   });
 
   const [format, setFormat] = useState({
@@ -120,16 +140,54 @@ export default function PrintRaportView({
   }, []);
 
   React.useEffect(() => {
+    const handlePrincipalUpdate = (e: any) => {
+      if (e.detail?.name && String(e.detail.name).trim() !== "") {
+        setPrincipal((prev) => ({
+          name: String(e.detail.name).trim(),
+          nip: e.detail.nip !== undefined ? String(e.detail.nip).trim() : prev.nip,
+        }));
+      }
+    };
+    window.addEventListener("principal_updated", handlePrincipalUpdate);
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "smart_sts_principal_name" && e.newValue) {
+        setPrincipal((prev) => ({ ...prev, name: e.newValue || prev.name }));
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => {
+      window.removeEventListener("principal_updated", handlePrincipalUpdate);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  React.useEffect(() => {
     fetch("/api/settings", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         const settingsData = data?.settings || data;
         if (settingsData && typeof settingsData === "object") {
-          if (settingsData.principalName !== undefined || settingsData.principalNip !== undefined) {
+          const pName = settingsData.principalName ?? settingsData.settings?.principalName;
+          const pNip = settingsData.principalNip ?? settingsData.settings?.principalNip;
+          if (pName !== undefined && pName !== null && String(pName).trim() !== "") {
+            const cleanName = String(pName).trim();
             setPrincipal((prev) => ({
-              name: settingsData.principalName !== undefined && settingsData.principalName !== null ? String(settingsData.principalName) : prev.name,
-              nip: settingsData.principalNip !== undefined && settingsData.principalNip !== null ? String(settingsData.principalNip) : prev.nip,
+              ...prev,
+              name: cleanName,
             }));
+            try {
+              localStorage.setItem("smart_sts_principal_name", cleanName);
+            } catch (e) {}
+          }
+          if (pNip !== undefined && pNip !== null && String(pNip).trim() !== "") {
+            const cleanNip = String(pNip).trim();
+            setPrincipal((prev) => ({
+              ...prev,
+              nip: cleanNip,
+            }));
+            try {
+              localStorage.setItem("smart_sts_principal_nip", cleanNip);
+            } catch (e) {}
           }
           const fmt = settingsData.format;
           if (fmt && typeof fmt === "object") {
@@ -1885,8 +1943,6 @@ export default function PrintRaportView({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      principalName: principal.name,
-                      principalNip: principal.nip,
                       format: { ...format, showLogo: val },
                     }),
                   }).catch((err) =>
@@ -1918,8 +1974,6 @@ export default function PrintRaportView({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      principalName: principal.name,
-                      principalNip: principal.nip,
                       format: { ...format, paperSize: newPaperSize },
                     }),
                   }).catch((err) =>
@@ -1951,8 +2005,6 @@ export default function PrintRaportView({
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
-                      principalName: principal.name,
-                      principalNip: principal.nip,
                       format: { ...format, signaturePosition: newPos },
                     }),
                   }).catch((err) =>

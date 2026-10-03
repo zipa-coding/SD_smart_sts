@@ -62,10 +62,23 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
   const filteredSuggestions = username.trim()
     ? teachers
         .filter((t) => {
-          const query = username.toLowerCase();
+          const query = username.toLowerCase().trim();
+          const cleanQuery = query.replace(/[^a-z0-9]/g, "");
+          const tName = (t.name || "").toLowerCase();
+          const tUser = (t.username || "").toLowerCase();
           return (
-            t.name.toLowerCase().includes(query) ||
-            t.username.toLowerCase().includes(query)
+            tName.includes(query) ||
+            tUser.includes(query) ||
+            (cleanQuery &&
+              (tName.replace(/[^a-z0-9]/g, "").includes(cleanQuery) ||
+                tUser.replace(/[^a-z0-9]/g, "").includes(cleanQuery))) ||
+            (Array.isArray((t as any).aliases) &&
+              (t as any).aliases.some(
+                (a: string) =>
+                  a.toLowerCase().includes(query) ||
+                  (cleanQuery &&
+                    a.toLowerCase().replace(/[^a-z0-9]/g, "").includes(cleanQuery))
+              ))
           );
         })
         .slice(0, 5)
@@ -119,9 +132,13 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value);
-                    setShowSuggestions(true);
+                    setShowSuggestions(e.target.value.trim().length > 0);
                   }}
-                  onFocus={() => setShowSuggestions(true)}
+                  onFocus={() => {
+                    if (username.trim().length > 0) {
+                      setShowSuggestions(true);
+                    }
+                  }}
                   onBlur={() => {
                     setTimeout(() => setShowSuggestions(false), 200);
                   }}
@@ -132,7 +149,7 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                 />
 
                 {/* Suggestions Dropdown */}
-                {showSuggestions && filteredSuggestions.length > 0 && (
+                {showSuggestions && username.trim().length > 0 && filteredSuggestions.length > 0 && (
                   <div className="absolute z-50 left-0 right-0 mt-1.5 bg-[#0a101f] border border-[#1e2e4a] rounded-xl shadow-2xl max-h-52 overflow-y-auto divide-y divide-[#15233c]">
                     <div className="p-2 text-[10px] font-bold text-slate-400 bg-[#070c18] uppercase tracking-wider font-mono">
                       Pilihan Cepat Pengguna
@@ -148,12 +165,14 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                         className="w-full text-left px-3.5 py-2.5 hover:bg-[#121e36] transition flex flex-col gap-0.5 cursor-pointer text-slate-200"
                       >
                         <span className="text-xs font-bold text-blue-300">{t.name}</span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[10px] font-mono text-slate-300 bg-[#0d1627] border border-[#1e2e4a] px-1.5 py-0.5 rounded font-medium">
                             {t.username}
                           </span>
                           <span className="text-[10px] text-slate-400">
-                            • Mapel {t.subject} {t.isWaliKelas ? `(Kelas ${t.kelas})` : ""}
+                            • {Array.isArray(t.subjects) && t.subjects.length > 1
+                                ? `${t.subjects.length} Mapel (${t.subjects.slice(0, 3).join(", ")}${t.subjects.length > 3 ? "..." : ""})`
+                                : `Mapel ${t.subject || "PAI"}`} {t.isWaliKelas ? `(Wali Kelas ${t.kelas})` : ""}
                           </span>
                         </div>
                       </button>

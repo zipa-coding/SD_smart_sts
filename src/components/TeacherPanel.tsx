@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Teacher, Student, Grade, TPItem } from "../types";
+import { Teacher, Student, Grade, TPItem, getTeacherAssignedSubjects } from "../types";
 import {
   BookOpen,
   User,
@@ -11,7 +11,6 @@ import {
   Plus,
   Trash2,
   Award,
-  Sparkles,
   ChevronRight,
 } from "lucide-react";
 
@@ -59,24 +58,40 @@ export default function TeacherPanel({
   const [allNotes, setAllNotes] = useState<{ [studentId: string]: any }>({});
   const [ekskulList, setEkskulList] = useState<any[]>([]);
 
+  // Extract all subjects assigned to this teacher (multi-mapel, Keislaman, or single subject)
+  const assignedSubjects = useMemo(() => {
+    return getTeacherAssignedSubjects(user);
+  }, [user]);
+
   // Determine if this teacher is assigned to Keislaman
   const isKeislamanTeacher = useMemo(() => {
     return (
       user.subject === "Keislaman" ||
       user.subject === "Pendidikan Keislaman" ||
       user.subject === "Agama Islam / Keislaman" ||
+      (Array.isArray(user.subjects) &&
+        user.subjects.some((s) => s.toLowerCase().includes("keislaman"))) ||
       KEISLAMAN_SUB_SUBJECTS.some((k) => k.id === user.subject) ||
       user.subject === "Admin"
     );
-  }, [user.subject]);
+  }, [user]);
 
   // Current active subject being graded
   const [activeSubject, setActiveSubject] = useState<string>(() => {
+    const list = getTeacherAssignedSubjects(user);
+    if (list.length > 0) return list[0];
     if (user.subject === "Keislaman" || user.subject === "Admin") {
       return "Tahsin ABaTaTsa";
     }
     return user.subject || "PAI";
   });
+
+  // Ensure activeSubject stays valid when assignedSubjects change
+  useEffect(() => {
+    if (assignedSubjects.length > 0 && !assignedSubjects.includes(activeSubject)) {
+      setActiveSubject(assignedSubjects[0]);
+    }
+  }, [assignedSubjects, activeSubject]);
 
   // Current ekskul being handled if user is an ekskul teacher
   const [selectedEkskulName, setSelectedEkskulName] = useState<string>(() => {
@@ -92,8 +107,13 @@ export default function TeacherPanel({
     return "grades";
   });
 
-  // Class selection state (1, 2, 3, 4, 5, 6)
-  const [selectedClass, setSelectedClass] = useState("1");
+  // Class selection state (1, 2, 3, 4, 5, 6) - defaults to teacher's class if wali kelas
+  const [selectedClass, setSelectedClass] = useState<string>(() => {
+    if (user.isWaliKelas && user.kelas && ["1", "2", "3", "4", "5", "6"].includes(String(user.kelas).trim())) {
+      return String(user.kelas).trim();
+    }
+    return "1";
+  });
   // Student selection state
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
@@ -378,8 +398,8 @@ export default function TeacherPanel({
     }
   };
 
-  // Switch Keislaman sub-aspect seamlessly
-  const handleSwitchKeislamanSub = (subId: string) => {
+  // Switch subject seamlessly (Multi-Mapel & Keislaman unified switching)
+  const handleSwitchSubject = (subId: string) => {
     setActiveSubject(subId);
     setSuccess("");
     setError("");
@@ -395,6 +415,8 @@ export default function TeacherPanel({
       handleStudentSelect(selectedStudent, grades, classTps, subId, allNotes);
     }
   };
+
+  const handleSwitchKeislamanSub = handleSwitchSubject;
 
   // Helper with numeric-to-predicate mapping for default selections
   const handleScoreChange = (val: string) => {
@@ -747,6 +769,10 @@ export default function TeacherPanel({
               const isFilled = activeViewTab === "ekskul" ? isFilledEkskul : isFilledSubject;
               const isSelected = selectedStudent?.id === s.id;
 
+              const multiFilledCount = assignedSubjects.filter((sub) =>
+                grades.some((g) => g && g.studentId === s.id && g.subject === sub)
+              ).length;
+
               return (
                 <button
                   key={s.id}
@@ -754,7 +780,31 @@ export default function TeacherPanel({
                   className={`w-full p-2 rounded text-left text-xs transition flex items-center justify-between gap-2 border cursor-pointer ${isSelected ? "bg-emerald-50/70 border-emerald-400 font-bold text-emerald-900" : "bg-white border-slate-150 text-slate-700 hover:bg-slate-50"}`}
                 >
                   <span className="truncate">{s.name || "N/A"}</span>
-                  {isFilled ? (
+                  {activeViewTab === "ekskul" ? (
+                    isFilled ? (
+                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                        Selesai ✓
+                      </span>
+                    ) : (
+                      <span className="bg-slate-100 text-slate-400 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0">
+                        Kosong
+                      </span>
+                    )
+                  ) : assignedSubjects.length > 1 ? (
+                    multiFilledCount === assignedSubjects.length ? (
+                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                        Lengkap ({assignedSubjects.length}) ✓
+                      </span>
+                    ) : multiFilledCount > 0 ? (
+                      <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                        {multiFilledCount}/{assignedSubjects.length} Mapel
+                      </span>
+                    ) : (
+                      <span className="bg-slate-100 text-slate-400 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0">
+                        0/{assignedSubjects.length}
+                      </span>
+                    )
+                  ) : isFilled ? (
                     <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
                       Selesai ✓
                     </span>
@@ -838,16 +888,20 @@ export default function TeacherPanel({
           </div>
         </div>
 
-        {/* UNIFIED KEISLAMAN NAVIGATION BAR (1 AKUN UNTUK SEMUA BAGIAN KEISLAMAN) */}
-        {isKeislamanTeacher && activeViewTab !== "ekskul" && (
-          <div className="mb-4 bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 p-3 rounded-xl shadow-md border border-emerald-700/50 text-white animate-fade-in">
+        {/* UNIFIED MULTI-MAPEL & KEISLAMAN NAVIGATION BAR (1 AKUN UNTUK SEMUA MAPEL YANG DIAMPU) */}
+        {(assignedSubjects.length > 1 || isKeislamanTeacher) && activeViewTab !== "ekskul" && (
+          <div className="mb-4 bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 p-3.5 rounded-xl shadow-md border border-emerald-700/50 text-white animate-fade-in">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-emerald-800/80">
               <div>
-                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-100">
-                  Panel Terpadu Rapor Keislaman
+                <h4 className="text-xs font-black uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
+                  {isKeislamanTeacher && assignedSubjects.every((s) => KEISLAMAN_SUB_SUBJECTS.some((k) => k.id === s))
+                    ? "Panel Terpadu Rapor Keislaman"
+                    : `Mata Pelajaran Yang Diampu (${user.name})`}
                 </h4>
-                <p className="text-[10px] text-emerald-200/80 leading-tight">
-                  Satu akun untuk menginput seluruh 4 aspek keislaman: Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat.
+                <p className="text-[10px] text-emerald-200/80 leading-tight mt-0.5">
+                  {isKeislamanTeacher && assignedSubjects.every((s) => KEISLAMAN_SUB_SUBJECTS.some((k) => k.id === s))
+                    ? "Satu akun untuk menginput seluruh 4 aspek keislaman: Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat."
+                    : `Tersedia ${assignedSubjects.length} mapel: ${assignedSubjects.join(", ")}. Klik salah satu mapel di bawah untuk menginput nilai raport siswa.`}
                 </p>
               </div>
 
@@ -855,49 +909,52 @@ export default function TeacherPanel({
                 <div className="flex items-center gap-1.5 self-start sm:self-auto">
                   <span className="text-[10px] text-emerald-300 font-medium">Status {selectedStudent.name.split(" ")[0]}:</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 border border-emerald-500/50 text-emerald-300">
-                    {KEISLAMAN_SUB_SUBJECTS.filter((k) =>
+                    {assignedSubjects.filter((sub) =>
                       grades.some(
-                        (g) => g.studentId === selectedStudent.id && g.subject === k.id
+                        (g) => g.studentId === selectedStudent.id && g.subject === sub
                       )
-                    ).length} / 4 Aspek Terisi
+                    ).length} / {assignedSubjects.length} Mapel Terisi
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Sub-Aspects Buttons Switcher */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5" id="keislaman-sub-selectors">
-              {KEISLAMAN_SUB_SUBJECTS.map((k, idx) => {
-                const isCurrentActive = activeSubject === k.id;
+            {/* Sub-Aspects / Subjects Buttons Switcher */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-1.5" id="multi-subject-selectors">
+              {assignedSubjects.map((sub, idx) => {
+                const isCurrentActive = activeSubject === sub;
                 const isFilledForStudent =
                   selectedStudent &&
                   grades.some(
-                    (g) => g.studentId === selectedStudent.id && g.subject === k.id
+                    (g) => g.studentId === selectedStudent.id && g.subject === sub
                   );
+                const keislamanItem = KEISLAMAN_SUB_SUBJECTS.find((k) => k.id === sub);
+                const shortLabel = keislamanItem ? keislamanItem.short : sub;
+                const fullLabel = keislamanItem ? keislamanItem.label : `Mata Pelajaran ${sub}`;
 
                 return (
                   <button
-                    key={k.id}
+                    key={sub}
                     type="button"
-                    onClick={() => handleSwitchKeislamanSub(k.id)}
+                    onClick={() => handleSwitchSubject(sub)}
                     className={`p-2.5 rounded-lg text-left transition cursor-pointer flex flex-col justify-between gap-1.5 border ${
                       isCurrentActive
-                        ? "bg-white text-emerald-950 font-bold shadow-lg border-white scale-[1.02]"
+                        ? "bg-white text-emerald-950 font-bold shadow-lg border-white scale-[1.02] ring-2 ring-emerald-400"
                         : "bg-emerald-950/60 hover:bg-emerald-900/80 text-white border-emerald-700/60"
                     }`}
                   >
                     <div className="flex items-center justify-between w-full">
                       <span className="text-[11px] font-extrabold uppercase tracking-wide">
-                        Bagian {idx + 1}
+                        {keislamanItem ? `Bagian ${idx + 1}` : `Mapel ${idx + 1}`}
                       </span>
                       <span
-                        className={`text-[8px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                        className={`text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
                           isFilledForStudent
                             ? isCurrentActive
                               ? "bg-emerald-100 text-emerald-900 font-bold"
                               : "bg-emerald-500/30 text-emerald-300 border border-emerald-400/40"
                             : isCurrentActive
-                            ? "bg-slate-100 text-slate-500"
+                            ? "bg-slate-100 text-slate-500 font-bold"
                             : "bg-black/30 text-slate-400"
                         }`}
                       >
@@ -906,14 +963,14 @@ export default function TeacherPanel({
                     </div>
                     <div>
                       <div className="text-xs font-extrabold leading-tight">
-                        {k.short}
+                        {shortLabel}
                       </div>
                       <div
                         className={`text-[9px] leading-tight line-clamp-1 mt-0.5 ${
                           isCurrentActive ? "text-emerald-800" : "text-emerald-300/70"
                         }`}
                       >
-                        {k.label}
+                        {fullLabel}
                       </div>
                     </div>
                   </button>
@@ -1380,6 +1437,33 @@ export default function TeacherPanel({
                 </p>
               </div>
             </div>
+
+            {/* Multi-Mapel Switcher in TP Management */}
+            {assignedSubjects.length > 1 && (
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">
+                  Pilih Mapel TP:
+                </span>
+                {assignedSubjects.map((sub) => {
+                  const isAct = activeSubject === sub;
+                  const keisl = KEISLAMAN_SUB_SUBJECTS.find((k) => k.id === sub);
+                  return (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => handleSwitchSubject(sub)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                        isAct
+                          ? "bg-emerald-800 text-white shadow-xs"
+                          : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {keisl ? keisl.short : sub}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Form to add custom learning objective directly by the teacher */}
             <form

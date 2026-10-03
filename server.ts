@@ -2,30 +2,63 @@ import express from "express";
 import path from "path";
 import fs from "fs/promises";
 import { createServer as createViteServer } from "vite";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { 
+  getFirestore, 
+  collection, 
+  getDocs, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  deleteDoc 
+} from "firebase/firestore";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
 
+// Firebase configuration for smart-sd-sts
+const firebaseConfig = {
+  apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyDe3hjTP6AphfSaPY8KJkPPgYFocJ2xTcs",
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "smart-sd-sts.firebaseapp.com",
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "smart-sd-sts",
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "smart-sd-sts.firebasestorage.app",
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "132220678784",
+  appId: process.env.VITE_FIREBASE_APP_ID || "1:132220678784:web:1187d3dfe1403becedec65",
+  measurementId: process.env.VITE_FIREBASE_MEASUREMENT_ID || "G-L5XBRWBZRQ"
+};
+
+let firestoreDb: any = null;
+try {
+  const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+  firestoreDb = getFirestore(firebaseApp);
+  console.log("⚡ Firebase Firestore successfully connected on backend server.");
+} catch (e) {
+  console.warn("Firebase Firestore initialization warning on server:", e);
+}
+
 // Path to data file
 const DB_PATH = path.join(process.cwd(), "src", "data", "db.json");
 
-// In-memory database cache for sub-millisecond responses
+// In-memory database cache with file mtime tracking
 let memoryDB: any = null;
+let lastDbMtime = 0;
 let saveDebounceTimer: NodeJS.Timeout | null = null;
 let dbVersion = Date.now();
 
-// Helper to read database with memory caching
+// Helper to read database with memory caching and disk change detection
 async function readDB() {
-  if (memoryDB) {
-    return memoryDB;
-  }
   try {
-    const data = await fs.readFile(DB_PATH, "utf-8");
-    memoryDB = JSON.parse(data);
+    const stat = await fs.stat(DB_PATH);
+    if (!memoryDB || stat.mtimeMs > lastDbMtime) {
+      const data = await fs.readFile(DB_PATH, "utf-8");
+      memoryDB = JSON.parse(data);
+      lastDbMtime = stat.mtimeMs;
+    }
     return memoryDB;
   } catch (err) {
+    if (memoryDB) return memoryDB;
     console.error("Error reading db file, using empty default:", err);
     memoryDB = {
       teachers: [],
@@ -33,6 +66,7 @@ async function readDB() {
       grades: [],
       walikelas_notes: {},
       tujuan_pembelajaran_templates: {},
+      settings: {},
     };
     return memoryDB;
   }
@@ -43,7 +77,12 @@ async function writeDB(data: any) {
   memoryDB = data;
   dbVersion = Date.now();
   try {
-    await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), "utf-8");
+    const content = JSON.stringify(data, null, 2);
+    await fs.writeFile(DB_PATH, content, "utf-8");
+    try {
+      const stat = await fs.stat(DB_PATH);
+      lastDbMtime = stat.mtimeMs;
+    } catch {}
   } catch (err) {
     console.error("Error writing db file:", err);
   }
@@ -56,13 +95,91 @@ function asyncPersistDB() {
   saveDebounceTimer = setTimeout(async () => {
     if (memoryDB) {
       try {
-        await fs.writeFile(DB_PATH, JSON.stringify(memoryDB, null, 2), "utf-8");
+        const content = JSON.stringify(memoryDB, null, 2);
+        await fs.writeFile(DB_PATH, content, "utf-8");
+        try {
+          const stat = await fs.stat(DB_PATH);
+          lastDbMtime = stat.mtimeMs;
+        } catch {}
       } catch (e) {
         console.error("Async disk sync error:", e);
       }
     }
   }, 50);
 }
+
+// Helper to sync database from Firestore into local server cache
+async function syncDatabaseWithFirestore() {
+  if (!firestoreDb) return { success: false, message: "Firestore not initialized" };
+  try {
+    const db = await readDB();
+    let changed = false;
+
+    // 1. Sync Teachers
+    const tSnap = await getDocs(collection(firestoreDb, "teachers"));
+    if (!tSnap.empty) {
+      const fsTeachers: any[] = [];
+      tSnap.forEach(d => {
+        const data = d.data();
+        if (!isDummyTeacherServer(data)) {
+          fsTeachers.push({ id: d.id, ...data });
+        }
+      });
+      if (fsTeachers.length > 0) {
+        db.teachers = fsTeachers;
+        changed = true;
+      }
+    }
+
+    // 2. Sync Students
+    const sSnap = await getDocs(collection(firestoreDb, "students"));
+    if (!sSnap.empty) {
+      const fsStudents: any[] = [];
+      sSnap.forEach(d => fsStudents.push({ id: d.id, ...d.data() }));
+      if (fsStudents.length >= (db.students || []).length) {
+        db.students = fsStudents;
+        changed = true;
+      }
+    }
+
+    // 3. Sync Settings
+    const setSnap = await getDoc(doc(firestoreDb, "settings", "app"));
+    if (setSnap.exists()) {
+      const fsSet = setSnap.data();
+      if (!db.settings) db.settings = {};
+      if (fsSet.principalName && String(fsSet.principalName).trim()) {
+        db.settings.principalName = String(fsSet.principalName).trim();
+      }
+      if (fsSet.principalNip !== undefined) {
+        db.settings.principalNip = String(fsSet.principalNip).trim();
+      }
+      if (fsSet.format) {
+        db.settings.format = { ...(db.settings.format || {}), ...fsSet.format };
+      }
+      changed = true;
+    }
+
+    if (changed) {
+      await writeDB(db);
+      console.log(`[Firestore Sync] Sync complete. Teachers: ${db.teachers?.length || 0}, Students: ${db.students?.length || 0}, Principal: ${db.settings?.principalName}`);
+    }
+    return {
+      success: true,
+      teachersCount: db.teachers?.length || 0,
+      studentsCount: db.students?.length || 0,
+      principalName: db.settings?.principalName,
+      principalNip: db.settings?.principalNip
+    };
+  } catch (err: any) {
+    console.warn("[Firestore Sync] Error syncing:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+// Initial background sync
+setTimeout(() => {
+  syncDatabaseWithFirestore().catch(() => {});
+}, 1000);
 
 // ==================== API ENDPOINTS ====================
 
@@ -86,11 +203,22 @@ app.post("/api/login", async (req, res) => {
   }
 
   const db = await readDB();
-  const teacher = db.teachers.find(
-    (t: any) =>
-      t.username.toLowerCase() === username.toLowerCase() &&
-      t.password === password,
-  );
+  const cleanUser = String(username || "").trim().toLowerCase();
+  const normalize = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normUser = normalize(username);
+
+  const teacher = db.teachers.find((t: any) => {
+    const passMatch = t.password === password || (!t.password && password === "123");
+    if (!passMatch) return false;
+    const tUser = String(t.username || "").trim().toLowerCase();
+    const tName = String(t.name || "").trim().toLowerCase();
+    if (tUser === cleanUser || tName === cleanUser) return true;
+    if (normUser && (normalize(t.username) === normUser || normalize(t.name) === normUser)) return true;
+    if (Array.isArray(t.aliases)) {
+      if (t.aliases.some((a: string) => String(a).toLowerCase().trim() === cleanUser || (normUser && normalize(a) === normUser))) return true;
+    }
+    return false;
+  });
 
   if (!teacher) {
     return res
@@ -112,12 +240,14 @@ app.post("/api/login", async (req, res) => {
 
   const isEkskulTeacher = Boolean(teacher.isEkskulTeacher || assignedEks);
   const ekskulName = assignedEks ? assignedEks.name : (teacher.ekskulName || "");
+  const teacherSubs = extractTeacherSubjects(teacher);
 
   res.json({
     id: teacher.id,
     name: teacher.name,
     username: teacher.username,
     subject: teacher.subject,
+    subjects: teacherSubs.length > 0 ? teacherSubs : [teacher.subject || "PAI"],
     isWaliKelas: teacher.isWaliKelas || false,
     kelas: teacher.kelas || "",
     isEkskulTeacher,
@@ -133,11 +263,22 @@ app.post("/api/verify-session", async (req, res) => {
   }
 
   const db = await readDB();
-  const teacher = db.teachers.find(
-    (t: any) =>
-      t.username.toLowerCase() === username.toLowerCase() &&
-      t.password === password,
-  );
+  const cleanUser = String(username || "").trim().toLowerCase();
+  const normalize = (s: string) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normUser = normalize(username);
+
+  const teacher = db.teachers.find((t: any) => {
+    const passMatch = t.password === password || (!t.password && password === "123");
+    if (!passMatch) return false;
+    const tUser = String(t.username || "").trim().toLowerCase();
+    const tName = String(t.name || "").trim().toLowerCase();
+    if (tUser === cleanUser || tName === cleanUser) return true;
+    if (normUser && (normalize(t.username) === normUser || normalize(t.name) === normUser)) return true;
+    if (Array.isArray(t.aliases)) {
+      if (t.aliases.some((a: string) => String(a).toLowerCase().trim() === cleanUser || (normUser && normalize(a) === normUser))) return true;
+    }
+    return false;
+  });
 
   if (!teacher) {
     return res.status(401).json({ error: "Sesi tidak valid." });
@@ -153,18 +294,56 @@ app.post("/api/verify-session", async (req, res) => {
 
   const isEkskulTeacher = Boolean(teacher.isEkskulTeacher || assignedEks);
   const ekskulName = assignedEks ? assignedEks.name : (teacher.ekskulName || "");
+  const teacherSubs = extractTeacherSubjects(teacher);
 
   res.json({
     id: teacher.id,
     name: teacher.name,
     username: teacher.username,
     subject: teacher.subject,
+    subjects: teacherSubs.length > 0 ? teacherSubs : [teacher.subject || "PAI"],
     isWaliKelas: teacher.isWaliKelas || false,
     kelas: teacher.kelas || "",
     isEkskulTeacher,
     ekskulName,
   });
 });
+
+// Helper to extract and normalize teacher subjects
+function extractTeacherSubjects(t: any): string[] {
+  if (!t) return [];
+  let rawList: string[] = [];
+  if (Array.isArray(t.subjects) && t.subjects.length > 0) {
+    rawList = t.subjects.map((s: any) => String(s || '').trim()).filter(Boolean);
+  } else if (t.subject) {
+    rawList = String(t.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean);
+  }
+
+  const expanded: string[] = [];
+  const keislamanSubs = [
+    "Tahsin ABaTaTsa",
+    "Tahfizh Al-Qur’an",
+    "Do’a Harian dan Hadits",
+    "Wudhu dan Sholat"
+  ];
+
+  for (const s of rawList) {
+    if (
+      s === "Keislaman" ||
+      s === "Pendidikan Keislaman" ||
+      s === "Agama Islam / Keislaman" ||
+      s.toLowerCase().includes("keislaman")
+    ) {
+      keislamanSubs.forEach(k => {
+        if (!expanded.includes(k)) expanded.push(k);
+      });
+    } else {
+      if (!expanded.includes(s)) expanded.push(s);
+    }
+  }
+
+  return expanded;
+}
 
 // 2. Teachers CRUD
 const DUMMY_TEACHER_IDS = ['t2', 't3', 't4', 't5', 't6', 't7'];
@@ -204,28 +383,42 @@ app.get("/api/teachers", async (req, res) => {
         (e.teacherId && String(e.teacherId) === String(t.id)) ||
         (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
     );
+    const teacherSubs = extractTeacherSubjects(t);
+    const base = {
+      ...t,
+      subjects: teacherSubs.length > 0 ? teacherSubs : [t.subject || "PAI"],
+      isEkskulTeacher: Boolean(t.isEkskulTeacher || eks),
+      ekskulName: eks ? eks.name : (t.ekskulName || ""),
+    };
     if (eks) {
       return {
-        ...t,
+        ...base,
         isEkskulTeacher: true,
         ekskulName: eks.name,
       };
     }
-    return {
-      ...t,
-      isEkskulTeacher: Boolean(t.isEkskulTeacher),
-      ekskulName: t.ekskulName || "",
-    };
+    return base;
   });
 
   res.json(list);
 });
 
 app.post("/api/teachers", async (req, res) => {
-  const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = req.body;
-  if (!name || !username || !password || !subject) {
+  const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = req.body;
+  if (!name || !username || !password) {
     return res.status(400).json({ error: "Data guru kurang lengkap." });
   }
+
+  let finalSubjects: string[] = [];
+  if (Array.isArray(subjects) && subjects.length > 0) {
+    finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
+  } else if (subject) {
+    finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+  }
+  if (finalSubjects.length === 0) {
+    return res.status(400).json({ error: "Pilih setidaknya satu mata pelajaran yang diampu." });
+  }
+  const finalSubjectStr = finalSubjects.join(", ");
 
   const db = await readDB();
   if (!Array.isArray(db.teachers)) db.teachers = [];
@@ -247,7 +440,8 @@ app.post("/api/teachers", async (req, res) => {
     name: String(name || "").trim(),
     username: String(username || "").trim().toLowerCase(),
     password: String(password || "123").trim(),
-    subject: String(subject || "PAI").trim(),
+    subject: finalSubjectStr,
+    subjects: finalSubjects,
     isWaliKelas: Boolean(isWaliKelas),
     kelas: isWaliKelas ? String(kelas || "").trim() : "",
     isEkskulTeacher: isEks,
@@ -279,12 +473,21 @@ app.post("/api/teachers", async (req, res) => {
   }
 
   await writeDB(db);
+
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, "teachers", newTeacher.id), newTeacher);
+    } catch (e) {
+      console.warn("Firestore teacher create error:", e);
+    }
+  }
+
   res.status(201).json(newTeacher);
 });
 
 app.put("/api/teachers/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, username, password, subject, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = req.body;
+  const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = req.body;
 
   const db = await readDB();
   if (!Array.isArray(db.teachers)) db.teachers = [];
@@ -304,6 +507,17 @@ app.put("/api/teachers/:id", async (req, res) => {
     return res.status(400).json({ error: "Username sudah digunakan." });
   }
 
+  let finalSubjects: string[] = [];
+  if (Array.isArray(subjects) && subjects.length > 0) {
+    finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
+  } else if (subject) {
+    finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+  }
+  if (finalSubjects.length === 0) {
+    finalSubjects = [db.teachers[index].subject || "PAI"];
+  }
+  const finalSubjectStr = finalSubjects.join(", ");
+
   const isEks = Boolean(isEkskulTeacher);
   const cleanEkskulName = isEks ? String(ekskulName || "").trim() : "";
 
@@ -312,7 +526,8 @@ app.put("/api/teachers/:id", async (req, res) => {
     name: String(name || "").trim(),
     username: String(username || "").trim().toLowerCase(),
     password: String(password || "123").trim(),
-    subject: String(subject || "PAI").trim(),
+    subject: finalSubjectStr,
+    subjects: finalSubjects,
     isWaliKelas: Boolean(isWaliKelas),
     kelas: isWaliKelas ? String(kelas || "").trim() : "",
     isEkskulTeacher: isEks,
@@ -354,6 +569,15 @@ app.put("/api/teachers/:id", async (req, res) => {
   });
 
   await writeDB(db);
+
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, "teachers", String(id)), db.teachers[index], { merge: true });
+    } catch (e) {
+      console.warn("Firestore teacher update error:", e);
+    }
+  }
+
   res.json(db.teachers[index]);
 });
 
@@ -374,6 +598,15 @@ app.delete("/api/teachers/:id", async (req, res) => {
 
   db.teachers = filtered;
   await writeDB(db);
+
+  if (firestoreDb) {
+    try {
+      await deleteDoc(doc(firestoreDb, "teachers", String(id)));
+    } catch (e) {
+      console.warn("Firestore teacher delete error:", e);
+    }
+  }
+
   res.json({ message: "Guru berhasil dihapus." });
 });
 
@@ -849,38 +1082,69 @@ app.post("/api/settings", async (req, res) => {
   if (!db.settings) {
     db.settings = {};
   }
-  if (principalName !== undefined) {
-    db.settings.principalName = principalName;
+  
+  // Only update principalName and principalNip if explicitly provided as non-empty/valid values
+  if (principalName !== undefined && typeof principalName === "string" && principalName.trim() !== "") {
+    db.settings.principalName = principalName.trim();
   }
-  if (principalNip !== undefined) {
-    db.settings.principalNip = principalNip;
+  if (principalNip !== undefined && typeof principalNip === "string") {
+    db.settings.principalNip = principalNip.trim();
   }
 
-  if (format) {
+  if (format && typeof format === "object") {
     db.settings.format = {
-      semesterName: format.semesterName || "Ganjil",
-      tahunPelajaran: format.tahunPelajaran || "2026/2027",
-      fontSize: format.fontSize || "11pt",
-      showLogo: format.showLogo !== undefined ? format.showLogo : false,
+      ...(db.settings.format || {}),
+      ...format,
+      semesterName: format.semesterName || db.settings.format?.semesterName || "Ganjil",
+      tahunPelajaran: format.tahunPelajaran || db.settings.format?.tahunPelajaran || "2026/2027",
+      fontSize: format.fontSize || db.settings.format?.fontSize || "11pt",
+      showLogo: format.showLogo !== undefined ? format.showLogo : (db.settings.format?.showLogo || false),
       showSpiritual:
-        format.showSpiritual !== undefined ? format.showSpiritual : true,
-      showSosial: format.showSosial !== undefined ? format.showSosial : true,
+        format.showSpiritual !== undefined ? format.showSpiritual : (db.settings.format?.showSpiritual ?? true),
+      showSosial: format.showSosial !== undefined ? format.showSosial : (db.settings.format?.showSosial ?? true),
       showAttendance:
-        format.showAttendance !== undefined ? format.showAttendance : true,
-      showCatatan: format.showCatatan !== undefined ? format.showCatatan : true,
-      fontFamily: format.fontFamily || "Times New Roman",
-      paperSize: format.paperSize || "A4",
-      tanggalRaport: format.tanggalRaport || "17 Juni 2026",
-      signaturePosition: format.signaturePosition || "kanan",
+        format.showAttendance !== undefined ? format.showAttendance : (db.settings.format?.showAttendance ?? true),
+      showCatatan: format.showCatatan !== undefined ? format.showCatatan : (db.settings.format?.showCatatan ?? true),
+      fontFamily: format.fontFamily || db.settings.format?.fontFamily || "Times New Roman",
+      paperSize: format.paperSize || db.settings.format?.paperSize || "A4",
+      tanggalRaport: format.tanggalRaport || db.settings.format?.tanggalRaport || "17 Juni 2026",
+      signaturePosition: format.signaturePosition || db.settings.format?.signaturePosition || "kanan",
       watermarkSize:
-        format.watermarkSize !== undefined ? format.watermarkSize : 440,
+        format.watermarkSize !== undefined ? format.watermarkSize : (db.settings.format?.watermarkSize ?? 440),
       watermarkOpacity:
-        format.watermarkOpacity !== undefined ? format.watermarkOpacity : 0.05,
+        format.watermarkOpacity !== undefined ? format.watermarkOpacity : (db.settings.format?.watermarkOpacity ?? 0.05),
     };
   }
 
   await writeDB(db);
+
+  // Sync to Firestore immediately
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, "settings", "app"), {
+        principalName: db.settings.principalName,
+        principalNip: db.settings.principalNip,
+        format: db.settings.format,
+      }, { merge: true });
+    } catch (e) {
+      console.warn("Firestore settings update error:", e);
+    }
+  }
+
   res.json({ success: true, settings: db.settings, principalName: db.settings.principalName, principalNip: db.settings.principalNip, format: db.settings.format });
+});
+
+// Force Real-time Cloud Firestore Re-sync Endpoint
+app.post("/api/sync-database", async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  const result = await syncDatabaseWithFirestore();
+  res.json(result);
+});
+
+app.get("/api/sync-database", async (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  const result = await syncDatabaseWithFirestore();
+  res.json(result);
 });
 
 // 6.6. Extracurricular List API
@@ -1306,7 +1570,12 @@ app.get("/api/summary", async (req, res) => {
         : 0;
 
     // Find active teacher for this subject
-    const teacher = db.teachers.find((t: any) => t.subject === sub);
+    const teacher = db.teachers.find((t: any) => {
+      const subs = extractTeacherSubjects(t);
+      if (subs.includes(sub)) return true;
+      if (t.subject === sub) return true;
+      return false;
+    });
 
     return {
       subject: sub,
