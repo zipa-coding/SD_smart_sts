@@ -21,7 +21,6 @@ import {
   Medal,
   ChevronDown,
   ChevronUp,
-  Star,
   SlidersHorizontal,
   Eye,
   BookOpen

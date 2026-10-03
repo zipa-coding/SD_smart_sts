@@ -27,7 +27,7 @@ import {
   UserPlus,
   ClipboardPaste,
   Download,
-  Sparkles,
+  PenTool,
   CheckSquare,
   Square,
   RefreshCw,
@@ -3221,9 +3221,10 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
 
       {/* TEACHER MODAL FORM */}
       {isTeacherModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0c1424] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scale-up border border-[#1e2e4a]">
-            <div className="bg-[#080d19] px-6 py-4 text-white flex items-center justify-between border-b border-[#1e2e4a]">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md p-2 sm:p-4 flex min-h-screen items-center justify-center">
+          <div className="relative bg-[#0c1424] w-full max-w-lg max-h-[88vh] sm:max-h-[84vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden my-auto border border-[#1e2e4a]">
+            {/* Modal Header */}
+            <div className="bg-[#080d19] px-5 sm:px-6 py-4 text-white flex items-center justify-between border-b border-[#1e2e4a] shrink-0 z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
                   <UserPlus className="w-4 h-4 text-emerald-400" />
@@ -3233,20 +3234,24 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsTeacherModalOpen(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                title="Tutup Modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleTeacherSubmit} className="p-6 space-y-4">
-              {teacherModalError && (
-                <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-200 flex gap-2 items-start animate-fade-in shadow-md">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
-                  <span className="font-medium">{teacherModalError}</span>
-                </div>
-              )}
+            <form onSubmit={handleTeacherSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              {/* Modal Body Scrollable */}
+              <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+                {teacherModalError && (
+                  <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-200 flex gap-2 items-start animate-fade-in shadow-md">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                    <span className="font-medium">{teacherModalError}</span>
+                  </div>
+                )}
 
               {/* Petunjuk Guru Multi-Mapel */}
               <div className="bg-emerald-950/40 border-l-4 border-emerald-500 p-3 rounded-r-xl text-xs text-emerald-200 leading-relaxed space-y-1">
@@ -3367,7 +3372,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                         : "bg-slate-900 text-slate-300 border-slate-700 hover:border-teal-500 hover:text-white"
                     }`}
                   >
-                    <span>✨ Paket Keislaman (4 Aspek Lengkap)</span>
+                    <span>Paket Keislaman (4 Aspek Lengkap)</span>
                   </button>
 
                   <button
@@ -3458,7 +3463,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 {/* Info Note if Keislaman is selected */}
                 {teacherForm.subjects.includes("Keislaman") && (
                   <div className="mb-2 p-2 bg-teal-950/60 border border-teal-700/60 rounded-lg text-[11px] text-teal-200 flex items-start gap-1.5 animate-fade-in">
-                    <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
+                    <BookOpen className="w-3.5 h-3.5 text-teal-400 shrink-0 mt-0.5" />
                     <span>
                       <strong>Paket Keislaman Aktif:</strong> Guru ini otomatis dapat menginput 4 aspek (Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat) secara langsung dalam satu akun dashboard.
                     </span>
@@ -3652,8 +3657,10 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   </p>
                 </div>
               )}
+              </div>
 
-              <div className="flex gap-3 pt-3">
+              {/* Modal Sticky Footer Action Buttons */}
+              <div className="shrink-0 bg-[#080d19] p-4 sm:px-6 border-t border-[#1e2e4a] flex gap-3">
                 <button
                   type="button"
                   disabled={isSubmittingTeacher}
@@ -3675,7 +3682,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>Simpan Data</span>
+                      <span>Simpan Data Guru</span>
                     </>
                   )}
                 </button>
@@ -3687,9 +3694,9 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
 
       {/* STUDENT MODAL FORM */}
       {isStudentModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#0c1424] w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scale-up border border-[#1e2e4a]">
-            <div className="bg-[#080d19] px-6 py-4 text-white flex items-center justify-between border-b border-[#1e2e4a]">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md p-2 sm:p-4 flex min-h-screen items-center justify-center">
+          <div className="relative bg-[#0c1424] w-full max-w-md max-h-[88vh] sm:max-h-[84vh] flex flex-col rounded-2xl shadow-2xl overflow-hidden my-auto border border-[#1e2e4a]">
+            <div className="bg-[#080d19] px-6 py-4 text-white flex items-center justify-between border-b border-[#1e2e4a] shrink-0 z-10">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
                   <UserPlus className="w-4 h-4 text-emerald-400" />
@@ -3699,6 +3706,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 </h3>
               </div>
               <button
+                type="button"
                 onClick={() => setIsStudentModalOpen(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
               >
@@ -3706,79 +3714,81 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
               </button>
             </div>
 
-            <form onSubmit={handleStudentSubmit} className="p-6 space-y-4">
-              {studentModalError && (
-                <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-200 flex gap-2 items-start animate-fade-in shadow-md">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
-                  <span className="font-semibold">{studentModalError}</span>
+            <form onSubmit={handleStudentSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 min-h-0 overscroll-contain">
+                {studentModalError && (
+                  <div className="p-3 bg-red-950/60 border border-red-500/50 rounded-xl text-xs text-red-200 flex gap-2 items-start animate-fade-in shadow-md">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                    <span className="font-semibold">{studentModalError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 font-mono uppercase tracking-wider">
+                    Nama Lengkap Siswa
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={studentForm.name}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: Muhammad Al-Farabi"
+                    className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] rounded-xl text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500"
+                    id="student-name-input"
+                  />
                 </div>
-              )}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-200 mb-1.5 font-mono uppercase tracking-wider">
-                  Nama Lengkap Siswa
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={studentForm.name}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({
-                      ...prev,
-                      name: e.target.value,
-                    }))
-                  }
-                  placeholder="Contoh: Muhammad Al-Farabi"
-                  className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] rounded-xl text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 placeholder:text-slate-500"
-                  id="student-name-input"
-                />
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 font-mono uppercase tracking-wider">
+                    NISN Siswa (Nomor Induk Nasional)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={studentForm.nisn}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({
+                        ...prev,
+                        nisn: e.target.value,
+                      }))
+                    }
+                    placeholder="Contoh: 0134988712"
+                    className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] rounded-xl text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 font-mono placeholder:text-slate-500"
+                    id="student-nisn-input"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 font-mono uppercase tracking-wider">
+                    Kelas / Rombongan Belajar
+                  </label>
+                  <select
+                    value={studentForm.kelas}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({
+                        ...prev,
+                        kelas: e.target.value,
+                      }))
+                    }
+                    className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-emerald-500 font-medium"
+                    id="student-class-select"
+                  >
+                    <option value="1">Kelas 1</option>
+                    <option value="2">Kelas 2</option>
+                    <option value="3">Kelas 3</option>
+                    <option value="4">Kelas 4</option>
+                    <option value="5">Kelas 5</option>
+                    <option value="6">Kelas 6</option>
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-200 mb-1.5 font-mono uppercase tracking-wider">
-                  NISN Siswa (Nomor Induk Nasional)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={studentForm.nisn}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({
-                      ...prev,
-                      nisn: e.target.value,
-                    }))
-                  }
-                  placeholder="Contoh: 0134988712"
-                  className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] rounded-xl text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 font-mono placeholder:text-slate-500"
-                  id="student-nisn-input"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-200 mb-1.5 font-mono uppercase tracking-wider">
-                  Kelas / Rombongan Belajar
-                </label>
-                <select
-                  value={studentForm.kelas}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({
-                      ...prev,
-                      kelas: e.target.value,
-                    }))
-                  }
-                  className="w-full px-3.5 py-2.5 border border-[#1e2e4a] bg-[#070b14] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-emerald-500 font-medium"
-                  id="student-class-select"
-                >
-                  <option value="1">Kelas 1</option>
-                  <option value="2">Kelas 2</option>
-                  <option value="3">Kelas 3</option>
-                  <option value="4">Kelas 4</option>
-                  <option value="5">Kelas 5</option>
-                  <option value="6">Kelas 6</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3 pt-3">
+              <div className="shrink-0 bg-[#080d19] p-4 sm:px-6 border-t border-[#1e2e4a] flex gap-3 sticky bottom-0 z-20">
                 <button
                   type="button"
                   disabled={isSubmittingStudent}
@@ -3905,7 +3915,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                         className="px-3 py-1.5 bg-[#0c1424] hover:bg-[#16233b] border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition"
                         title="Rapikan huruf kapital pada nama siswa (Title Case)"
                       >
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                        <PenTool className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Rapikan Huruf Nama</span>
                       </button>
                     )}

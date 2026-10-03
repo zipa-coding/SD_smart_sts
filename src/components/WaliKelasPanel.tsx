@@ -304,7 +304,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
           </span>
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-slate-800">
-              Kelas {selectedClass} {user.kelas === selectedClass && "⭐ (Kelas Anda)"}
+              Kelas {selectedClass} {user.kelas === selectedClass && "(Kelas Anda)"}
             </h3>
             {/* If admin is viewing, let them switch class */}
             {user.subject === "Admin" && (
