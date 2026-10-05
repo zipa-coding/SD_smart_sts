@@ -3659,10 +3659,10 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
               </div>
 
               {teacherForm.isEkskulTeacher && (
-                <div className="bg-[#070b14] p-3.5 rounded-xl border border-amber-500/40 animate-fade-in space-y-2">
+                <div className="bg-[#070b14] p-3.5 rounded-xl border border-amber-500/40 animate-fade-in space-y-2.5">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-bold text-amber-300 font-mono uppercase tracking-wider">
-                      Ekstrakurikuler yang Diampu
+                      Ekstrakurikuler yang Dibina (Bisa Lebih Dari 1)
                     </label>
                     <button
                       type="button"
@@ -3676,31 +3676,79 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     </button>
                   </div>
 
-                  <select
-                    value={teacherForm.ekskulName}
-                    onChange={(e) =>
-                      setTeacherForm((prev) => ({
-                        ...prev,
-                        ekskulName: e.target.value,
-                      }))
-                    }
-                    className="w-full px-3 py-2 bg-[#0c1424] border border-[#1e2e4a] rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-medium cursor-pointer"
-                  >
-                    <option value="">-- Pilih Ekstrakurikuler --</option>
-                    {ekskuls.map((eks) => (
-                      <option key={eks.id} value={eks.name}>
-                        {eks.name} ({eks.type})
-                      </option>
-                    ))}
-                    {!ekskuls.some((e) => e.name === teacherForm.ekskulName) && teacherForm.ekskulName ? (
-                      <option value={teacherForm.ekskulName}>
-                        {teacherForm.ekskulName}
-                      </option>
-                    ) : null}
-                  </select>
+                  {/* Selected Ekskul Badges Bar */}
+                  <div className="p-2 bg-[#0c1424] border border-[#1e2e4a] rounded-lg flex flex-wrap gap-1.5 min-h-[36px] items-center">
+                    {teacherForm.ekskulNames.length === 0 ? (
+                      <span className="text-[11px] text-amber-400/80 italic">
+                        Belum ada ekskul dipilih. Klik ekskul di bawah untuk menugaskan guru ini.
+                      </span>
+                    ) : (
+                      teacherForm.ekskulNames.map((eksName) => (
+                        <span
+                          key={eksName}
+                          className="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-200 border border-amber-600/80 text-xs font-bold flex items-center gap-1.5 shadow-xs"
+                        >
+                          <span>⚽ {eksName}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = teacherForm.ekskulNames.filter((n) => n !== eksName);
+                              setTeacherForm((prev) => ({
+                                ...prev,
+                                ekskulNames: next,
+                                ekskulName: next.join(", "),
+                                isEkskulTeacher: next.length > 0,
+                              }));
+                            }}
+                            className="w-3.5 h-3.5 rounded-full hover:bg-white/20 flex items-center justify-center text-[10px] cursor-pointer"
+                            title={`Hapus ${eksName}`}
+                          >
+                            ✕
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Multi-Ekskul Selector Buttons Grid */}
+                  <div className="max-h-[140px] overflow-y-auto p-2 bg-[#080d19] border border-[#1e2e4a] rounded-xl grid grid-cols-2 gap-1.5">
+                    {ekskuls.map((eks) => {
+                      const isSelected = teacherForm.ekskulNames.includes(eks.name);
+                      return (
+                        <button
+                          key={eks.id}
+                          type="button"
+                          onClick={() => {
+                            let next: string[];
+                            if (isSelected) {
+                              next = teacherForm.ekskulNames.filter((n) => n !== eks.name);
+                            } else {
+                              next = [...teacherForm.ekskulNames, eks.name];
+                            }
+                            setTeacherForm((prev) => ({
+                              ...prev,
+                              ekskulNames: next,
+                              ekskulName: next.join(", "),
+                              isEkskulTeacher: true,
+                            }));
+                          }}
+                          className={`p-2 rounded-lg text-left text-xs font-semibold transition border flex items-center justify-between gap-1 cursor-pointer ${
+                            isSelected
+                              ? "bg-amber-600 text-white font-bold border-amber-400 shadow-xs"
+                              : "bg-[#0c1424] text-slate-300 border-[#1e2e4a] hover:border-amber-500/60 hover:text-white"
+                          }`}
+                        >
+                          <span className="truncate">⚽ {eks.name}</span>
+                          <span className="text-[10px] shrink-0 font-mono font-bold">
+                            {isSelected ? "✓" : "+"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   <p className="text-[10px] text-slate-400 leading-tight">
-                    * Pengisian nilai ekskul ini akan dilakukan langsung oleh guru yang bersangkutan pada akun miliknya (tidak lagi diisi oleh wali kelas).
+                    * Centang/pilih semua kegiatan ekskul yang dibina guru ini (misal: Panahan & Futsal). Guru dapat langsung menginput nilai untuk seluruh ekskul yang dibina pada akun miliknya.
                   </p>
                 </div>
               )}

@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
   getFirestore, 
+  initializeFirestore,
   collection, 
   getDocs, 
   doc, 
@@ -32,7 +33,13 @@ const firebaseConfig = {
 let firestoreDb: any = null;
 try {
   const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-  firestoreDb = getFirestore(firebaseApp);
+  try {
+    firestoreDb = initializeFirestore(firebaseApp, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
+    firestoreDb = getFirestore(firebaseApp);
+  }
   console.log("⚡ Firebase Firestore successfully connected on backend server.");
 } catch (e) {
   console.warn("Firebase Firestore initialization warning on server:", e);

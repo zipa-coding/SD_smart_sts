@@ -928,6 +928,75 @@ export default function TeacherPanel({
           </div>
         </div>
 
+        {/* MULTI-EKSKUL NAVIGATION SWITCHER BAR (UNTUK GURU PEMBINA BEBERAPA EKSKUL SEKALIGUS) */}
+        {assignedEkskuls.length > 1 && activeViewTab === "ekskul" && (
+          <div className="mb-4 bg-gradient-to-r from-amber-900 via-yellow-900 to-amber-950 p-3.5 rounded-xl shadow-md border border-amber-600/50 text-white animate-fade-in">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-amber-700/80">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-amber-100 flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-amber-400" />
+                  <span>Ekstrakurikuler Yang Dibina ({user.name})</span>
+                </h4>
+                <p className="text-[10px] text-amber-200/80 leading-tight mt-0.5">
+                  Anda membina {assignedEkskuls.length} ekskul: {assignedEkskuls.join(", ")}. Klik salah satu ekskul di bawah untuk menginput nilai dan deskripsi rapor siswa.
+                </p>
+              </div>
+
+              {selectedStudent && (
+                <div className="flex items-center gap-1.5 self-start sm:self-auto">
+                  <span className="text-[10px] text-amber-300 font-medium">Status {selectedStudent.name.split(" ")[0]}:</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-950 border border-amber-500/50 text-amber-300">
+                    {assignedEkskuls.filter((eks) => {
+                      const studentNote = allNotes[selectedStudent.id];
+                      const sEks = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+                      return sEks.some((e: any) => e.name === eks || e.ekskulName === eks);
+                    }).length} / {assignedEkskuls.length} Ekskul Terisi
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Sub-Ekskul Selector Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2" id="multi-ekskul-selectors">
+              {assignedEkskuls.map((eks) => {
+                const isCurrentActive = currentEkskul === eks;
+                const isFilledForStudent =
+                  selectedStudent &&
+                  (() => {
+                    const studentNote = allNotes[selectedStudent.id];
+                    const sEks = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+                    return sEks.some((e: any) => e.name === eks || e.ekskulName === eks);
+                  })();
+
+                return (
+                  <button
+                    key={eks}
+                    type="button"
+                    onClick={() => setSelectedEkskulName(eks)}
+                    className={`p-2.5 rounded-lg text-left transition cursor-pointer flex flex-col justify-between gap-1 border ${
+                      isCurrentActive
+                        ? "bg-amber-500/30 border-amber-400 text-white shadow-md ring-2 ring-amber-400/50"
+                        : "bg-amber-950/40 border-amber-700/40 text-amber-200 hover:bg-amber-900/40 hover:border-amber-500/60"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-xs truncate">⚽ {eks}</span>
+                      {isFilledForStudent ? (
+                        <span className="text-[9px] bg-emerald-500 text-white font-extrabold px-1 rounded">✓</span>
+                      ) : (
+                        <span className="text-[9px] bg-amber-900/80 text-amber-300 font-medium px-1 rounded">-</span>
+                      )}
+                    </div>
+                    <span className="text-[9px] opacity-80">
+                      {isCurrentActive ? "Aktif Dinilai" : "Klik untuk nilai"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* UNIFIED MULTI-MAPEL & KEISLAMAN NAVIGATION BAR (1 AKUN UNTUK SEMUA MAPEL YANG DIAMPU) */}
         {(assignedSubjects.length > 1 || isKeislamanTeacher) && activeViewTab !== "ekskul" && (
           <div className="mb-4 bg-gradient-to-r from-emerald-900 via-teal-900 to-emerald-950 p-3.5 rounded-xl shadow-md border border-emerald-700/50 text-white animate-fade-in">

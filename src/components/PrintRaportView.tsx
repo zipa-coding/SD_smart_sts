@@ -467,19 +467,21 @@ export default function PrintRaportView({
     });
   };
 
-  // Strictly filter UMUM: NO Sirah/Siroh, NO Mulok (Bahasa Inggris, TIK, Life Skill, Bahasa Arab), NO duplicates
-  const activeUmum = React.useMemo(() => {
-    // Base national curriculum subjects for B. UMUM
-    const baseUmum = [
-      "PAI",
-      "PPKN",
-      "Bahasa Indonesia",
-      "Matematika",
-      "PJOK",
-      "IPAS",
-    ];
+  const getNumericKelas = (kelasStr?: string): number => {
+    const str = String(kelasStr || "").trim();
+    const match = str.match(/\d+/);
+    if (match) return parseInt(match[0], 10);
+    return 1;
+  };
 
-    // Check if optional subjects (Seni Budaya or Prakarya) exist in allSubjects or grades
+  const numericKelas = getNumericKelas(student?.kelas);
+
+  // Grade-aware B. UMUM subjects (IPAS excluded in Kelas 1 & 2)
+  const activeUmum = React.useMemo(() => {
+    const baseUmum = numericKelas <= 2
+      ? ["PAI", "PPKN", "Bahasa Indonesia", "Matematika", "PJOK"]
+      : ["PAI", "PPKN", "Bahasa Indonesia", "Matematika", "PJOK", "IPAS"];
+
     const additional: string[] = [];
     const checkList = [...(grades || []).map((g) => g?.subject || ""), ...allSubjects];
     for (const item of checkList) {
@@ -494,12 +496,18 @@ export default function PrintRaportView({
     }
 
     return [...baseUmum, ...additional];
-  }, [allSubjects, grades]);
+  }, [allSubjects, grades, numericKelas]);
 
-  // Strictly 4 distinct subjects for Muatan Lokal (Bahasa Arab, Bahasa Inggris, TIK, Life Skill)
+  // Grade-aware C. MUATAN LOKAL subjects
+  // Kelas 1, 2, 3: Bahasa Arab, Bahasa Inggris, Life Skill (NO TIK)
+  // Kelas 4, 5, 6: Bahasa Arab, Bahasa Inggris, TIK (NO Life Skill)
   const activeMulok = React.useMemo(() => {
-    return CANONICAL_MULOK_SUBJECTS;
-  }, []);
+    if (numericKelas <= 3) {
+      return ["Bahasa Arab", "Bahasa Inggris", "Life Skill"];
+    } else {
+      return ["Bahasa Arab", "Bahasa Inggris", "TIK"];
+    }
+  }, [numericKelas]);
 
   // Strictly 5 distinct subjects for Keislaman (Tahsin, Tahfizh, Do'a & Hadits, Wudhu & Sholat, Sirah Nabawiyah)
   const activeKeislaman = React.useMemo(() => {
@@ -1183,7 +1191,6 @@ export default function PrintRaportView({
                 <td style="width: 50%; text-align: center; padding-top: ${isA4 ? "2px" : "10px"}; vertical-align: top;">
                   <p style="margin: 0 0 ${isA4 ? "12px" : "40px"} 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
                   <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "9.5pt" : "11pt"};">${principal.name}</p>
-                  <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "8pt" : "9.5pt"}; color: #555;">NIP. ${principal.nip}</p>
                 </td>
                 <td style="width: 50%; text-align: center; vertical-align: top;">&nbsp;</td>
               </tr>
@@ -1195,7 +1202,6 @@ export default function PrintRaportView({
                   <div style="display: inline-block; text-align: center; margin: 0 auto;">
                     <p style="margin: 0 0 ${isA4 ? "12px" : "40px"} 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
                     <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "9.5pt" : "11pt"};">${principal.name}</p>
-                    <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "8pt" : "9.5pt"}; color: #555;">NIP. ${principal.nip}</p>
                   </div>
                 </td>
               </tr>
@@ -1206,7 +1212,6 @@ export default function PrintRaportView({
                 <td style="width: 50%; text-align: center; padding-top: ${isA4 ? "2px" : "10px"}; vertical-align: top;">
                   <p style="margin: 0 0 ${isA4 ? "12px" : "40px"} 0; line-height: 1.3;">Mengetahui,<br />Kepala Sekolah</p>
                   <p style="margin: 0; font-weight: bold; font-size: ${isA4 ? "9.5pt" : "11pt"};">${principal.name}</p>
-                  <p style="margin: 1.5px 0 0 0; font-size: ${isA4 ? "8pt" : "9.5pt"}; color: #555;">NIP. ${principal.nip}</p>
                 </td>
               </tr>
               `
@@ -1381,15 +1386,16 @@ export default function PrintRaportView({
 
         const sliceCanvas = document.createElement("canvas");
         sliceCanvas.width = canvas.width;
-        sliceCanvas.height = sliceHeight;
+        // Always set sliceCanvas.height to maxPageCanvasHeight so it represents a full physical paper page
+        sliceCanvas.height = maxPageCanvasHeight;
 
         const sliceCtx = sliceCanvas.getContext("2d");
         if (sliceCtx) {
-          // 1. Draw solid white background on the slice canvas
+          // 1. Draw solid white background on the full page canvas
           sliceCtx.fillStyle = "#ffffff";
           sliceCtx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
 
-          // 2. Draw crisp watermark in the center of the page slice
+          // 2. Draw watermark in the EXACT GEOMETRIC CENTER of the full paper page
           if (wmImg.complete && wmImg.naturalWidth > 0) {
             sliceCtx.save();
             const targetOpacity =
@@ -1432,9 +1438,9 @@ export default function PrintRaportView({
           );
         }
 
-        const sliceImgHeightMm = (sliceHeight * printWidth) / canvas.width;
+        const sliceImgHeightMm = printHeight;
 
-        // Draw the complete combined page slice into PDF
+        // Draw full-page slice into PDF at marginTop
         const sliceDataUrl = sliceCanvas.toDataURL("image/jpeg", 0.95);
         pdf.addImage(
           sliceDataUrl,
@@ -1912,7 +1918,6 @@ export default function PrintRaportView({
           <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
             <p style="margin: 0 0 50px 0; line-height: 1.3; font-size: 11pt;">Mengetahui,<br />Kepala Sekolah</p>
             <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
-            <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555555;">NIP. ${principal.nip}</p>
           </td>
           <td style="width: 50%; text-align: center; vertical-align: top; border: none; color: #000000;">&nbsp;</td>
         </tr>
@@ -1923,7 +1928,6 @@ export default function PrintRaportView({
           <td colspan="2" style="width: 100%; text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
             <p style="margin: 0 0 50px 0; line-height: 1.3; font-size: 11pt;">Mengetahui,<br />Kepala Sekolah</p>
             <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
-            <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555555;">NIP. ${principal.nip}</p>
           </td>
         </tr>
         `
@@ -1933,7 +1937,6 @@ export default function PrintRaportView({
           <td style="width: 50%; text-align: center; padding-top: 15px; vertical-align: top; border: none; color: #000000;">
             <p style="margin: 0 0 50px 0; line-height: 1.3; font-size: 11pt;">Mengetahui,<br />Kepala Sekolah</p>
             <p style="margin: 0; font-weight: bold; font-size: 11pt;">${principal.name}</p>
-            <p style="margin: 3px 0 0 0; font-size: 9.5pt; color: #555555;">NIP. ${principal.nip}</p>
           </td>
         </tr>
         `
@@ -2912,9 +2915,6 @@ export default function PrintRaportView({
                   <div className="font-bold inline-block text-center text-black">
                     {principal.name}
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold">
-                    NIP. {principal.nip}
-                  </p>
                 </div>
                 <div>{/* Empty column on right */}</div>
               </div>
@@ -2929,9 +2929,6 @@ export default function PrintRaportView({
                   <div className="font-bold inline-block text-center text-black">
                     {principal.name}
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold">
-                    NIP. {principal.nip}
-                  </p>
                 </div>
               </div>
             ) : (
@@ -2946,9 +2943,6 @@ export default function PrintRaportView({
                   <div className="font-bold inline-block text-center text-black">
                     {principal.name}
                   </div>
-                  <p className="text-[10px] text-gray-500 font-mono mt-0.5 font-bold">
-                    NIP. {principal.nip}
-                  </p>
                 </div>
               </div>
             )}

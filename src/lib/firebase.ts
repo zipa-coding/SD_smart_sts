@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
   getFirestore, 
+  initializeFirestore,
   collection, 
   getDocs, 
   getDoc, 
@@ -195,7 +196,13 @@ export function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
 if (isFirebaseConfigured) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    db = getFirestore(app);
+    try {
+      db = initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+      });
+    } catch {
+      db = getFirestore(app);
+    }
     console.log("Firebase initialized successfully with cloud Firestore.");
     
     // Automatically populate Firestore in real-time immediately on boot if empty

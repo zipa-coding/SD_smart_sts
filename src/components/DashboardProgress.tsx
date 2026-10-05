@@ -1056,8 +1056,9 @@ export default function DashboardProgress({
 
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-1">
                                   {[
-                                    "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS", "Bahasa Inggris", "PJOK", "Prakarya", "Informatika",
-                                    "Bahasa Arab", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
+                                    "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPAS", "PJOK", "Prakarya",
+                                    "Bahasa Arab", "Bahasa Inggris", "TIK", "Life Skill",
+                                    "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat", "Sirah Nabawiyah"
                                   ].map((subName) => {
                                     const score = student.subjectScores?.[subName];
                                     const hasScore = score !== undefined && score !== null;
