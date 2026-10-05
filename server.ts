@@ -493,7 +493,13 @@ app.put("/api/teachers/:id", async (req, res) => {
   if (!Array.isArray(db.teachers)) db.teachers = [];
   if (!Array.isArray(db.ekskul)) db.ekskul = [];
 
-  const index = db.teachers.findIndex((t: any) => t.id === id);
+  const index = db.teachers.findIndex(
+    (t: any) =>
+      t.id === id ||
+      String(t.id) === String(id) ||
+      (t.username && t.username.toLowerCase() === id.toLowerCase()) ||
+      (t.username && t.username.toLowerCase() === String(username || "").toLowerCase())
+  );
   if (index === -1) {
     return res.status(404).json({ error: "Guru tidak ditemukan." });
   }
@@ -501,7 +507,8 @@ app.put("/api/teachers/:id", async (req, res) => {
   // Check username unique except itself
   const exists = db.teachers.some(
     (t: any) =>
-      t.username.toLowerCase() === username.toLowerCase() && t.id !== id,
+      t.username.toLowerCase() === String(username || "").trim().toLowerCase() &&
+      t.id !== db.teachers[index].id,
   );
   if (exists) {
     return res.status(400).json({ error: "Username sudah digunakan." });
@@ -523,9 +530,9 @@ app.put("/api/teachers/:id", async (req, res) => {
 
   db.teachers[index] = {
     ...db.teachers[index],
-    name: String(name || "").trim(),
-    username: String(username || "").trim().toLowerCase(),
-    password: String(password || "123").trim(),
+    name: String(name || db.teachers[index].name || "").trim(),
+    username: String(username || db.teachers[index].username || "").trim().toLowerCase(),
+    password: String(password || db.teachers[index].password || "123").trim(),
     subject: finalSubjectStr,
     subjects: finalSubjects,
     isWaliKelas: Boolean(isWaliKelas),
@@ -1050,11 +1057,11 @@ app.get("/api/settings", async (req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
   const db = await readDB();
   const principalName =
-    db.settings?.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
+    db.settings?.principalName || "Sobariyani, S.Pd.";
   const principalNip =
     db.settings?.principalNip !== undefined
       ? db.settings.principalNip
-      : "19780512 200501 1 002";
+      : "19800101 200501 1 003";
   const format = {
     semesterName: "Ganjil",
     tahunPelajaran: "2026/2027",

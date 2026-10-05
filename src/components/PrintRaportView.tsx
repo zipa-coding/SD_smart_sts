@@ -47,16 +47,16 @@ export default function PrintRaportView({
         if (!pName && p.settings?.principalName) pName = p.settings.principalName;
         if (!pNip && p.settings?.principalNip) pNip = p.settings.principalNip;
       }
-      if (pName && String(pName).trim() !== "") {
+      if (pName && String(pName).trim() !== "" && !pName.includes("Abdul Muhyi") && !pName.includes("Muhammad Ihsan")) {
         return {
           name: String(pName).trim(),
-          nip: pNip ? String(pNip).trim() : "19780512 200501 1 002",
+          nip: pNip ? String(pNip).trim() : "19800101 200501 1 003",
         };
       }
     } catch (e) {}
     return {
-      name: "Ustadz H. Ir. Abdul Muhyi, M.Pd",
-      nip: "19780512 200501 1 002",
+      name: "Sobariyani, S.Pd.",
+      nip: "19800101 200501 1 003",
     };
   });
 

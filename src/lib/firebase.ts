@@ -574,16 +574,19 @@ export const firebaseApi = {
               const subs = Array.isArray(d.subjects) && d.subjects.length > 0
                 ? d.subjects
                 : (d.subject ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+              const isWalas = !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali);
               const teacherObj = {
+                ...d,
                 id: docSnap.id,
                 name: d.name || d.nama || d.namaGuru || d.nama_lengkap || d.namaLengkap || d.fullname || "Guru",
                 username: d.username || d.user || d.email || docSnap.id,
                 password: d.password || d.pass || "123",
                 subject: d.subject || d.mapel || d.mataPelajaran || d.mata_pelajaran || "Guru",
                 subjects: subs.length > 0 ? subs : [d.subject || "PAI"],
-                isWaliKelas: !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali),
-                kelas: d.kelas || d.rombel || d.class || "",
-                ...d
+                isWaliKelas: isWalas,
+                kelas: isWalas ? (d.kelas || d.rombel || d.class || "") : "",
+                isEkskulTeacher: !!(d.isEkskulTeacher || d.is_ekskul_teacher || d.ekskulName),
+                ekskulName: d.ekskulName || d.ekskul || "",
               };
               if (isDummyTeacher(teacherObj)) {
                 // Permanently clean from Firestore collection
@@ -1210,8 +1213,8 @@ export const firebaseApi = {
     } catch {}
 
     const fallback = getLocalFallbackData().settings || {
-      principalName: (explicitName && explicitName.trim()) || "Ustadz H. Ir. Abdul Muhyi, M.Pd",
-      principalNip: (explicitNip && explicitNip.trim()) || "19780512 200501 1 002",
+      principalName: (explicitName && explicitName.trim()) || "Sobariyani, S.Pd.",
+      principalNip: (explicitNip && explicitNip.trim()) || "19800101 200501 1 003",
       format: {
         semesterName: "Ganjil",
         tahunPelajaran: "2026/2027",

@@ -77,14 +77,18 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
   const [principalName, setPrincipalName] = useState(() => {
     try {
       const explicitName = localStorage.getItem("smart_sts_principal_name");
-      if (explicitName && explicitName.trim()) return explicitName.trim();
+      if (explicitName && explicitName.trim() && !explicitName.includes("Abdul Muhyi") && !explicitName.includes("Muhammad Ihsan")) {
+        return explicitName.trim();
+      }
       const raw = localStorage.getItem("smart_sts_db");
       if (raw) {
         const p = JSON.parse(raw);
-        if (p.settings?.principalName) return p.settings.principalName;
+        if (p.settings?.principalName && !p.settings.principalName.includes("Abdul Muhyi") && !p.settings.principalName.includes("Muhammad Ihsan")) {
+          return p.settings.principalName;
+        }
       }
     } catch (e) {}
-    return "Ustadz H. Ir. Abdul Muhyi, M.Pd";
+    return "Sobariyani, S.Pd.";
   });
   const [principalNip, setPrincipalNip] = useState(() => {
     try {
@@ -96,7 +100,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         if (p.settings?.principalNip) return p.settings.principalNip;
       }
     } catch (e) {}
-    return "19780512 200501 1 002";
+    return "19800101 200501 1 003";
   });
   const [settingsLoading, setSettingsLoading] = useState(false);
 

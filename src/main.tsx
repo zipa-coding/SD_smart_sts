@@ -93,7 +93,7 @@ function initializeLocalStorage() {
           }
         }
 
-        // Sync teachers from dbData into clientDbCache so newly entered or consolidated teachers are always up-to-date
+        // Sync teachers from dbData into clientDbCache only for teachers not yet present
         if (Array.isArray(dbData.teachers) && Array.isArray(clientDbCache.teachers)) {
           for (const dt of dbData.teachers) {
             if (isDummyTeacher(dt)) continue;
@@ -101,28 +101,33 @@ function initializeLocalStorage() {
               String(t.id) === String(dt.id) || 
               (dt.name && String(t.name).trim().toLowerCase() === String(dt.name).trim().toLowerCase())
             );
-            if (existingIdx >= 0) {
-              clientDbCache.teachers[existingIdx] = {
-                ...clientDbCache.teachers[existingIdx],
-                ...dt
-              };
-              changed = true;
-            } else {
+            if (existingIdx === -1) {
               clientDbCache.teachers.push(dt);
               changed = true;
             }
           }
         }
 
-        // Apply explicit principal name if saved
+        // Apply explicit principal name if saved or default to Sobariyani, S.Pd.
         try {
           const explicitPrincipal = localStorage.getItem('smart_sts_principal_name');
           const explicitNip = localStorage.getItem('smart_sts_principal_nip');
-          if (explicitPrincipal && clientDbCache.settings) {
+          if (!clientDbCache.settings) clientDbCache.settings = {};
+          
+          if (explicitPrincipal && explicitPrincipal.trim()) {
             clientDbCache.settings.principalName = explicitPrincipal.trim();
+          } else if (!clientDbCache.settings.principalName || clientDbCache.settings.principalName.includes("Abdul Muhyi") || clientDbCache.settings.principalName.includes("Muhammad Ihsan")) {
+            clientDbCache.settings.principalName = "Sobariyani, S.Pd.";
+            localStorage.setItem('smart_sts_principal_name', "Sobariyani, S.Pd.");
+            changed = true;
           }
-          if (explicitNip && clientDbCache.settings) {
+          
+          if (explicitNip && explicitNip.trim()) {
             clientDbCache.settings.principalNip = explicitNip.trim();
+          } else if (!clientDbCache.settings.principalNip) {
+            clientDbCache.settings.principalNip = "19800101 200501 1 003";
+            localStorage.setItem('smart_sts_principal_nip', "19800101 200501 1 003");
+            changed = true;
           }
         } catch (e) {}
 
@@ -222,6 +227,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         // POST /api/teachers
         if (path === '/api/teachers' && method === 'POST') {
           try {
+            // Forward write to backend server so db.json is updated permanently
+            originalFetch(urlStr, init).catch((err) => console.warn("Backend teacher post sync:", err));
             const t = await firebaseApi.postTeacher(body);
             return new Response(JSON.stringify(t), { status: 201, headers: { 'Content-Type': 'application/json' } });
           } catch (e: any) {
@@ -236,6 +243,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         // PUT /api/teachers/:id
         if (path.startsWith('/api/teachers/') && method === 'PUT') {
           const id = path.split('/').pop() || "";
+          // Forward write to backend server so db.json is updated permanently
+          originalFetch(urlStr, init).catch((err) => console.warn("Backend teacher put sync:", err));
           const t = await firebaseApi.putTeacher(id, body);
           return new Response(JSON.stringify(t), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
@@ -243,6 +252,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         // DELETE /api/teachers/:id
         if (path.startsWith('/api/teachers/') && method === 'DELETE') {
           const id = path.split('/').pop() || "";
+          originalFetch(urlStr, init).catch((err) => console.warn("Backend teacher delete sync:", err));
           try {
             const res = await firebaseApi.deleteTeacher(id);
             return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -955,8 +965,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const db = getDB();
       const explicitName = typeof window !== 'undefined' ? localStorage.getItem('smart_sts_principal_name') : null;
       const explicitNip = typeof window !== 'undefined' ? localStorage.getItem('smart_sts_principal_nip') : null;
-      const principalName = (explicitName && explicitName.trim()) || db.settings?.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-      const principalNip = (explicitNip && explicitNip.trim()) || (db.settings?.principalNip !== undefined ? db.settings.principalNip : "19780512 200501 1 002");
+      const principalName = (explicitName && explicitName.trim()) || db.settings?.principalName || "Sobariyani, S.Pd.";
+      const principalNip = (explicitNip && explicitNip.trim()) || (db.settings?.principalNip !== undefined ? db.settings.principalNip : "19800101 200501 1 003");
       const format = {
         semesterName: "Ganjil",
         tahunPelajaran: "2026/2027",
