@@ -70,8 +70,27 @@ export default function DashboardProgress({
   const categorizedSubjects = useMemo(() => {
     if (!summary?.subjectProgress) return [];
 
-    const islamicSubjects = ["PAI", "Bahasa Arab", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"];
-    const muatanSubjects = ["Prakarya", "Informatika"];
+    const islamicSubjects = [
+      "PAI",
+      "Sirah",
+      "Sirah Nabawiyah",
+      "Keislaman",
+      "Tahsin ABaTaTsa",
+      "Tahfizh Al-Qur’an",
+      "Tahfizh Al-Qur'an",
+      "Do’a Harian dan Hadits",
+      "Do'a Harian dan Hadits",
+      "Wudhu dan Sholat",
+    ];
+    const muatanSubjects = [
+      "Bahasa Arab",
+      "Bahasa Inggris",
+      "TIK",
+      "Informatika",
+      "Life skill",
+      "Life Skill",
+      "Prakarya",
+    ];
 
     return summary.subjectProgress.map(sub => {
       let category: "nasional" | "islamic" | "muatan" = "nasional";

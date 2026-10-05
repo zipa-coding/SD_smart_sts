@@ -9,6 +9,7 @@ export interface Teacher {
   kelas: string;
   isEkskulTeacher?: boolean;
   ekskulName?: string;
+  ekskulNames?: string[];
 }
 
 export interface Student {
@@ -105,21 +106,26 @@ export interface SchoolSummary {
 }
 
 export const SUBJECT_LIST = [
-  // B. Umum
+  // B. Umum / Nasional
   "PAI",
   "PPKN",
   "Bahasa Indonesia",
   "Matematika",
   "IPA",
   "IPS",
-  "Bahasa Inggris",
   "PJOK",
+  "Seni Budaya",
   "Prakarya",
-  "Informatika",
-  // C. Muatan Lokal
+
+  // C. Muatan Lokal (Bahasa Inggris, TIK, Life Skill, Bahasa Arab)
   "Bahasa Arab",
-  // D. Keislaman
+  "Bahasa Inggris",
+  "TIK",
+  "Life Skill",
+
+  // D. Keislaman (Sirah, Tahsin, Tahfidz, Doa & Hadits, Wudhu & Sholat)
   "Keislaman",
+  "Sirah",
   "Tahsin ABaTaTsa",
   "Tahfizh Al-Qur’an",
   "Do’a Harian dan Hadits",
@@ -127,6 +133,7 @@ export const SUBJECT_LIST = [
 ];
 
 export const KEISLAMAN_SUB_SUBJECTS = [
+  { id: "Sirah", label: "Sirah", short: "Sirah" },
   { id: "Tahsin ABaTaTsa", label: "Tahsin ABaTaTsa", short: "Tahsin" },
   { id: "Tahfizh Al-Qur’an", label: "Tahfizh Al-Qur’an", short: "Tahfidz" },
   { id: "Do’a Harian dan Hadits", label: "Do’a Harian dan Hadits", short: "Doa & Hadist" },
@@ -139,6 +146,35 @@ export interface EkskulItem {
   type: "Wajib" | "Pilihan";
   teacherId?: string;
   teacherName?: string;
+}
+
+/**
+ * Extracts all extracurriculars assigned to a teacher.
+ */
+export function getTeacherAssignedEkskuls(
+  teacher: Partial<Teacher> | null | undefined
+): string[] {
+  if (!teacher) return [];
+  if (Array.isArray(teacher.ekskulNames) && teacher.ekskulNames.length > 0) {
+    return Array.from(
+      new Set(
+        teacher.ekskulNames
+          .map((s) => String(s || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  if (teacher.ekskulName) {
+    return Array.from(
+      new Set(
+        String(teacher.ekskulName)
+          .split(",")
+          .map((s) => String(s || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  return [];
 }
 
 /**

@@ -2,15 +2,17 @@
   "teachers": [
     {
       "id": "t1",
-      "kelas": "",
-      "password": "123",
+      "subject": "Admin",
       "isWaliKelas": false,
-      "username": "admin",
       "name": "Admin SD Islam Smart",
-      "subject": "Admin"
+      "password": "123",
+      "username": "admin",
+      "kelas": ""
     },
     {
       "id": "t_1790569810843",
+      "isEkskulTeacher": true,
+      "name": "Ahmad Jumanda, S.Pd.",
       "subject": "PJOK",
       "isWaliKelas": false,
       "aliases": [
@@ -18,36 +20,44 @@
         "Ahmad Jumanda, S.Pd.",
         "ahmad jumanda, s.pd."
       ],
-      "username": "Ahmad Jumanda, S.Pd.",
-      "isEkskulTeacher": true,
       "ekskulName": "Futsal",
-      "kelas": "",
-      "name": "Ahmad Jumanda, S.Pd.",
-      "password": "Pangkalpinang_26"
+      "password": "Pangkalpinang_26",
+      "username": "Ahmad Jumanda, S.Pd.",
+      "kelas": ""
     },
     {
       "id": "t_1790571092178",
-      "subject": "Keislaman, Siroh",
-      "password": "Pangkalpinang_26",
-      "ekskulName": "",
-      "isWaliKelas": false,
       "kelas": "",
-      "username": "sumaini, s.ag.",
-      "isEkskulTeacher": false,
+      "aliases": [
+        "sumaini_keislaman",
+        "Sumaini, S.Ag.",
+        "sumaini, s.ag."
+      ],
+      "password": "Pangkalpinang_26",
+      "username": "Sumaini, S.Ag.",
+      "subject": "Keislaman",
       "name": "Sumaini, S.Ag.",
-      "subjects": [
-        "Keislaman",
-        "Siroh"
-      ]
+      "isWaliKelas": false
     },
     {
       "id": "t_1790571171866",
-      "password": "Pangkalpinang_26",
-      "kelas": "1",
-      "isEkskulTeacher": false,
-      "name": "Fefi Arfina, S.E.",
       "ekskulName": "",
+      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill",
+      "aliases": [
+        "Fefi Arfina, S.E.",
+        "fefi",
+        "fefi arfina",
+        "fefi_kls1",
+        "fefi_ppkn",
+        "fefiarfina_mtk",
+        "fefiarfina_senbud",
+        "fefiarfina_lifskil",
+        "fefi arfina, s.e."
+      ],
       "isWaliKelas": true,
+      "username": "Fefi Arfina, S.E.",
+      "password": "123",
+      "kelas": "1",
       "subjects": [
         "Bahasa Indonesia",
         "PPKN",
@@ -55,192 +65,195 @@
         "Seni Budaya",
         "Life skill"
       ],
-      "username": "fefi arfina, s.e.",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill"
+      "name": "Fefi Arfina, S.E.",
+      "isEkskulTeacher": false
     },
     {
       "id": "t_1790911745090",
-      "name": "Sulastri, S.Pd., Gr.",
-      "isEkskulTeacher": false,
-      "password": "Pangkalpinang_26",
-      "ekskulName": "",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, IPAS, Seni Budaya, Life skill, TIK",
-      "kelas": "5",
-      "isWaliKelas": true,
       "subjects": [
         "Bahasa Indonesia",
         "PPKN",
         "Matematika",
-        "IPAS",
         "Seni Budaya",
         "Life skill",
+        "IPAS",
         "TIK"
       ],
-      "username": "sulastri"
+      "ekskulName": "",
+      "password": "Pangkalpinang_26",
+      "username": "Sulastri, S.Pd., Gr.",
+      "isWaliKelas": true,
+      "kelas": "5",
+      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill, IPAS, TIK",
+      "aliases": [
+        "Sulastri, S.Pd., Gr.",
+        "sulastri",
+        "sulastri, s.pd., gr.",
+        "sulastri, s.pd, gr.",
+        "sulastri, spd, gr",
+        "sulastri_bindokls5",
+        "sulastri_pkn",
+        "sulastri_mtk",
+        "sulastri_senbud",
+        "sulastri_lifskil",
+        "sulastri_ipas",
+        "sulastri_tik"
+      ],
+      "isEkskulTeacher": false,
+      "name": "Sulastri, S.Pd., Gr."
     },
     {
       "id": "t_1790914584783",
-      "username": "Rozalia, S.Pd.",
-      "ekskulName": "",
-      "name": "Rozalia, S.Pd.",
+      "isWaliKelas": true,
+      "isEkskulTeacher": false,
+      "kelas": "4",
       "aliases": [
         "rozalia_bindokls4",
         "Rozalia, S.Pd.",
         "rozalia, s.pd."
       ],
+      "name": "Rozalia, S.Pd.",
+      "ekskulName": "",
       "subject": "Bahasa Indonesia",
-      "password": "Pangkalpinang_26",
-      "kelas": "4",
-      "isWaliKelas": true,
-      "isEkskulTeacher": false
+      "username": "Rozalia, S.Pd.",
+      "password": "Pangkalpinang_26"
     },
     {
       "id": "t_1790914643922",
-      "isWaliKelas": true,
-      "password": "Pangkalpinang_26",
+      "subject": "Bahasa Indonesia",
       "isEkskulTeacher": false,
-      "kelas": "2",
+      "ekskulName": "",
       "name": "Kiki Anggun Triana, S.Pd.",
-      "username": "kiki anggun triana, s.pd.",
-      "subjects": [
-        "Bahasa Indonesia",
-        "PJOK",
-        "PPKN",
-        "Bahasa Inggris",
-        "Matematika"
+      "kelas": "2",
+      "aliases": [
+        "kiki_b.indokls2",
+        "Kiki Anggun Triana, S.Pd.",
+        "kiki anggun triana, s.pd."
       ],
-      "subject": "Bahasa Indonesia, PJOK, PPKN, Bahasa Inggris, Matematika",
-      "ekskulName": ""
+      "username": "Kiki Anggun Triana, S.Pd.",
+      "password": "Pangkalpinang_26",
+      "isWaliKelas": true
     },
     {
       "id": "t_1790914744767",
-      "ekskulName": "",
-      "subjects": [
-        "Bahasa Indonesia",
-        "PAI",
-        "PPKN",
-        "Matematika",
-        "Bahasa Inggris",
-        "PJOK"
-      ],
-      "username": "siti nur hayati, s.pd., gr.",
-      "name": "Siti Nur hayati, S.Pd., Gr.",
-      "isWaliKelas": true,
-      "isEkskulTeacher": false,
       "password": "Pangkalpinang_26",
+      "username": "Siti Nur hayati, S.Pd., Gr.",
       "kelas": "3",
-      "subject": "Bahasa Indonesia, PAI, PPKN, Matematika, Bahasa Inggris, PJOK"
+      "isEkskulTeacher": false,
+      "ekskulName": "",
+      "aliases": [
+        "siti_bindokls3",
+        "Siti Nur hayati, S.Pd., Gr.",
+        "siti nur hayati, s.pd., gr."
+      ],
+      "subject": "Bahasa Indonesia",
+      "isWaliKelas": true,
+      "name": "Siti Nur hayati, S.Pd., Gr."
     },
     {
       "id": "t_1790914798965",
-      "username": "Cindi Pricilia Aziizir, S.Pd.",
+      "kelas": "6",
+      "isWaliKelas": true,
+      "subject": "Bahasa Indonesia",
       "name": "Cindi Pricilia Aziizir, S.Pd.",
       "isEkskulTeacher": false,
       "ekskulName": "",
-      "isWaliKelas": true,
       "aliases": [
         "cindi_b.indokls6",
         "Cindi Pricilia Aziizir, S.Pd.",
         "cindi pricilia aziizir, s.pd."
       ],
-      "kelas": "6",
       "password": "Pangkalpinang_26",
-      "subject": "Bahasa Indonesia"
+      "username": "Cindi Pricilia Aziizir, S.Pd."
     },
     {
       "id": "t_1791030920697",
-      "ekskulName": "",
+      "isWaliKelas": false,
       "isEkskulTeacher": false,
+      "subject": "PAI",
       "subjects": [
-        "PAI",
-        "PPKN",
-        "Bahasa Inggris",
-        "Matematika"
+        "PAI"
       ],
-      "username": "jawariah_pai",
-      "name": "Jawariah, S.Pd.",
-      "isWaliKelas": false,
-      "password": "Pangkalpinang_26",
-      "subject": "PAI, PPKN, Bahasa Inggris, Matematika",
-      "kelas": ""
-    },
-    {
-      "id": "t_1791030984580",
-      "subject": "Bahasa Arab",
-      "isWaliKelas": false,
       "kelas": "",
       "ekskulName": "",
       "password": "Pangkalpinang_26",
-      "isEkskulTeacher": false,
+      "username": "jawariah_pai",
+      "name": "Jawariah, S.Pd."
+    },
+    {
+      "id": "t_1791030984580",
+      "password": "Pangkalpinang_26",
       "username": "zahra_b.arab",
-      "name": "Zahrawayna Anelaz Uthorida",
+      "subject": "Bahasa Arab",
       "subjects": [
         "Bahasa Arab"
-      ]
+      ],
+      "isEkskulTeacher": false,
+      "kelas": "",
+      "name": "Zahrawayna Anelaz Uthorida",
+      "isWaliKelas": false,
+      "ekskulName": ""
     },
     {
       "id": "t_1791031054255",
-      "isEkskulTeacher": false,
-      "subject": "Bahasa Arab",
+      "password": "Pangkalpinang_26",
       "username": "sindi_b.arab",
       "isWaliKelas": false,
       "subjects": [
         "Bahasa Arab"
       ],
-      "kelas": "",
-      "ekskulName": "",
       "name": "Sindi Kalaudia",
-      "password": "Pangkalpinang_26"
+      "kelas": "",
+      "isEkskulTeacher": false,
+      "ekskulName": "",
+      "subject": "Bahasa Arab"
     },
     {
       "id": "t_1791031092974",
-      "subjects": [
-        "Bahasa Arab",
-        "PJOK"
-      ],
-      "name": "Haminudin, S.Sos.",
       "username": "haminudin_b.arab",
-      "isEkskulTeacher": false,
       "password": "Pangkalpinang_26",
       "kelas": "",
+      "ekskulName": "Futsal",
+      "subject": "Bahasa Arab, PJOK, Pembina Ekskul",
+      "subjects": [
+        "Bahasa Arab",
+        "PJOK",
+        "Pembina Ekskul"
+      ],
       "isWaliKelas": false,
-      "ekskulName": "",
-      "subject": "Bahasa Arab, PJOK"
+      "name": "Haminudin, S.Sos.",
+      "isEkskulTeacher": true
     },
     {
       "id": "t_1791031311091",
-      "username": "noriyah_pai",
+      "ekskulName": "",
+      "kelas": "",
+      "isWaliKelas": false,
       "subjects": [
         "PAI"
       ],
-      "name": "Noriyah, S.Pd.I.",
-      "subject": "PAI",
+      "username": "noriyah_pai",
       "password": "Pangkalpinang_26",
-      "kelas": "",
       "isEkskulTeacher": false,
-      "isWaliKelas": false,
-      "ekskulName": ""
+      "subject": "PAI",
+      "name": "Noriyah, S.Pd.I."
     },
     {
       "id": "t_1791031367621",
-      "isWaliKelas": false,
-      "username": "nissa_b.ingris",
-      "isEkskulTeacher": false,
-      "name": "Nurun Nissa",
       "subjects": [
         "Bahasa Inggris"
       ],
-      "subject": "Bahasa Inggris",
-      "kelas": "",
+      "isWaliKelas": false,
+      "password": "Pangkalpinang_26",
+      "username": "nissa_b.ingris",
       "ekskulName": "",
-      "password": "Pangkalpinang_26"
+      "isEkskulTeacher": false,
+      "name": "Nurun Nissa",
+      "kelas": "",
+      "subject": "Bahasa Inggris"
     },
     {
       "id": "t_1791174063864",
-      "name": "Fefi Arfina, S.E.",
-      "username": "fefi_arfina",
-      "password": "123",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill",
       "subjects": [
         "Bahasa Indonesia",
         "PPKN",
@@ -248,60 +261,78 @@
         "Seni Budaya",
         "Life skill"
       ],
+      "name": "Fefi Arfina, S.E.",
       "isWaliKelas": true,
-      "kelas": "1",
+      "password": "123",
+      "username": "fefi_arfina",
       "isEkskulTeacher": false,
-      "ekskulName": ""
+      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill",
+      "ekskulName": "",
+      "kelas": "1"
+    },
+    {
+      "id": "t_1791174418787",
+      "kelas": "",
+      "subject": "Siroh",
+      "isWaliKelas": false,
+      "subjects": [
+        "Siroh"
+      ],
+      "username": "inun_siroh",
+      "password": "Pangkalpinang_26",
+      "name": "Nurmainah",
+      "ekskulName": "",
+      "isEkskulTeacher": false
     }
   ],
   "students": [
     {
       "id": "s_1790568732862_1",
       "nisn": "3144707189",
-      "kelas": "6",
-      "name": "Ahmad Al Ghifari"
+      "name": "Ahmad Al Ghifari",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732865_2",
       "nisn": "0142239739",
-      "kelas": "6",
-      "name": "AKHMAD RAFLI ALGHIFARI"
+      "name": "AKHMAD RAFLI ALGHIFARI",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732866_3",
       "kelas": "6",
-      "name": "Al Haadiy Fatha Nur Rayjib",
-      "nisn": "3158568812"
+      "nisn": "3158568812",
+      "name": "Al Haadiy Fatha Nur Rayjib"
     },
     {
       "id": "s_1790568732869_4",
-      "kelas": "6",
+      "nisn": "0157125197",
       "name": "AL RIZKY ABIYYU",
-      "nisn": "0157125197"
-    },
-    {
-      "id": "s_1790568732871_5",
-      "nisn": "0143755123",
-      "name": "AQIL HAKIM MUSTHAFA",
       "kelas": "6"
     },
     {
-      "id": "s_1790568732873_6",
-      "nisn": "0156956461",
+      "id": "s_1790568732871_5",
       "kelas": "6",
+      "nisn": "0143755123",
+      "name": "AQIL HAKIM MUSTHAFA"
+    },
+    {
+      "id": "s_1790568732873_6",
+      "kelas": "6",
+      "nisn": "0156956461",
       "name": "Audy Al Qudsha"
     },
     {
       "id": "s_1790568732876_7",
+      "nisn": "0151599931",
       "name": "CALISTA RAYA FAIQA",
-      "kelas": "6",
-      "nisn": "0151599931"
+      "kelas": "6"
     },
     {
       "id": "s_1790568732877_8",
-      "kelas": "6",
+      "nisn": "3159489521",
       "name": "Davina Gladis Viallen",
-      "nisn": "3159489521"
+      "kelas": "6"
     },
     {
       "id": "s_1790568732878_10",
@@ -311,63 +342,63 @@
     },
     {
       "id": "s_1790568732878_9",
-      "nisn": "3158945397",
+      "kelas": "6",
       "name": "Dirgantara Alfarizqy Septario",
-      "kelas": "6"
+      "nisn": "3158945397"
     },
     {
       "id": "s_1790568732879_11",
-      "name": "KALISHA NAILA ANDINI",
       "kelas": "6",
-      "nisn": "3155674943"
+      "nisn": "3155674943",
+      "name": "KALISHA NAILA ANDINI"
     },
     {
       "id": "s_1790568732880_12",
+      "name": "KENZIE AL RASYID",
       "nisn": "0144324938",
-      "kelas": "6",
-      "name": "KENZIE AL RASYID"
+      "kelas": "6"
     },
     {
       "id": "s_1790568732881_13",
-      "name": "MUHAMAD FATIH ALLANDI",
       "kelas": "6",
-      "nisn": "3143198571"
+      "nisn": "3143198571",
+      "name": "MUHAMAD FATIH ALLANDI"
     },
     {
       "id": "s_1790568732883_14",
-      "nisn": "0153264387",
       "kelas": "6",
-      "name": "MUHAMMAD AMMAR AZMI"
+      "name": "MUHAMMAD AMMAR AZMI",
+      "nisn": "0153264387"
     },
     {
       "id": "s_1790568732885_15",
       "nisn": "3151706407",
-      "kelas": "6",
-      "name": "Muhammad Azzam Aditya Pratama"
+      "name": "Muhammad Azzam Aditya Pratama",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732886_16",
       "nisn": "3149465565",
-      "kelas": "6",
-      "name": "Muhammad Qaiser Jakeem El Zamby"
+      "name": "Muhammad Qaiser Jakeem El Zamby",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732887_17",
-      "kelas": "6",
       "nisn": "0136986858",
-      "name": "Muhammad Zidan Kasyafi"
+      "name": "Muhammad Zidan Kasyafi",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732889_18",
-      "nisn": "0148305672",
       "kelas": "6",
+      "nisn": "0148305672",
       "name": "Nyayu Adzkia Syakira"
     },
     {
       "id": "s_1790568732890_19",
       "kelas": "6",
-      "name": "SYARIFAH NADHIF RAISANI",
-      "nisn": "3159211614"
+      "nisn": "3159211614",
+      "name": "SYARIFAH NADHIF RAISANI"
     },
     {
       "id": "s_1790568732891_20",
@@ -377,93 +408,93 @@
     },
     {
       "id": "s_1790568732892_21",
+      "kelas": "6",
       "nisn": "0147161088",
-      "name": "Zaqiya Al-Zahsy",
-      "kelas": "6"
+      "name": "Zaqiya Al-Zahsy"
     },
     {
       "id": "s_1790568873974_1",
-      "nisn": "3158308414",
+      "kelas": "5",
       "name": "ABDUL KARIM",
-      "kelas": "5"
+      "nisn": "3158308414"
     },
     {
       "id": "s_1790568873975_2",
+      "nisn": "3163017500",
       "name": "ADIBA  KHOIRIAH  MAULIDA",
-      "kelas": "5",
-      "nisn": "3163017500"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873976_3",
-      "name": "AFIF AFFAN AL GHIFARI",
       "kelas": "5",
-      "nisn": "0155448497"
+      "nisn": "0155448497",
+      "name": "AFIF AFFAN AL GHIFARI"
     },
     {
       "id": "s_1790568873977_4",
       "nisn": "3161815542",
-      "kelas": "5",
-      "name": "ALWANOJA KHODIJAH LISTUHAYU FADANTYA"
+      "name": "ALWANOJA KHODIJAH LISTUHAYU FADANTYA",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873978_5",
       "nisn": "0153346868",
-      "kelas": "5",
-      "name": "Anindita Keisha Azzahra"
+      "name": "Anindita Keisha Azzahra",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873978_6",
-      "kelas": "5",
+      "nisn": "3166292912",
       "name": "ASHEEQA YUMASAKHI",
-      "nisn": "3166292912"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873979_7",
       "kelas": "5",
-      "name": "ASYIFA ZULIMAH PUTERI OSMOZA",
-      "nisn": "0168236871"
+      "nisn": "0168236871",
+      "name": "ASYIFA ZULIMAH PUTERI OSMOZA"
     },
     {
       "id": "s_1790568873980_8",
-      "name": "AZQA ALQIZA WIRADHAN",
       "kelas": "5",
-      "nisn": "3169847227"
+      "nisn": "3169847227",
+      "name": "AZQA ALQIZA WIRADHAN"
     },
     {
       "id": "s_1790568873981_9",
-      "name": "BERYL HAMIZAN FARABI",
       "kelas": "5",
-      "nisn": "0162792460"
+      "nisn": "0162792460",
+      "name": "BERYL HAMIZAN FARABI"
     },
     {
       "id": "s_1790568873982_10",
-      "nisn": "3164657085",
       "kelas": "5",
+      "nisn": "3164657085",
       "name": "Daffa Pradipta aditya"
     },
     {
       "id": "s_1790568873985_11",
-      "name": "EARLYTA ARSYFA SALSABILA",
       "kelas": "5",
+      "name": "EARLYTA ARSYFA SALSABILA",
       "nisn": "3154119618"
     },
     {
       "id": "s_1790568873987_12",
       "kelas": "5",
-      "nisn": "3164652783",
-      "name": "HUSNA ALFATHUNISSA"
+      "name": "HUSNA ALFATHUNISSA",
+      "nisn": "3164652783"
     },
     {
       "id": "s_1790568873988_13",
       "nisn": "3158412534",
-      "kelas": "5",
-      "name": "M. ABID AL GIFARI"
+      "name": "M. ABID AL GIFARI",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873989_14",
       "kelas": "5",
-      "name": "Malik Al Khafi",
-      "nisn": "3165591363"
+      "nisn": "3165591363",
+      "name": "Malik Al Khafi"
     },
     {
       "id": "s_1790568873991_15",
@@ -474,8 +505,8 @@
     {
       "id": "s_1790568873992_16",
       "nisn": "3157054166",
-      "kelas": "5",
-      "name": "MUHAMMAD FAIZ ABQORY"
+      "name": "MUHAMMAD FAIZ ABQORY",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873992_17",
@@ -491,51 +522,51 @@
     },
     {
       "id": "s_1790568873994_19",
+      "name": "Naura Aisyah Putri Hartono",
       "nisn": "3161086196",
-      "kelas": "5",
-      "name": "Naura Aisyah Putri Hartono"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873994_20",
       "kelas": "5",
-      "nisn": "0159923344",
-      "name": "NINDYA PUTRI SEKARWANGI"
+      "name": "NINDYA PUTRI SEKARWANGI",
+      "nisn": "0159923344"
     },
     {
       "id": "s_1790568873995_21",
       "nisn": "3158424250",
-      "kelas": "5",
-      "name": "Pringgondani Fatharian"
+      "name": "Pringgondani Fatharian",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873996_22",
+      "name": "RAFARDHAN GIBRAN ATHALLA",
       "nisn": "0169269416",
-      "kelas": "5",
-      "name": "RAFARDHAN GIBRAN ATHALLA"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873996_23",
+      "nisn": "3159620251",
       "name": "Ratifa Inara",
-      "kelas": "5",
-      "nisn": "3159620251"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873997_24",
-      "nisn": "3157026957",
       "kelas": "5",
+      "nisn": "3157026957",
       "name": "Salman Alfarezi"
     },
     {
       "id": "s_1790568873998_25",
       "kelas": "5",
-      "name": "Syafia Kinanti Qurratal Ain",
-      "nisn": "0163777392"
+      "nisn": "0163777392",
+      "name": "Syafia Kinanti Qurratal Ain"
     },
     {
       "id": "s_1790568873999_26",
-      "name": "ZAHWA QONITA",
+      "kelas": "5",
       "nisn": "3165943084",
-      "kelas": "5"
+      "name": "ZAHWA QONITA"
     },
     {
       "id": "s_1790568874000_27",
@@ -545,15 +576,15 @@
     },
     {
       "id": "s_1790568874001_28",
+      "name": "Zian Al Farisy",
       "nisn": "3150543180",
-      "kelas": "5",
-      "name": "Zian Al Farisy"
+      "kelas": "5"
     },
     {
       "id": "s_1790568998019_1",
+      "name": "ABID RAFIZKY ALFARIQ",
       "nisn": "3177624581",
-      "kelas": "4",
-      "name": "ABID RAFIZKY ALFARIQ"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998021_2",
@@ -569,171 +600,171 @@
     },
     {
       "id": "s_1790568998024_4",
-      "nisn": "3166349654",
       "kelas": "4",
-      "name": "ALESHA ZAHRA CALLISTA"
+      "name": "ALESHA ZAHRA CALLISTA",
+      "nisn": "3166349654"
     },
     {
       "id": "s_1790568998025_5",
       "nisn": "3167018276",
-      "kelas": "4",
-      "name": "ALKHALIFI ZIKRI FARESY"
+      "name": "ALKHALIFI ZIKRI FARESY",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998026_6",
-      "nisn": "3174302822",
       "kelas": "4",
-      "name": "ALZIO RAFFASYA PRADIPTA"
+      "name": "ALZIO RAFFASYA PRADIPTA",
+      "nisn": "3174302822"
     },
     {
       "id": "s_1790568998026_7",
-      "name": "AMEERA MYEASHA AFSEEN",
       "kelas": "4",
-      "nisn": "3179285088"
+      "nisn": "3179285088",
+      "name": "AMEERA MYEASHA AFSEEN"
     },
     {
       "id": "s_1790568998028_8",
       "kelas": "4",
-      "nisn": "3165552577",
-      "name": "ARSYIL KHAYRU KURNIAWAN"
+      "name": "ARSYIL KHAYRU KURNIAWAN",
+      "nisn": "3165552577"
     },
     {
       "id": "s_1790568998028_9",
-      "nisn": "3169942885",
       "name": "Cahaya Humaira",
+      "nisn": "3169942885",
       "kelas": "4"
     },
     {
       "id": "s_1790568998029_10",
-      "kelas": "4",
+      "nisn": "3168420131",
       "name": "Gazela Meilbina Karzethy",
-      "nisn": "3168420131"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998030_11",
-      "kelas": "4",
+      "name": "IQMI",
       "nisn": "3177117715",
-      "name": "IQMI"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998031_12",
-      "nisn": "3175590696",
       "kelas": "4",
+      "nisn": "3175590696",
       "name": "Izora Farzana Alesha"
     },
     {
       "id": "s_1790568998033_13",
-      "nisn": "3176620084",
       "kelas": "4",
+      "nisn": "3176620084",
       "name": "KANZIA NAZAHA"
     },
     {
       "id": "s_1790568998036_14",
+      "kelas": "4",
       "nisn": "3172136125",
-      "name": "KARIM ABDUL JALIL",
-      "kelas": "4"
+      "name": "KARIM ABDUL JALIL"
     },
     {
       "id": "s_1790568998038_15",
+      "nisn": "3175013111",
       "name": "MAHEERA SABELA",
-      "kelas": "4",
-      "nisn": "3175013111"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998040_16",
-      "nisn": "3175132911",
       "kelas": "4",
+      "nisn": "3175132911",
       "name": "Malika Rachel Dinara"
     },
     {
       "id": "s_1790568998041_17",
       "name": "MAULIDINA ARIN NALADHIFA",
-      "kelas": "4",
-      "nisn": "3178497362"
+      "nisn": "3178497362",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998042_18",
       "nisn": "3178993817",
-      "kelas": "4",
-      "name": "MUHAMMAD ATHAR FIRTA"
+      "name": "MUHAMMAD ATHAR FIRTA",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998043_19",
-      "kelas": "4",
+      "name": "MUHAMMAD AWWAB MIYAZ",
       "nisn": "3171733158",
-      "name": "MUHAMMAD AWWAB MIYAZ"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998044_20",
+      "nisn": "3169994606",
       "name": "NAMIRA PUTRI ASHARI",
-      "kelas": "4",
-      "nisn": "3169994606"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998044_21",
-      "name": "PARULIAN RAAKAAN DZAKIIR",
       "kelas": "4",
-      "nisn": "3176667313"
+      "nisn": "3176667313",
+      "name": "PARULIAN RAAKAAN DZAKIIR"
     },
     {
       "id": "s_1790568998046_22",
+      "name": "RAFAN DZAKIANDRA ALMAIR",
       "nisn": "3170836149",
-      "kelas": "4",
-      "name": "RAFAN DZAKIANDRA ALMAIR"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998047_23",
-      "kelas": "4",
+      "nisn": "0177981714",
       "name": "RAIHAN FATHUR RAMADHAN",
-      "nisn": "0177981714"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998048_24",
       "nisn": "3163742716",
-      "kelas": "4",
-      "name": "REYHAN ARIF ARIANTO"
+      "name": "REYHAN ARIF ARIANTO",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998049_25",
-      "nisn": "3172149618",
       "kelas": "4",
-      "name": "Risciko Al Hanan"
+      "name": "Risciko Al Hanan",
+      "nisn": "3172149618"
     },
     {
       "id": "s_1790568998052_26",
-      "kelas": "4",
       "name": "SALSABILA SHAFANA WANSAH",
-      "nisn": "3173131741"
+      "nisn": "3173131741",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998054_27",
-      "kelas": "4",
       "name": "SHAFALUNA PUTRI BELSYA",
-      "nisn": "3173687003"
+      "nisn": "3173687003",
+      "kelas": "4"
     },
     {
       "id": "s_1790569388930_1",
+      "nisn": "3178740475",
       "name": "Ahmad Husein Badali",
-      "kelas": "3",
-      "nisn": "3178740475"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388932_2",
-      "kelas": "3",
+      "nisn": "3185271472",
       "name": "AKHMAD DJATI GUNAWAN",
-      "nisn": "3185271472"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388933_3",
-      "kelas": "3",
       "nisn": "3187069952",
-      "name": "ALKHALIFI DANAM MAHADUDE"
+      "name": "ALKHALIFI DANAM MAHADUDE",
+      "kelas": "3"
     },
     {
       "id": "s_1790569388934_4",
       "nisn": "3172917535",
-      "kelas": "3",
-      "name": "ASHADIYA MISHA ILMIAWAN"
+      "name": "ASHADIYA MISHA ILMIAWAN",
+      "kelas": "3"
     },
     {
       "id": "s_1790569388935_5",
@@ -743,21 +774,21 @@
     },
     {
       "id": "s_1790569388936_6",
+      "nisn": "3175200416",
       "name": "Azkadina Noura Setyawan",
-      "kelas": "3",
-      "nisn": "3175200416"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388937_7",
-      "name": "Dafran Wafi Rafiqi",
       "kelas": "3",
+      "name": "Dafran Wafi Rafiqi",
       "nisn": "0179915797"
     },
     {
       "id": "s_1790569388939_8",
-      "name": "ENZO ALVARO",
       "kelas": "3",
-      "nisn": "3175047600"
+      "nisn": "3175047600",
+      "name": "ENZO ALVARO"
     },
     {
       "id": "s_1790569388940_9",
@@ -767,14 +798,14 @@
     },
     {
       "id": "s_1790569388941_10",
-      "nisn": "3171573450",
+      "kelas": "3",
       "name": "Ifra Athirah",
-      "kelas": "3"
+      "nisn": "3171573450"
     },
     {
       "id": "s_1790569388942_11",
-      "nisn": "3179979700",
       "kelas": "3",
+      "nisn": "3179979700",
       "name": "Iltizamul Hasan"
     },
     {
@@ -786,55 +817,55 @@
     {
       "id": "s_1790569388945_13",
       "kelas": "3",
-      "name": "KENZI RABBANI PUTRA UMBARA",
-      "nisn": "3174618346"
+      "nisn": "3174618346",
+      "name": "KENZI RABBANI PUTRA UMBARA"
     },
     {
       "id": "s_1790569388946_14",
-      "name": "Mildzam Novianto",
+      "kelas": "3",
       "nisn": "3185609708",
-      "kelas": "3"
+      "name": "Mildzam Novianto"
     },
     {
       "id": "s_1790569388951_15",
+      "nisn": "3175928664",
       "name": "Muhammad Farzan Arrafi",
-      "kelas": "3",
-      "nisn": "3175928664"
-    },
-    {
-      "id": "s_1790569388953_16",
-      "name": "MUHAMMAD SYAFIQ",
-      "nisn": "3178694800",
       "kelas": "3"
     },
     {
-      "id": "s_1790569388954_17",
-      "name": "NADYA FARRAH AZZAHRA",
+      "id": "s_1790569388953_16",
       "kelas": "3",
+      "nisn": "3178694800",
+      "name": "MUHAMMAD SYAFIQ"
+    },
+    {
+      "id": "s_1790569388954_17",
+      "kelas": "3",
+      "name": "NADYA FARRAH AZZAHRA",
       "nisn": "3183717925"
     },
     {
       "id": "s_1790569388955_18",
-      "nisn": "3187224399",
       "kelas": "3",
+      "nisn": "3187224399",
       "name": "Nafasha Syafiq Hisyam"
     },
     {
       "id": "s_1790569388956_19",
+      "kelas": "3",
       "nisn": "3179706308",
-      "name": "NAHLA KHAIRIN ALIFYA",
-      "kelas": "3"
+      "name": "NAHLA KHAIRIN ALIFYA"
     },
     {
       "id": "s_1790569388957_20",
-      "kelas": "3",
+      "nisn": "3175682542",
       "name": "NAMIRA YASMINE ASHSHABIRA",
-      "nisn": "3175682542"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388958_21",
-      "name": "Qiana Sri Azzarine",
       "nisn": "3179175936",
+      "name": "Qiana Sri Azzarine",
       "kelas": "3"
     },
     {
@@ -845,87 +876,87 @@
     },
     {
       "id": "s_1790569388961_23",
-      "nisn": "3177953309",
       "kelas": "3",
+      "nisn": "3177953309",
       "name": "Ratisya Hafis Kharismanda"
     },
     {
       "id": "s_1790569388963_24",
       "nisn": "3182434709",
-      "kelas": "3",
-      "name": "SALMA SYUA DANEZA"
+      "name": "SALMA SYUA DANEZA",
+      "kelas": "3"
     },
     {
       "id": "s_1790569388966_25",
-      "kelas": "3",
+      "name": "Syafa Khirani Almaira",
       "nisn": "3172245115",
-      "name": "Syafa Khirani Almaira"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388968_26",
-      "kelas": "3",
       "name": "SYAKILLA MUZDALIFAH NAMIAH",
-      "nisn": "3181046452"
+      "nisn": "3181046452",
+      "kelas": "3"
     },
     {
       "id": "s_1790569388969_27",
-      "nisn": "3187420906",
       "name": "YUSUF AL MUHAIMIN",
+      "nisn": "3187420906",
       "kelas": "3"
     },
     {
       "id": "s_1790569388971_28",
       "nisn": "3175816489",
-      "kelas": "3",
-      "name": "ZAMEER MAULANA IBADURRAHMAN"
+      "name": "ZAMEER MAULANA IBADURRAHMAN",
+      "kelas": "3"
     },
     {
       "id": "s_1790569388972_29",
-      "nisn": "3184231725",
       "kelas": "3",
-      "name": "Zikra Ar Rahman"
+      "name": "Zikra Ar Rahman",
+      "nisn": "3184231725"
     },
     {
       "id": "s_1790569540608_1",
+      "kelas": "2",
       "nisn": "3180786045",
-      "name": "Abqari Kamayel Gustiyan",
-      "kelas": "2"
+      "name": "Abqari Kamayel Gustiyan"
     },
     {
       "id": "s_1790569540609_2",
-      "kelas": "2",
       "name": "Adzkia Syafa Alfatunissa",
-      "nisn": "3191028289"
+      "nisn": "3191028289",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540610_3",
-      "kelas": "2",
+      "nisn": "3194527156",
       "name": "AHMAD FARABI ZAIN ARADONI",
-      "nisn": "3194527156"
+      "kelas": "2"
     },
     {
       "id": "s_1790569540612_4",
-      "kelas": "2",
+      "name": "ALFATHIR DZIKRI ARISANDI",
       "nisn": "3198548168",
-      "name": "ALFATHIR DZIKRI ARISANDI"
+      "kelas": "2"
     },
     {
       "id": "s_1790569540613_5",
-      "kelas": "2",
       "nisn": "3199330730",
-      "name": "ALMEERA ZEA HUMAIRA"
+      "name": "ALMEERA ZEA HUMAIRA",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540614_6",
+      "kelas": "2",
       "nisn": "3189345919",
-      "name": "AQIFA ANNAFSI DAREK TENA",
-      "kelas": "2"
+      "name": "AQIFA ANNAFSI DAREK TENA"
     },
     {
       "id": "s_1790569540616_7",
+      "kelas": "2",
       "name": "AQILA NAZIHA EFFENDY",
-      "nisn": "3185010110",
-      "kelas": "2"
+      "nisn": "3185010110"
     },
     {
       "id": "s_1790569540620_8",
@@ -935,63 +966,63 @@
     },
     {
       "id": "s_1790569540621_9",
-      "nisn": "3190231316",
       "kelas": "2",
-      "name": "Damartha Arsenio Runako"
+      "name": "Damartha Arsenio Runako",
+      "nisn": "3190231316"
     },
     {
       "id": "s_1790569540623_10",
-      "nisn": "3191367016",
+      "kelas": "2",
       "name": "ELVANO RASHAAD DIANDRA",
-      "kelas": "2"
+      "nisn": "3191367016"
     },
     {
       "id": "s_1790569540625_11",
-      "name": "HANNA HUMAIRAH",
       "kelas": "2",
-      "nisn": "3181302541"
+      "nisn": "3181302541",
+      "name": "HANNA HUMAIRAH"
     },
     {
       "id": "s_1790569540628_12",
+      "kelas": "2",
       "nisn": "0183999741",
-      "name": "Izzah Althafunnisa",
-      "kelas": "2"
+      "name": "Izzah Althafunnisa"
     },
     {
       "id": "s_1790569540629_13",
-      "nisn": "3186425467",
       "name": "JUNA RIZQIANTARA ALFATIH",
+      "nisn": "3186425467",
       "kelas": "2"
     },
     {
       "id": "s_1790569540631_14",
-      "name": "LETISHA SHANUM",
       "nisn": "3180037269",
+      "name": "LETISHA SHANUM",
       "kelas": "2"
     },
     {
       "id": "s_1790569540632_15",
-      "name": "MUHAMMAD ANAS MUTTAQI",
       "kelas": "2",
-      "nisn": "3180941670"
+      "nisn": "3180941670",
+      "name": "MUHAMMAD ANAS MUTTAQI"
     },
     {
       "id": "s_1790569540634_16",
-      "nisn": "3197152100",
       "kelas": "2",
+      "nisn": "3197152100",
       "name": "MUHAMMAD ARKHAN RAFISQY SATRIA"
     },
     {
       "id": "s_1790569540635_17",
-      "name": "MUHAMMAD ATHAR NUR IKRAM",
       "kelas": "2",
-      "nisn": "3194205396"
+      "nisn": "3194205396",
+      "name": "MUHAMMAD ATHAR NUR IKRAM"
     },
     {
       "id": "s_1790569540638_18",
-      "nisn": "3196327876",
       "kelas": "2",
-      "name": "MUHAMMAD FARDHAN AL HAFIDZ"
+      "name": "MUHAMMAD FARDHAN AL HAFIDZ",
+      "nisn": "3196327876"
     },
     {
       "id": "s_1790569540641_19",
@@ -1001,14 +1032,14 @@
     },
     {
       "id": "s_1790569540643_20",
-      "name": "MUHAMMAD RAFFASYA ALFAREZI",
       "kelas": "2",
-      "nisn": "3188051235"
+      "nisn": "3188051235",
+      "name": "MUHAMMAD RAFFASYA ALFAREZI"
     },
     {
       "id": "s_1790569540644_21",
-      "name": "MUHAMMAD SYAM MITRA",
       "nisn": "3186911136",
+      "name": "MUHAMMAD SYAM MITRA",
       "kelas": "2"
     },
     {
@@ -1020,26 +1051,26 @@
     {
       "id": "s_1790569540646_23",
       "nisn": "3192447616",
-      "kelas": "2",
-      "name": "Nayyira Kusuma"
+      "name": "Nayyira Kusuma",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540647_24",
-      "nisn": "3194016264",
       "kelas": "2",
-      "name": "RAIHAN NABHAN ABDURRAHMAN"
+      "name": "RAIHAN NABHAN ABDURRAHMAN",
+      "nisn": "3194016264"
     },
     {
       "id": "s_1790569540649_25",
-      "nisn": "3186836693",
       "kelas": "2",
-      "name": "RANA MAHDIYA NAWAR CANDRA"
+      "name": "RANA MAHDIYA NAWAR CANDRA",
+      "nisn": "3186836693"
     },
     {
       "id": "s_1790569540653_26",
+      "name": "SAID ZUBAIR ARRAFI",
       "nisn": "3184911783",
-      "kelas": "2",
-      "name": "SAID ZUBAIR ARRAFI"
+      "kelas": "2"
     },
     {
       "id": "s_1790569540657_27",
@@ -1049,27 +1080,27 @@
     },
     {
       "id": "s_1790569540658_28",
+      "kelas": "2",
       "nisn": "3180110290",
-      "name": "SHIZA SHANUM WIGUNA",
-      "kelas": "2"
+      "name": "SHIZA SHANUM WIGUNA"
     },
     {
       "id": "s_1790569686984_1",
+      "nisn": "3196509328",
       "name": "AHMAD HAFEEZHAN BAYANAKA",
-      "kelas": "1",
-      "nisn": "3196509328"
+      "kelas": "1"
     },
     {
       "id": "s_1790569686986_2",
-      "kelas": "1",
       "name": "AHMAD RAFA HAZIQ",
-      "nisn": "3190146479"
+      "nisn": "3190146479",
+      "kelas": "1"
     },
     {
       "id": "s_1790569686988_3",
       "nisn": "3203013796",
-      "kelas": "1",
-      "name": "Aisyah Mikayla Hanifa"
+      "name": "Aisyah Mikayla Hanifa",
+      "kelas": "1"
     },
     {
       "id": "s_1790569686990_4",
@@ -1080,152 +1111,152 @@
     {
       "id": "s_1790569686991_5",
       "kelas": "1",
-      "name": "ALIF RAFASYA ALFATIH",
-      "nisn": "3191728671"
+      "nisn": "3191728671",
+      "name": "ALIF RAFASYA ALFATIH"
     },
     {
       "id": "s_1790569686992_6",
-      "kelas": "1",
       "name": "ASSYIFA YUMANAHLA",
-      "nisn": "3200658211"
+      "nisn": "3200658211",
+      "kelas": "1"
     },
     {
       "id": "s_1790569686993_7",
-      "kelas": "1",
       "nisn": "3195138370",
-      "name": "AYUDIA INARA"
+      "name": "AYUDIA INARA",
+      "kelas": "1"
     },
     {
       "id": "s_1790569686994_8",
+      "nisn": "3194643865",
       "name": "FARIZ NAUFAL RABBANI",
-      "kelas": "1",
-      "nisn": "3194643865"
+      "kelas": "1"
     },
     {
       "id": "s_1790569686995_9",
-      "nisn": "3194939369",
       "kelas": "1",
+      "nisn": "3194939369",
       "name": "GHAFFAR TSAQIB ABSI"
     },
     {
       "id": "s_1790569686997_10",
       "kelas": "1",
-      "name": "GIANDRA FAIZ ADIWARA",
-      "nisn": "3194291980"
+      "nisn": "3194291980",
+      "name": "GIANDRA FAIZ ADIWARA"
     },
     {
       "id": "s_1790569686999_11",
+      "name": "Haziq Mahasin Silangit",
       "nisn": "3190014542",
-      "kelas": "1",
-      "name": "Haziq Mahasin Silangit"
+      "kelas": "1"
     },
     {
       "id": "s_1790569687003_12",
       "kelas": "1",
-      "name": "HILYA BINAR MAFAZA",
-      "nisn": "3193290253"
+      "nisn": "3193290253",
+      "name": "HILYA BINAR MAFAZA"
     },
     {
       "id": "s_1790569687006_13",
       "nisn": "3195051949",
-      "kelas": "1",
-      "name": "KEANU GENANDRA ZUBAIR"
+      "name": "KEANU GENANDRA ZUBAIR",
+      "kelas": "1"
     },
     {
       "id": "s_1790569687007_14",
-      "nisn": "3204903146",
       "kelas": "1",
+      "nisn": "3204903146",
       "name": "MUHAMMAD AKARA ASLAM"
     },
     {
       "id": "s_1790569687008_15",
-      "nisn": "3193998629",
       "kelas": "1",
+      "nisn": "3193998629",
       "name": "MUHAMMAD ALZUBAIR ARIN SINAGA"
     },
     {
       "id": "s_1790569687009_16",
+      "nisn": "3192471873",
       "name": "MUHAMMAD RAFIF WINANTA",
-      "kelas": "1",
-      "nisn": "3192471873"
-    },
-    {
-      "id": "s_1790569687010_17",
-      "name": "Muhammad Tirta Akhsan",
-      "nisn": "3190781720",
       "kelas": "1"
     },
     {
-      "id": "s_1790569687011_18",
+      "id": "s_1790569687010_17",
       "kelas": "1",
+      "nisn": "3190781720",
+      "name": "Muhammad Tirta Akhsan"
+    },
+    {
+      "id": "s_1790569687011_18",
       "name": "NABILA FATTANA",
-      "nisn": "3196098011"
+      "nisn": "3196098011",
+      "kelas": "1"
     },
     {
       "id": "s_1790569687013_19",
-      "nisn": "3192002296",
       "kelas": "1",
-      "name": "NAHLA SYAFIQA QUEENZA"
+      "name": "NAHLA SYAFIQA QUEENZA",
+      "nisn": "3192002296"
     },
     {
       "id": "s_1790569687017_20",
       "name": "NASHA KHAYRA",
-      "kelas": "1",
-      "nisn": "3205982139"
+      "nisn": "3205982139",
+      "kelas": "1"
     },
     {
       "id": "s_1790569687020_21",
-      "nisn": "3206141100",
       "kelas": "1",
-      "name": "NAZERA ALFYA ANWAR"
+      "name": "NAZERA ALFYA ANWAR",
+      "nisn": "3206141100"
     },
     {
       "id": "s_1790569687022_22",
+      "name": "Queenza Arunika Gunara",
       "nisn": "3207334894",
-      "kelas": "1",
-      "name": "Queenza Arunika Gunara"
+      "kelas": "1"
     },
     {
       "id": "s_1790569687023_23",
       "nisn": "3207010285",
-      "kelas": "1",
-      "name": "QUINZIA FALISHA HANIFAH"
+      "name": "QUINZIA FALISHA HANIFAH",
+      "kelas": "1"
     },
     {
       "id": "s_1790569687024_24",
-      "name": "RAZQYA AYUDIA DINATA",
       "kelas": "1",
+      "name": "RAZQYA AYUDIA DINATA",
       "nisn": "3193865455"
     },
     {
       "id": "s_1790569687025_25",
+      "name": "RHEANA ZIDNI SABHIRA",
       "nisn": "3191621086",
-      "kelas": "1",
-      "name": "RHEANA ZIDNI SABHIRA"
-    },
-    {
-      "id": "s_1790569687026_26",
-      "name": "SEGARA JINGGA EL ZAMBY",
-      "kelas": "1",
-      "nisn": "3203426978"
-    },
-    {
-      "id": "s_1790569687027_27",
-      "name": "Shakila Yusma Inara",
-      "kelas": "1",
-      "nisn": "3201019849"
-    },
-    {
-      "id": "s_1790569687029_28",
-      "nisn": "3196964481",
-      "name": "SYAFIL IBAD RIWASI",
       "kelas": "1"
     },
     {
-      "id": "s_1790569687030_29",
-      "name": "SYARIFAH HAFSHAH AZKIYA",
+      "id": "s_1790569687026_26",
       "kelas": "1",
-      "nisn": "3205383425"
+      "nisn": "3203426978",
+      "name": "SEGARA JINGGA EL ZAMBY"
+    },
+    {
+      "id": "s_1790569687027_27",
+      "nisn": "3201019849",
+      "name": "Shakila Yusma Inara",
+      "kelas": "1"
+    },
+    {
+      "id": "s_1790569687029_28",
+      "kelas": "1",
+      "nisn": "3196964481",
+      "name": "SYAFIL IBAD RIWASI"
+    },
+    {
+      "id": "s_1790569687030_29",
+      "kelas": "1",
+      "nisn": "3205383425",
+      "name": "SYARIFAH HAFSHAH AZKIYA"
     }
   ],
   "grades": [
@@ -16636,26 +16667,27 @@
       "semesterName": "Ganjil",
       "watermarkOpacity": 0.05,
       "showCatatan": true,
-      "showLogo": true
+      "showLogo": false
     },
-    "principalName": "Sobariyani, S.Pd."
+    "principalName": "Drs. H. Muhammad Ihsan, M.Pd.I"
   },
   "subjects": [
     "PAI",
     "PPKN",
     "Bahasa Indonesia",
     "Matematika",
-    "Bahasa Inggris",
+    "IPAS",
     "PJOK",
+    "Seni Budaya",
+    "Prakarya",
     "Bahasa Arab",
+    "Bahasa Inggris",
+    "TIK",
+    "Life Skill",
     "Tahsin ABaTaTsa",
     "Tahfizh Al-Qur’an",
     "Do’a Harian dan Hadits",
     "Wudhu dan Sholat",
-    "Siroh",
-    "IPAS",
-    "Seni Budaya",
-    "Life skill",
-    "TIK"
+    "Sirah Nabawiyah"
   ]
 }

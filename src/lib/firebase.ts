@@ -629,8 +629,15 @@ export const firebaseApi = {
     const finalSubjectStr = finalSubjects.join(", ");
 
     const id = "t_" + Date.now();
-    const isEks = Boolean(isEkskulTeacher);
-    const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+    let finalEkskuls: string[] = [];
+    if (Array.isArray(body?.ekskulNames) && body.ekskulNames.length > 0) {
+      finalEkskuls = Array.from(new Set(body.ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+    } else if (ekskulName) {
+      finalEkskuls = Array.from(new Set(String(ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+    }
+    const isEks = Boolean(isEkskulTeacher && finalEkskuls.length > 0);
+    const cleanEksName = isEks ? finalEkskuls.join(", ") : "";
+
     const newTeacher = {
       id,
       name,
@@ -641,26 +648,28 @@ export const firebaseApi = {
       isWaliKelas: !!isWaliKelas,
       kelas: kelas || "",
       isEkskulTeacher: isEks,
-      ekskulName: cleanEksName
+      ekskulName: cleanEksName,
+      ekskulNames: isEks ? finalEkskuls : []
     };
     
     unmarkDeletedId('teachers', [id, username]);
     // Always persist to local cache immediately
     updateLocalFallbackItem('teachers', newTeacher);
 
-    if (isEks && cleanEksName) {
-      if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
-      let matchedEks = fallback.ekskul.find(
-        (e: any) => e.name.toLowerCase().trim() === cleanEksName.toLowerCase().trim()
-      );
-      if (!matchedEks) {
-        matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: id, teacherName: name };
-        fallback.ekskul.push(matchedEks);
-      } else {
-        matchedEks.teacherId = id;
-        matchedEks.teacherName = name;
-        newTeacher.ekskulName = matchedEks.name;
-      }
+    if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+    if (isEks && finalEkskuls.length > 0) {
+      finalEkskuls.forEach((eksName) => {
+        let matchedEks = fallback.ekskul.find(
+          (e: any) => e.name.toLowerCase().trim() === eksName.toLowerCase().trim()
+        );
+        if (!matchedEks) {
+          matchedEks = { id: "e_" + Date.now() + Math.random().toString(36).substr(2, 4), name: eksName, type: "Pilihan", teacherId: id, teacherName: name };
+          fallback.ekskul.push(matchedEks);
+        } else {
+          matchedEks.teacherId = id;
+          matchedEks.teacherName = name;
+        }
+      });
       if (typeof window !== 'undefined') {
         localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
       }
@@ -676,9 +685,15 @@ export const firebaseApi = {
     return newTeacher;
   },
   putTeacher: async (id: string, body: any) => {
-    const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
-    const isEks = Boolean(isEkskulTeacher);
-    const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+    const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName, ekskulNames } = body;
+    let finalEkskuls: string[] = [];
+    if (Array.isArray(ekskulNames) && ekskulNames.length > 0) {
+      finalEkskuls = Array.from(new Set(ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+    } else if (ekskulName) {
+      finalEkskuls = Array.from(new Set(String(ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+    }
+    const isEks = Boolean(isEkskulTeacher && finalEkskuls.length > 0);
+    const cleanEksName = isEks ? finalEkskuls.join(", ") : "";
 
     let finalSubjects: string[] = [];
     if (Array.isArray(subjects) && subjects.length > 0) {
@@ -699,48 +714,39 @@ export const firebaseApi = {
       isWaliKelas: !!isWaliKelas,
       kelas: kelas || "",
       isEkskulTeacher: isEks,
-      ekskulName: cleanEksName
+      ekskulName: cleanEksName,
+      ekskulNames: isEks ? finalEkskuls : []
     };
     updateLocalFallbackItem('teachers', updated);
 
     const fallback = getLocalFallbackData();
-    if (isEks && cleanEksName) {
-      if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
-      let matchedEks = fallback.ekskul.find(
-        (e: any) =>
-          e.name.toLowerCase() === cleanEksName.toLowerCase() ||
-          cleanEksName.toLowerCase().includes(e.name.toLowerCase()) ||
-          e.name.toLowerCase().includes(cleanEksName.toLowerCase())
-      );
-      if (!matchedEks) {
-        matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: id, teacherName: name };
-        fallback.ekskul.push(matchedEks);
-      } else {
-        matchedEks.teacherId = id;
-        matchedEks.teacherName = name;
-        updated.ekskulName = matchedEks.name;
-      }
-      fallback.ekskul.forEach((e: any) => {
-        if (matchedEks && e.id !== matchedEks.id && String(e.teacherId) === String(id)) {
+    if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
+    if (isEks && finalEkskuls.length > 0) {
+      finalEkskuls.forEach((eksName) => {
+        let matchedEks = fallback.ekskul.find(
+          (e: any) => e.name.toLowerCase().trim() === eksName.toLowerCase().trim()
+        );
+        if (!matchedEks) {
+          matchedEks = { id: "e_" + Date.now() + Math.random().toString(36).substr(2, 4), name: eksName, type: "Pilihan", teacherId: id, teacherName: name };
+          fallback.ekskul.push(matchedEks);
+        } else {
+          matchedEks.teacherId = id;
+          matchedEks.teacherName = name;
+        }
+      });
+    }
+
+    fallback.ekskul.forEach((e: any) => {
+      if (String(e.teacherId) === String(id)) {
+        if (!isEks || !finalEkskuls.some((fn) => fn.toLowerCase().trim() === e.name.toLowerCase().trim())) {
           e.teacherId = "";
           e.teacherName = "";
         }
-      });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
       }
-    } else {
-      if (Array.isArray(fallback.ekskul)) {
-        fallback.ekskul.forEach((e: any) => {
-          if (String(e.teacherId) === String(id)) {
-            e.teacherId = "";
-            e.teacherName = "";
-          }
-        });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
-        }
-      }
+    });
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem("smart_sts_db", JSON.stringify(fallback));
     }
 
     if (db) {
@@ -1212,35 +1218,37 @@ export const firebaseApi = {
       }
     } catch {}
 
-    const fallback = getLocalFallbackData().settings || {
-      principalName: (explicitName && explicitName.trim()) || "Sobariyani, S.Pd.",
-      principalNip: (explicitNip && explicitNip.trim()) || "19800101 200501 1 003",
+    const localDb = getLocalFallbackData();
+    const fallbackSettings = localDb.settings || {};
+
+    const finalName = (explicitName && explicitName.trim()) || fallbackSettings.principalName || "Sobariyani, S.Pd.";
+    const finalNip = (explicitNip && explicitNip.trim()) || fallbackSettings.principalNip || "19800101 200501 1 003";
+
+    const fallback = {
+      principalName: finalName,
+      principalNip: finalNip,
       format: {
-        semesterName: "Ganjil",
-        tahunPelajaran: "2026/2027",
-        fontSize: "11pt",
-        showLogo: false,
-        showSpiritual: true,
-        showSosial: true,
-        showAttendance: true,
-        showCatatan: true,
-        fontFamily: "Times New Roman",
-        paperSize: "A4",
-        tanggalRaport: "17 Juni 2026",
-        signaturePosition: "kanan",
-        watermarkSize: 440,
-        watermarkOpacity: 0.05
+        semesterName: fallbackSettings.format?.semesterName || "Ganjil",
+        tahunPelajaran: fallbackSettings.format?.tahunPelajaran || "2026/2027",
+        fontSize: fallbackSettings.format?.fontSize || "11pt",
+        showLogo: fallbackSettings.format?.showLogo !== undefined ? fallbackSettings.format.showLogo : false,
+        showSpiritual: fallbackSettings.format?.showSpiritual !== undefined ? fallbackSettings.format.showSpiritual : true,
+        showSosial: fallbackSettings.format?.showSosial !== undefined ? fallbackSettings.format.showSosial : true,
+        showAttendance: fallbackSettings.format?.showAttendance !== undefined ? fallbackSettings.format.showAttendance : true,
+        showCatatan: fallbackSettings.format?.showCatatan !== undefined ? fallbackSettings.format.showCatatan : true,
+        fontFamily: fallbackSettings.format?.fontFamily || "Times New Roman",
+        paperSize: fallbackSettings.format?.paperSize || "A4",
+        tanggalRaport: fallbackSettings.format?.tanggalRaport || "17 Juni 2026",
+        signaturePosition: fallbackSettings.format?.signaturePosition || "kanan",
+        watermarkSize: fallbackSettings.format?.watermarkSize !== undefined ? fallbackSettings.format.watermarkSize : 440,
+        watermarkOpacity: fallbackSettings.format?.watermarkOpacity !== undefined ? fallbackSettings.format.watermarkOpacity : 0.05
       }
     };
+
     if (!db) {
-      if (fallback.format) {
-        if (!fallback.format.tanggalRaport) fallback.format.tanggalRaport = "17 Juni 2026";
-        if (!fallback.format.signaturePosition) fallback.format.signaturePosition = "kanan";
-        if (fallback.format.watermarkSize === undefined) fallback.format.watermarkSize = 440;
-        if (fallback.format.watermarkOpacity === undefined) fallback.format.watermarkOpacity = 0.05;
-      }
       return fallback;
     }
+
     try {
       const ref = doc(db, "settings", "app");
       const docSnap = await withTimeout(getDoc(ref), 3500);
@@ -1259,7 +1267,18 @@ export const firebaseApi = {
             }
           } catch {}
         }
-        return data;
+        if (data.principalNip) {
+          try {
+            if (typeof window !== 'undefined') {
+              localStorage.setItem("smart_sts_principal_nip", String(data.principalNip).trim());
+            }
+          } catch {}
+        }
+        return {
+          principalName: data.principalName || finalName,
+          principalNip: data.principalNip || finalNip,
+          format: { ...fallback.format, ...(data.format || {}) }
+        };
       }
     } catch (err) {}
     return fallback;
@@ -1268,45 +1287,42 @@ export const firebaseApi = {
     const { principalName, principalNip, format } = body;
     const fallback = getLocalFallbackData();
     const prevSettings = fallback.settings || {};
-    
-    let savedPrincipalName = prevSettings.principalName || "Ustadz H. Ir. Abdul Muhyi, M.Pd";
-    if (principalName !== undefined && typeof principalName === 'string' && principalName.trim() !== '') {
-      savedPrincipalName = principalName.trim();
-    } else {
-      try {
-        const explicitName = typeof window !== 'undefined' ? localStorage.getItem("smart_sts_principal_name") : null;
-        if (explicitName && explicitName.trim()) savedPrincipalName = explicitName.trim();
-      } catch {}
-    }
 
-    let savedPrincipalNip = prevSettings.principalNip || "19780512 200501 1 002";
-    if (principalNip !== undefined && typeof principalNip === 'string') {
-      savedPrincipalNip = principalNip.trim();
-    } else {
-      try {
-        const explicitNip = typeof window !== 'undefined' ? localStorage.getItem("smart_sts_principal_nip") : null;
-        if (explicitNip && explicitNip.trim()) savedPrincipalNip = explicitNip.trim();
-      } catch {}
-    }
+    let explicitName: string | null = null;
+    let explicitNip: string | null = null;
+    try {
+      if (typeof window !== 'undefined') {
+        explicitName = localStorage.getItem("smart_sts_principal_name");
+        explicitNip = localStorage.getItem("smart_sts_principal_nip");
+      }
+    } catch {}
+    
+    let savedPrincipalName = (principalName !== undefined && typeof principalName === 'string' && principalName.trim() !== '')
+      ? principalName.trim()
+      : ((explicitName && explicitName.trim()) || prevSettings.principalName || "Sobariyani, S.Pd.");
+
+    let savedPrincipalNip = (principalNip !== undefined && typeof principalNip === 'string' && principalNip.trim() !== '')
+      ? principalNip.trim()
+      : ((explicitNip && explicitNip.trim()) || prevSettings.principalNip || "19800101 200501 1 003");
 
     const settingsData = {
       principalName: savedPrincipalName,
       principalNip: savedPrincipalNip,
       format: format ? {
-        semesterName: format.semesterName || "Ganjil",
-        tahunPelajaran: format.tahunPelajaran || "2026/2027",
-        fontSize: format.fontSize || "11pt",
-        showLogo: format.showLogo !== undefined ? format.showLogo : false,
-        showSpiritual: format.showSpiritual !== undefined ? format.showSpiritual : true,
-        showSosial: format.showSosial !== undefined ? format.showSosial : true,
-        showAttendance: format.showAttendance !== undefined ? format.showAttendance : true,
-        showCatatan: format.showCatatan !== undefined ? format.showCatatan : true,
-        fontFamily: format.fontFamily || "Times New Roman",
-        paperSize: format.paperSize || "A4",
-        tanggalRaport: format.tanggalRaport || "17 Juni 2026",
-        signaturePosition: format.signaturePosition || "kanan",
-        watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : 440,
-        watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : 0.05
+        semesterName: format.semesterName || prevSettings.format?.semesterName || "Ganjil",
+        tahunPelajaran: format.tahunPelajaran || prevSettings.format?.tahunPelajaran || "2026/2027",
+        fontSize: format.fontSize || prevSettings.format?.fontSize || "11pt",
+        showLogo: format.showLogo !== undefined ? format.showLogo : (prevSettings.format?.showLogo ?? false),
+        showSpiritual: format.showSpiritual !== undefined ? format.showSpiritual : (prevSettings.format?.showSpiritual ?? true),
+        showSosial: format.showSosial !== undefined ? format.showSosial : (prevSettings.format?.showSosial ?? true),
+        showAttendance: format.showAttendance !== undefined ? format.showAttendance : (prevSettings.format?.showAttendance ?? true),
+        showCatatan: format.showCatatan !== undefined ? format.showCatatan : (prevSettings.format?.showCatatan ?? true),
+        fontFamily: format.fontFamily || prevSettings.format?.fontFamily || "Times New Roman",
+        paperSize: format.paperSize || prevSettings.format?.paperSize || "A4",
+        tanggalRaport: format.tanggalRaport || prevSettings.format?.tanggalRaport || "17 Juni 2026",
+        signaturePosition: format.signaturePosition || prevSettings.format?.signaturePosition || "kanan",
+        watermarkSize: format.watermarkSize !== undefined ? Number(format.watermarkSize) : (prevSettings.format?.watermarkSize ?? 440),
+        watermarkOpacity: format.watermarkOpacity !== undefined ? Number(format.watermarkOpacity) : (prevSettings.format?.watermarkOpacity ?? 0.05)
       } : (prevSettings.format || {})
     };
 
@@ -1682,31 +1698,44 @@ export const firebaseApi = {
 
     const oldTeacherId = target.teacherId;
     let assignedTeacherName = "";
+    target.teacherId = teacherId || "";
+
     if (teacherId) {
       const t = fallback.teachers.find((tc: any) => String(tc.id) === String(teacherId));
       if (t) {
         assignedTeacherName = t.name;
         t.isEkskulTeacher = true;
-        t.ekskulName = target.name;
+        if (!Array.isArray(t.ekskulNames)) {
+          t.ekskulNames = t.ekskulName
+            ? t.ekskulName.split(",").map((s: string) => s.trim()).filter(Boolean)
+            : [];
+        }
+        if (!t.ekskulNames.includes(target.name)) {
+          t.ekskulNames.push(target.name);
+        }
+        t.ekskulName = t.ekskulNames.join(", ");
       }
     }
 
+    target.teacherName = assignedTeacherName;
+
+    // Update old teacher if changed
     if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
       const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
       if (prevT) {
-        prevT.isEkskulTeacher = false;
-        prevT.ekskulName = "";
-      }
-    }
-
-    // Clear any other ekskul having this teacher
-    if (teacherId) {
-      fallback.ekskul.forEach((e: any) => {
-        if (e.id !== id && String(e.teacherId) === String(teacherId)) {
-          e.teacherId = "";
-          e.teacherName = "";
+        const remainingEkskuls = fallback.ekskul.filter(
+          (e: any) => String(e.id) !== String(id) && String(e.teacherId) === String(oldTeacherId)
+        );
+        if (remainingEkskuls.length > 0) {
+          prevT.isEkskulTeacher = true;
+          prevT.ekskulNames = remainingEkskuls.map((e: any) => e.name);
+          prevT.ekskulName = prevT.ekskulNames.join(", ");
+        } else {
+          prevT.isEkskulTeacher = false;
+          prevT.ekskulNames = [];
+          prevT.ekskulName = "";
         }
-      });
+      }
     }
 
     target.teacherId = teacherId || "";

@@ -45,6 +45,12 @@ const KEISLAMAN_SUB_SUBJECTS = [
     short: "Wudhu & Sholat",
     description: "Praktik tata cara thaharah, wudhu, gerakan dan bacaan sholat",
   },
+  {
+    id: "Sirah",
+    label: "Sirah Nabawiyah",
+    short: "Sirah",
+    description: "Sejarah perjuangan hidup Nabi Muhammad SAW & para sahabat",
+  },
 ] as const;
 
 export default function TeacherPanel({
@@ -93,11 +99,46 @@ export default function TeacherPanel({
     }
   }, [assignedSubjects, activeSubject]);
 
+  // Extract all assigned ekskuls for this teacher (supports multiple ekskuls)
+  const assignedEkskuls = useMemo(() => {
+    const list: string[] = [];
+    if (user.subject === "Admin") {
+      return ekskulList.map((e) => e.name);
+    }
+    if (Array.isArray(user.ekskulNames) && user.ekskulNames.length > 0) {
+      user.ekskulNames.forEach((n) => {
+        const tr = String(n || "").trim();
+        if (tr && !list.includes(tr)) list.push(tr);
+      });
+    }
+    if (user.ekskulName) {
+      String(user.ekskulName).split(",").forEach((n) => {
+        const tr = String(n || "").trim();
+        const clean = tr === "Futsal Kids" ? "Futsal" : tr;
+        if (clean && !list.includes(clean)) list.push(clean);
+      });
+    }
+    ekskulList.forEach((e) => {
+      if (e.teacherId && (e.teacherId === user.id || String(e.teacherId) === String(user.id))) {
+        if (!list.includes(e.name)) list.push(e.name);
+      }
+    });
+    return list.length > 0 ? list : (user.isEkskulTeacher ? [user.ekskulName || "Pramuka"] : []);
+  }, [user, ekskulList]);
+
   // Current ekskul being handled if user is an ekskul teacher
   const [selectedEkskulName, setSelectedEkskulName] = useState<string>(() => {
     const raw = user.ekskulName || "Pramuka";
     return raw === "Futsal Kids" ? "Futsal" : raw;
   });
+
+  const currentEkskul = selectedEkskulName || (assignedEkskuls.length > 0 ? assignedEkskuls[0] : (user.ekskulName || "Pramuka"));
+
+  useEffect(() => {
+    if (assignedEkskuls.length > 0 && !assignedEkskuls.includes(selectedEkskulName)) {
+      setSelectedEkskulName(assignedEkskuls[0]);
+    }
+  }, [assignedEkskuls, selectedEkskulName]);
 
   // View state tab: grades (pengisian nilai), tps (kelola TP), or ekskul (pengisian nilai ekskul)
   const [activeViewTab, setActiveViewTab] = useState<"grades" | "tps" | "ekskul">(() => {
@@ -700,7 +741,6 @@ export default function TeacherPanel({
       ).length
     : 0;
 
-  const currentEkskul = selectedEkskulName || user.ekskulName || "Pramuka";
   const filledEkskulCount = classStudents.filter((s) => {
     const studentNote = allNotes[s.id];
     const sEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
@@ -841,13 +881,13 @@ export default function TeacherPanel({
           </button>
 
           {/* Ekskul Tab (Shown for Ekskul Teachers or Admin) */}
-          {(Boolean(user.isEkskulTeacher) || user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Admin") && (
+          {(Boolean(user.isEkskulTeacher) || assignedEkskuls.length > 0 || user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Admin") && (
             <button
               onClick={() => setActiveViewTab("ekskul")}
               className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "ekskul" ? "border-amber-600 text-amber-900 bg-amber-50/60 font-black" : "border-transparent text-amber-700 hover:text-amber-900"}`}
             >
               <Award className="w-3.5 h-3.5 text-amber-600" />
-              <span>Nilai Ekskul: {currentEkskul}</span>
+              <span>Nilai Ekskul: {currentEkskul} {assignedEkskuls.length > 1 && `(${assignedEkskuls.length})`}</span>
             </button>
           )}
         </div>
@@ -1292,8 +1332,68 @@ export default function TeacherPanel({
         {/* ======================================================== */}
         {/* 2. DEDICATED EKSKUL GRADING TAB                          */}
         {/* ======================================================== */}
-        {activeViewTab === "ekskul" &&
-          (selectedStudent ? (
+        {activeViewTab === "ekskul" && (
+          <div className="space-y-4">
+            {/* Multi-Ekskul Switcher if teacher mentors > 1 ekskul */}
+            {assignedEkskuls.length > 1 && (
+              <div className="p-3.5 bg-gradient-to-r from-amber-900 via-amber-950 to-slate-900 rounded-xl border border-amber-600/50 shadow-md animate-fade-in text-white">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 pb-2 border-b border-amber-800/60">
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-amber-200 flex items-center gap-1.5">
+                      <Award className="w-4 h-4 text-amber-400" />
+                      <span>Ekstrakurikuler yang Anda Bina ({assignedEkskuls.length} Ekskul)</span>
+                    </h4>
+                    <p className="text-[10px] text-amber-300/80 leading-tight mt-0.5">
+                      Anda membina lebih dari 1 kegiatan ekskul. Klik tombol di bawah untuk beralih ekskul yang sedang dinilai:
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-500/50 px-2 py-0.5 rounded-full w-fit">
+                    Aktif: {currentEkskul}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {assignedEkskuls.map((eks) => {
+                    const isCurrent = currentEkskul.toLowerCase().trim() === eks.toLowerCase().trim();
+                    return (
+                      <button
+                        key={eks}
+                        type="button"
+                        onClick={() => {
+                          setSelectedEkskulName(eks);
+                          if (selectedStudent) {
+                            const sNote = allNotes[selectedStudent.id];
+                            const sEks = Array.isArray(sNote?.ekskul) ? sNote.ekskul : [];
+                            const found = sEks.find((item: any) => item && (item.name === eks || item.ekskulName === eks));
+                            if (found) {
+                              setEkskulUsaha(found.usaha || "B");
+                              setEkskulProses(found.proses || "B");
+                              setEkskulCapaian(found.capaian || found.predicate || "B");
+                              setEkskulDescription(found.description || found.deskripsi || "");
+                            } else {
+                              setEkskulUsaha("B");
+                              setEkskulProses("B");
+                              setEkskulCapaian("B");
+                              setEkskulDescription(`Aktif dan bersemangat mengikuti latihan serta kegiatan ${eks} dengan baik.`);
+                            }
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
+                          isCurrent
+                            ? "bg-amber-500 text-slate-950 border-amber-300 shadow-md font-black"
+                            : "bg-slate-900/80 hover:bg-slate-800 text-amber-200 border-amber-700/50"
+                        }`}
+                      >
+                        <span>⚽</span>
+                        <span>{eks}</span>
+                        {isCurrent && <span className="text-[9px] bg-slate-950 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">Aktif</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {selectedStudent ? (
             <form onSubmit={handleSaveEkskul} className="space-y-4 animate-fade-in">
               {/* Header card with contrast */}
               <div className="p-3.5 bg-amber-50 dark:bg-[#1a1405] border border-amber-300 dark:border-amber-600/70 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-slate-900 dark:text-slate-100 shadow-xs">
@@ -1414,7 +1514,9 @@ export default function TeacherPanel({
             <div className="p-12 text-center text-slate-400 dark:text-slate-400 italic text-xs">
               Pilihlah salah satu siswa di bar sebelah kiri untuk mengisi nilai ekskul.
             </div>
-          ))}
+          )}
+          </div>
+        )}
 
         {/* ======================================================== */}
         {/* 3. LOCAL TP MANAGEMENT TAB                               */}

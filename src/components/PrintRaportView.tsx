@@ -233,27 +233,34 @@ export default function PrintRaportView({
       .catch((err) => console.error("Error loading principal settings:", err));
   }, []);
 
-  // Categorized Subject lists in Kurikulum Merdeka preferred order
-  const umumSubjects = [
+  // Canonical Subject lists - strictly non-overlapping
+  // B. UMUM: Standard national curriculum subjects only
+  const DEFAULT_UMUM_SUBJECTS = [
     "PAI",
     "PPKN",
     "Bahasa Indonesia",
     "Matematika",
-    "IPA",
-    "IPS",
-    "Bahasa Inggris",
     "PJOK",
+    "IPAS",
+    "Seni Budaya",
     "Prakarya",
-    "Informatika",
   ];
 
-  const mulokSubjects = ["Bahasa Arab"];
+  // C. MUATAN LOKAL: Strictly 4 subjects (Bahasa Arab, Bahasa Inggris, TIK, Life Skill)
+  const CANONICAL_MULOK_SUBJECTS = [
+    "Bahasa Arab",
+    "Bahasa Inggris",
+    "TIK",
+    "Life Skill",
+  ];
 
-  const keislamanSubjects = [
+  // D. KEISLAMAN: Strictly 5 subjects (Tahsin, Tahfizh, Do'a & Hadits, Wudhu & Sholat, Sirah Nabawiyah)
+  const CANONICAL_KEISLAMAN_SUBJECTS = [
     "Tahsin ABaTaTsa",
     "Tahfizh Al-Qur’an",
     "Do’a Harian dan Hadits",
     "Wudhu dan Sholat",
+    "Sirah Nabawiyah",
   ];
 
   const formatTitleCase = (str: string) => {
@@ -282,6 +289,42 @@ export default function PrintRaportView({
       .toLowerCase();
   };
 
+  // Helper to detect if a subject belongs to Keislaman
+  const isKeislamanSubject = (str: string) => {
+    const s = normalizeSub(str);
+    return (
+      s.includes("sirah") ||
+      s.includes("siroh") ||
+      s.includes("tahsin") ||
+      s.includes("tahfizh") ||
+      s.includes("tahfidz") ||
+      s.includes("hadits") ||
+      s.includes("hadist") ||
+      s.includes("doa") ||
+      s.includes("wudhu") ||
+      s.includes("sholat") ||
+      s.includes("shalat") ||
+      s.includes("keislaman") ||
+      s.includes("diniyah") ||
+      s === "ski"
+    );
+  };
+
+  // Helper to detect if a subject belongs to Muatan Lokal
+  const isMulokSubject = (str: string) => {
+    const s = normalizeSub(str);
+    return (
+      s.includes("arab") ||
+      s.includes("inggris") ||
+      s.includes("english") ||
+      s === "tik" ||
+      s.includes("informatika") ||
+      s.includes("teknologi informasi") ||
+      s.includes("life skill") ||
+      s.includes("keterampilan hidup")
+    );
+  };
+
   const findGradeForSubject = (gradesList: Grade[], targetSub: string): Grade | undefined => {
     if (!Array.isArray(gradesList) || !targetSub) return undefined;
 
@@ -307,6 +350,7 @@ export default function PrintRaportView({
       ],
       "Bahasa Indonesia": ["bahasa indonesia", "b. indonesia", "b indonesia", "bindo"],
       Matematika: ["matematika", "mtk", "math"],
+      IPAS: ["ipas", "ilmu pengetahuan alam dan sosial", "ipa dan ips", "ipa", "ips", "sains"],
       IPA: ["ipa", "ilmu pengetahuan alam", "sains"],
       IPS: ["ips", "ilmu pengetahuan sosial", "sosial"],
       "Bahasa Inggris": ["bahasa inggris", "b. inggris", "b inggris", "english", "bing"],
@@ -317,9 +361,53 @@ export default function PrintRaportView({
         "pendidikan jasmani olahraga dan kesehatan",
         "olahraga",
       ],
-      Prakarya: ["prakarya", "prakarya dan kewirausahaan", "sbk", "seni budaya"],
-      Informatika: ["informatika", "tik", "komputer"],
+      Prakarya: ["prakarya", "prakarya dan kewirausahaan", "sbk"],
+      "Seni Budaya": ["seni budaya", "seni", "kesenian", "sbk"],
+      TIK: [
+        "tik",
+        "informatika",
+        "teknologi informasi dan komunikasi",
+        "teknologi informasi",
+        "komputer",
+      ],
+      Informatika: [
+        "tik",
+        "informatika",
+        "teknologi informasi dan komunikasi",
+        "teknologi informasi",
+        "komputer",
+      ],
+      "Life Skill": [
+        "life skill",
+        "life skills",
+        "keterampilan hidup",
+        "life skill (keterampilan hidup)",
+      ],
+      "Life skill": [
+        "life skill",
+        "life skills",
+        "keterampilan hidup",
+        "life skill (keterampilan hidup)",
+      ],
       "Bahasa Arab": ["bahasa arab", "b. arab", "b arab", "arab"],
+      "Sirah Nabawiyah": [
+        "sirah",
+        "siroh",
+        "sirah nabawiyah",
+        "sirah nabawiyah (sejarah islam)",
+        "sejarah islam",
+        "sejarah kebudayaan islam",
+        "ski",
+      ],
+      Sirah: [
+        "sirah",
+        "siroh",
+        "sirah nabawiyah",
+        "sirah nabawiyah (sejarah islam)",
+        "sejarah islam",
+        "sejarah kebudayaan islam",
+        "ski",
+      ],
       "Tahsin ABaTaTsa": [
         "tahsin abatatsa",
         "tahsin",
@@ -379,23 +467,43 @@ export default function PrintRaportView({
     });
   };
 
+  // Strictly filter UMUM: NO Sirah/Siroh, NO Mulok (Bahasa Inggris, TIK, Life Skill, Bahasa Arab), NO duplicates
   const activeUmum = React.useMemo(() => {
-    if (allSubjects.length === 0) return umumSubjects;
-    return allSubjects.filter(
-      (s) =>
-        !mulokSubjects.some((m) => normalizeSub(m) === normalizeSub(s)) &&
-        !keislamanSubjects.some((k) => normalizeSub(k) === normalizeSub(s)) &&
-        normalizeSub(s) !== "keislaman" &&
-        normalizeSub(s) !== "pendidikan keislaman"
-    );
-  }, [allSubjects]);
+    // Base national curriculum subjects for B. UMUM
+    const baseUmum = [
+      "PAI",
+      "PPKN",
+      "Bahasa Indonesia",
+      "Matematika",
+      "PJOK",
+      "IPAS",
+    ];
 
+    // Check if optional subjects (Seni Budaya or Prakarya) exist in allSubjects or grades
+    const additional: string[] = [];
+    const checkList = [...(grades || []).map((g) => g?.subject || ""), ...allSubjects];
+    for (const item of checkList) {
+      if (!item) continue;
+      const norm = normalizeSub(item);
+      if (norm.includes("seni") && !additional.includes("Seni Budaya")) {
+        additional.push("Seni Budaya");
+      }
+      if (norm.includes("prakarya") && !additional.includes("Prakarya")) {
+        additional.push("Prakarya");
+      }
+    }
+
+    return [...baseUmum, ...additional];
+  }, [allSubjects, grades]);
+
+  // Strictly 4 distinct subjects for Muatan Lokal (Bahasa Arab, Bahasa Inggris, TIK, Life Skill)
   const activeMulok = React.useMemo(() => {
-    return mulokSubjects;
+    return CANONICAL_MULOK_SUBJECTS;
   }, []);
 
+  // Strictly 5 distinct subjects for Keislaman (Tahsin, Tahfizh, Do'a & Hadits, Wudhu & Sholat, Sirah Nabawiyah)
   const activeKeislaman = React.useMemo(() => {
-    return keislamanSubjects;
+    return CANONICAL_KEISLAMAN_SUBJECTS;
   }, []);
 
   // Helper with beautiful full human readable subject names
@@ -405,13 +513,21 @@ export default function PrintRaportView({
       PPKN: "Pendidikan Pancasila dan Kewarganegaraan",
       "Bahasa Indonesia": "Bahasa Indonesia",
       Matematika: "Matematika",
+      IPAS: "Ilmu Pengetahuan Alam dan Sosial (IPAS)",
       IPA: "Ilmu Pengetahuan Alam",
       IPS: "Ilmu Pengetahuan Sosial",
       "Bahasa Inggris": "Bahasa Inggris",
       PJOK: "Pendidikan Jasmani Olahraga dan Kesehatan",
-      Informatika: "Informatika",
+      Informatika: "Teknologi Informasi dan Komunikasi (TIK)",
+      TIK: "Teknologi Informasi dan Komunikasi (TIK)",
       Prakarya: "Prakarya",
       "Bahasa Arab": "Bahasa Arab",
+      Sirah: "Sirah Nabawiyah (Sejarah Islam)",
+      "Sirah Nabawiyah": "Sirah Nabawiyah (Sejarah Islam)",
+      Siroh: "Sirah Nabawiyah (Sejarah Islam)",
+      "Life skill": "Life Skill (Keterampilan Hidup)",
+      "Life Skill": "Life Skill (Keterampilan Hidup)",
+      "Seni Budaya": "Seni Budaya",
       "Tahsin ABaTaTsa": "Tahsin ABaTaTsa",
       "Tahfizh Al-Qur’an": "Tahfizh Al-Qur’an",
       "Tahfizh Al-Qur'an": "Tahfizh Al-Qur’an",

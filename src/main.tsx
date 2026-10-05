@@ -93,22 +93,7 @@ function initializeLocalStorage() {
           }
         }
 
-        // Sync teachers from dbData into clientDbCache only for teachers not yet present
-        if (Array.isArray(dbData.teachers) && Array.isArray(clientDbCache.teachers)) {
-          for (const dt of dbData.teachers) {
-            if (isDummyTeacher(dt)) continue;
-            const existingIdx = clientDbCache.teachers.findIndex((t: any) => 
-              String(t.id) === String(dt.id) || 
-              (dt.name && String(t.name).trim().toLowerCase() === String(dt.name).trim().toLowerCase())
-            );
-            if (existingIdx === -1) {
-              clientDbCache.teachers.push(dt);
-              changed = true;
-            }
-          }
-        }
-
-        // Apply explicit principal name if saved or default to Sobariyani, S.Pd.
+        // Apply explicit principal name/NIP if saved or retain current settings
         try {
           const explicitPrincipal = localStorage.getItem('smart_sts_principal_name');
           const explicitNip = localStorage.getItem('smart_sts_principal_nip');
@@ -116,7 +101,7 @@ function initializeLocalStorage() {
           
           if (explicitPrincipal && explicitPrincipal.trim()) {
             clientDbCache.settings.principalName = explicitPrincipal.trim();
-          } else if (!clientDbCache.settings.principalName || clientDbCache.settings.principalName.includes("Abdul Muhyi") || clientDbCache.settings.principalName.includes("Muhammad Ihsan")) {
+          } else if (!clientDbCache.settings.principalName) {
             clientDbCache.settings.principalName = "Sobariyani, S.Pd.";
             localStorage.setItem('smart_sts_principal_name', "Sobariyani, S.Pd.");
             changed = true;
@@ -383,6 +368,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
         // POST /api/settings
         if (path === '/api/settings' && method === 'POST') {
+          originalFetch(urlStr, init).catch((err) => console.warn("Backend settings post sync:", err));
           const s = await firebaseApi.postSettings(body);
           return new Response(JSON.stringify(s), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
@@ -592,8 +578,15 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
       const finalSubjectStr = finalSubjects.join(", ");
 
-      const isEks = Boolean(isEkskulTeacher);
-      const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+      let finalEkskuls: string[] = [];
+      if (Array.isArray(body?.ekskulNames) && body.ekskulNames.length > 0) {
+        finalEkskuls = Array.from(new Set(body.ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+      } else if (ekskulName) {
+        finalEkskuls = Array.from(new Set(String(ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+      }
+      const isEks = Boolean(isEkskulTeacher && finalEkskuls.length > 0);
+      const cleanEksName = isEks ? finalEkskuls.join(", ") : "";
+
       const newTeacher = {
         id: "t_" + Date.now(),
         name,
@@ -604,23 +597,25 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         isWaliKelas: !!isWaliKelas,
         kelas: kelas || "",
         isEkskulTeacher: isEks,
-        ekskulName: cleanEksName
+        ekskulName: cleanEksName,
+        ekskulNames: isEks ? finalEkskuls : []
       };
       db.teachers.push(newTeacher);
 
-      if (isEks && cleanEksName) {
-        if (!Array.isArray(db.ekskul)) db.ekskul = [];
-        let matchedEks = db.ekskul.find(
-          (e: any) => e.name.toLowerCase().trim() === cleanEksName.toLowerCase().trim()
-        );
-        if (!matchedEks) {
-          matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: newTeacher.id, teacherName: newTeacher.name };
-          db.ekskul.push(matchedEks);
-        } else {
-          matchedEks.teacherId = newTeacher.id;
-          matchedEks.teacherName = newTeacher.name;
-          newTeacher.ekskulName = matchedEks.name;
-        }
+      if (!Array.isArray(db.ekskul)) db.ekskul = [];
+      if (isEks && finalEkskuls.length > 0) {
+        finalEkskuls.forEach((eksName) => {
+          let matchedEks = db.ekskul.find(
+            (e: any) => e.name.toLowerCase().trim() === eksName.toLowerCase().trim()
+          );
+          if (!matchedEks) {
+            matchedEks = { id: "e_" + Date.now() + Math.random().toString(36).substr(2, 4), name: eksName, type: "Pilihan", teacherId: newTeacher.id, teacherName: newTeacher.name };
+            db.ekskul.push(matchedEks);
+          } else {
+            matchedEks.teacherId = newTeacher.id;
+            matchedEks.teacherName = newTeacher.name;
+          }
+        });
       }
 
       saveDB(db);
@@ -630,7 +625,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // PUT /api/teachers/:id
     if (path.startsWith('/api/teachers/') && method === 'PUT') {
       const id = path.split('/').pop();
-      const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body || {};
+      const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName, ekskulNames } = body || {};
       const db = getDB();
       const index = db.teachers.findIndex((t: any) => t.id === id);
       if (index === -1) {
@@ -646,8 +641,14 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
       const finalSubjectStr = finalSubjects.join(", ");
 
-      const isEks = Boolean(isEkskulTeacher);
-      const cleanEksName = isEks ? String(ekskulName || "").trim() : "";
+      let finalEkskuls: string[] = [];
+      if (Array.isArray(ekskulNames) && ekskulNames.length > 0) {
+        finalEkskuls = Array.from(new Set(ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+      } else if (ekskulName) {
+        finalEkskuls = Array.from(new Set(String(ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+      }
+      const isEks = Boolean(isEkskulTeacher && finalEkskuls.length > 0);
+      const cleanEksName = isEks ? finalEkskuls.join(", ") : "";
 
       db.teachers[index] = {
         ...db.teachers[index],
@@ -659,32 +660,32 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         isWaliKelas: !!isWaliKelas,
         kelas: kelas || "",
         isEkskulTeacher: isEks,
-        ekskulName: cleanEksName
+        ekskulName: cleanEksName,
+        ekskulNames: isEks ? finalEkskuls : []
       };
 
       if (!Array.isArray(db.ekskul)) db.ekskul = [];
-      let matchedEks = null;
-      if (isEks && cleanEksName) {
-        matchedEks = db.ekskul.find(
-          (e: any) => e.name.toLowerCase().trim() === cleanEksName.toLowerCase().trim()
-        );
-        if (!matchedEks) {
-          matchedEks = { id: "e_" + Date.now(), name: cleanEksName, type: "Pilihan", teacherId: id, teacherName: db.teachers[index].name };
-          db.ekskul.push(matchedEks);
-        } else {
-          matchedEks.teacherId = id;
-          matchedEks.teacherName = db.teachers[index].name;
-          db.teachers[index].ekskulName = matchedEks.name;
-        }
+      if (isEks && finalEkskuls.length > 0) {
+        finalEkskuls.forEach((eksName) => {
+          let matchedEks = db.ekskul.find(
+            (e: any) => e.name.toLowerCase().trim() === eksName.toLowerCase().trim()
+          );
+          if (!matchedEks) {
+            matchedEks = { id: "e_" + Date.now() + Math.random().toString(36).substr(2, 4), name: eksName, type: "Pilihan", teacherId: id, teacherName: db.teachers[index].name };
+            db.ekskul.push(matchedEks);
+          } else {
+            matchedEks.teacherId = id;
+            matchedEks.teacherName = db.teachers[index].name;
+          }
+        });
       }
 
       db.ekskul.forEach((e: any) => {
-        if (matchedEks && e.id !== matchedEks.id && String(e.teacherId) === String(id)) {
-          e.teacherId = "";
-          e.teacherName = "";
-        } else if (!isEks && String(e.teacherId) === String(id)) {
-          e.teacherId = "";
-          e.teacherName = "";
+        if (String(e.teacherId) === String(id)) {
+          if (!isEks || !finalEkskuls.some((fn) => fn.toLowerCase().trim() === e.name.toLowerCase().trim())) {
+            e.teacherId = "";
+            e.teacherName = "";
+          }
         }
       });
 
@@ -1119,30 +1120,44 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
       const oldTeacherId = target.teacherId;
       let assignedTeacherName = "";
+      target.teacherId = teacherId || "";
+
       if (teacherId) {
         const t = db.teachers.find((tc: any) => String(tc.id) === String(teacherId));
         if (t) {
           assignedTeacherName = t.name;
           t.isEkskulTeacher = true;
-          t.ekskulName = target.name;
+          if (!Array.isArray(t.ekskulNames)) {
+            t.ekskulNames = t.ekskulName
+              ? t.ekskulName.split(",").map((s: string) => s.trim()).filter(Boolean)
+              : [];
+          }
+          if (!t.ekskulNames.includes(target.name)) {
+            t.ekskulNames.push(target.name);
+          }
+          t.ekskulName = t.ekskulNames.join(", ");
         }
       }
 
+      target.teacherName = assignedTeacherName;
+
+      // Update old teacher if changed
       if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
         const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
         if (prevT) {
-          prevT.isEkskulTeacher = false;
-          prevT.ekskulName = "";
-        }
-      }
-
-      if (teacherId) {
-        db.ekskul.forEach((e: any) => {
-          if (e.id !== id && String(e.teacherId) === String(teacherId)) {
-            e.teacherId = "";
-            e.teacherName = "";
+          const remainingEkskuls = db.ekskul.filter(
+            (e: any) => String(e.id) !== String(id) && String(e.teacherId) === String(oldTeacherId)
+          );
+          if (remainingEkskuls.length > 0) {
+            prevT.isEkskulTeacher = true;
+            prevT.ekskulNames = remainingEkskuls.map((e: any) => e.name);
+            prevT.ekskulName = prevT.ekskulNames.join(", ");
+          } else {
+            prevT.isEkskulTeacher = false;
+            prevT.ekskulNames = [];
+            prevT.ekskulName = "";
           }
-        });
+        }
       }
 
       target.teacherId = teacherId || "";

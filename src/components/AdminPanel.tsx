@@ -156,6 +156,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     kelas: "",
     isEkskulTeacher: false,
     ekskulName: "",
+    ekskulNames: [] as string[],
   });
 
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
@@ -695,9 +696,6 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
               teacherName: selectedTeacher ? selectedTeacher.name : "",
             };
           }
-          if (teacherId && e.teacherId === teacherId) {
-            return { ...e, teacherId: "", teacherName: "" };
-          }
           return e;
         })
       );
@@ -705,14 +703,16 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       setTeachers((prev) =>
         prev.map((t) => {
           if (t.id === teacherId) {
+            const currentEks = Array.isArray(t.ekskulNames) ? [...t.ekskulNames] : (t.ekskulName ? t.ekskulName.split(",").map(s => s.trim()).filter(Boolean) : []);
+            if (targetEkskul && !currentEks.includes(targetEkskul.name)) {
+              currentEks.push(targetEkskul.name);
+            }
             return {
               ...t,
               isEkskulTeacher: true,
-              ekskulName: targetEkskul ? targetEkskul.name : t.ekskulName,
+              ekskulNames: currentEks,
+              ekskulName: currentEks.join(", "),
             };
-          }
-          if (targetEkskul && t.ekskulName === targetEkskul.name && t.id !== teacherId) {
-            return { ...t, isEkskulTeacher: false, ekskulName: "" };
           }
           return t;
         })
@@ -964,11 +964,14 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     setError("");
 
     const isEks = Boolean(teacherForm.isEkskulTeacher);
-    const defaultEks = ekskuls.length > 0 ? ekskuls[0].name : "Pramuka Siaga & Penggalang";
-    let selectedEkskul = teacherForm.ekskulName.trim();
-    if (isEks && !selectedEkskul) {
-      selectedEkskul = defaultEks;
+    const chosenEkskuls = Array.isArray(teacherForm.ekskulNames) && teacherForm.ekskulNames.length > 0
+      ? teacherForm.ekskulNames.filter(Boolean)
+      : (teacherForm.ekskulName ? teacherForm.ekskulName.split(",").map(s => s.trim()).filter(Boolean) : []);
+    
+    if (isEks && chosenEkskuls.length === 0 && ekskuls.length > 0) {
+      chosenEkskuls.push(ekskuls[0].name);
     }
+    const cleanEkskulName = isEks ? chosenEkskuls.join(", ") : "";
 
     const chosenSubjects = Array.isArray(teacherForm.subjects) && teacherForm.subjects.length > 0
       ? teacherForm.subjects.filter(Boolean)
@@ -987,8 +990,9 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       subject: chosenSubjects.join(", "),
       subjects: chosenSubjects,
       kelas: teacherForm.isWaliKelas ? teacherForm.kelas : "",
-      isEkskulTeacher: isEks,
-      ekskulName: isEks ? selectedEkskul : "",
+      isEkskulTeacher: isEks && chosenEkskuls.length > 0,
+      ekskulName: cleanEkskulName,
+      ekskulNames: isEks ? chosenEkskuls : [],
     };
 
     if (!payload.name) {
@@ -1049,7 +1053,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         isWaliKelas: false,
         kelas: "",
         isEkskulTeacher: false,
-        ekskulName: defaultEks,
+        ekskulName: "",
+        ekskulNames: [],
       });
       showSuccess(
         editingTeacher
@@ -1067,19 +1072,30 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
   const startEditTeacher = (t: Teacher) => {
     setEditingTeacher(t);
     setTeacherModalError("");
-    const matchedEks = ekskuls.find(
-      (e) =>
-        e.teacherId === t.id ||
-        (t.isEkskulTeacher && t.ekskulName && (
-          e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim() ||
-          (t.ekskulName === "Futsal Kids" && e.name === "Futsal")
-        ))
-    );
+    
+    // Find all ekskuls assigned to this teacher
+    const assignedEksList: string[] = [];
+    if (Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0) {
+      t.ekskulNames.forEach((n) => {
+        const tr = String(n || "").trim();
+        if (tr && !assignedEksList.includes(tr)) assignedEksList.push(tr);
+      });
+    }
+    if (t.ekskulName) {
+      String(t.ekskulName).split(",").forEach((n) => {
+        const tr = String(n || "").trim();
+        const clean = tr === "Futsal Kids" ? "Futsal" : tr;
+        if (clean && !assignedEksList.includes(clean)) assignedEksList.push(clean);
+      });
+    }
+    ekskuls.forEach((e) => {
+      if (e.teacherId && (e.teacherId === t.id || String(e.teacherId) === String(t.id))) {
+        if (!assignedEksList.includes(e.name)) assignedEksList.push(e.name);
+      }
+    });
 
-    const isEks = Boolean(t.isEkskulTeacher || matchedEks);
-    const rawEksName = (matchedEks ? matchedEks.name : "") || t.ekskulName || "";
-    const cleanEksName = rawEksName === "Futsal Kids" ? "Futsal" : rawEksName;
-    const defaultEks = cleanEksName || (ekskuls.length > 0 ? ekskuls[0].name : "");
+    const isEks = Boolean(t.isEkskulTeacher || assignedEksList.length > 0);
+    const finalEkskuls = isEks ? (assignedEksList.length > 0 ? assignedEksList : (ekskuls.length > 0 ? [ekskuls[0].name] : [])) : [];
 
     const subs = Array.isArray(t.subjects) && t.subjects.length > 0
       ? t.subjects
@@ -1094,7 +1110,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       isWaliKelas: Boolean(t.isWaliKelas),
       kelas: t.kelas || "",
       isEkskulTeacher: isEks,
-      ekskulName: isEks ? defaultEks : (ekskuls.length > 0 ? ekskuls[0].name : ""),
+      ekskulName: finalEkskuls.join(", "),
+      ekskulNames: finalEkskuls,
     });
     setIsTeacherModalOpen(true);
   };
@@ -1846,18 +1863,44 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                         )}
                       </td>
                       <td className="p-3">
-                        {t.isEkskulTeacher ? (
-                          <span className="text-amber-300 bg-amber-950/80 border border-amber-700/60 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1 w-fit">
-                            <span>⚽</span>
-                            <span>{(() => {
-                              const assigned = ekskuls.find((e) => e.teacherId === t.id);
-                              const name = assigned ? assigned.name : (t.ekskulName === "Futsal Kids" ? "Futsal" : t.ekskulName);
-                              return name || "Ekskul";
-                            })()}</span>
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 italic text-[11px]">-</span>
-                        )}
+                        {(() => {
+                          const assignedList: string[] = [];
+                          if (Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0) {
+                            t.ekskulNames.forEach((name) => {
+                              const tr = String(name || "").trim();
+                              if (tr && !assignedList.includes(tr)) assignedList.push(tr);
+                            });
+                          }
+                          if (t.ekskulName) {
+                            String(t.ekskulName).split(",").forEach((name) => {
+                              const tr = String(name || "").trim();
+                              const clean = tr === "Futsal Kids" ? "Futsal" : tr;
+                              if (clean && !assignedList.includes(clean)) assignedList.push(clean);
+                            });
+                          }
+                          ekskuls.forEach((e) => {
+                            if (e.teacherId && (e.teacherId === t.id || String(e.teacherId) === String(t.id))) {
+                              if (!assignedList.includes(e.name)) assignedList.push(e.name);
+                            }
+                          });
+
+                          if (assignedList.length > 0) {
+                            return (
+                              <div className="flex flex-wrap gap-1 max-w-[220px]">
+                                {assignedList.map((eksName) => (
+                                  <span
+                                    key={eksName}
+                                    className="text-amber-300 bg-amber-950/80 border border-amber-700/60 py-0.5 px-2 rounded-full font-bold flex items-center gap-1 text-[10px]"
+                                  >
+                                    <span>⚽</span>
+                                    <span>{eksName}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return <span className="text-slate-500 italic text-[11px]">-</span>;
+                        })()}
                       </td>
                       <td className="p-3 text-right">
                         {t.id === "t1" ? (

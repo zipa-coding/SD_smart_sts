@@ -284,16 +284,9 @@ app.post("/api/verify-session", async (req, res) => {
     return res.status(401).json({ error: "Sesi tidak valid." });
   }
 
-  const assignedEks = Array.isArray(db.ekskul)
-    ? db.ekskul.find(
-        (e: any) =>
-          (e.teacherId && String(e.teacherId) === String(teacher.id)) ||
-          (teacher.isEkskulTeacher && teacher.ekskulName && e.name.toLowerCase().trim() === teacher.ekskulName.toLowerCase().trim())
-      )
-    : null;
-
-  const isEkskulTeacher = Boolean(teacher.isEkskulTeacher || assignedEks);
-  const ekskulName = assignedEks ? assignedEks.name : (teacher.ekskulName || "");
+  const teacherEkskuls = extractTeacherEkskuls(teacher);
+  const isEkskulTeacher = Boolean(teacher.isEkskulTeacher || teacherEkskuls.length > 0);
+  const ekskulName = teacher.ekskulName || teacherEkskuls.join(", ");
   const teacherSubs = extractTeacherSubjects(teacher);
 
   res.json({
@@ -306,8 +299,21 @@ app.post("/api/verify-session", async (req, res) => {
     kelas: teacher.kelas || "",
     isEkskulTeacher,
     ekskulName,
+    ekskulNames: teacherEkskuls,
   });
 });
+
+// Helper to extract and normalize teacher extracurriculars
+function extractTeacherEkskuls(t: any): string[] {
+  if (!t) return [];
+  if (Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0) {
+    return Array.from(new Set(t.ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+  }
+  if (t.ekskulName) {
+    return Array.from(new Set(String(t.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+  }
+  return [];
+}
 
 // Helper to extract and normalize teacher subjects
 function extractTeacherSubjects(t: any): string[] {
@@ -432,8 +438,14 @@ app.post("/api/teachers", async (req, res) => {
     return res.status(400).json({ error: "Username sudah digunakan." });
   }
 
-  const isEks = Boolean(isEkskulTeacher);
-  const cleanEkskulName = isEks ? String(ekskulName || "").trim() : "";
+  let finalEkskuls: string[] = [];
+  if (Array.isArray(req.body.ekskulNames) && req.body.ekskulNames.length > 0) {
+    finalEkskuls = Array.from(new Set(req.body.ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+  } else if (req.body.ekskulName) {
+    finalEkskuls = Array.from(new Set(String(req.body.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+  }
+  const isEks = Boolean(isEkskulTeacher && finalEkskuls.length > 0);
+  const cleanEkskulName = isEks ? finalEkskuls.join(", ") : "";
 
   const newTeacher = {
     id: "t_" + Date.now(),
@@ -446,30 +458,32 @@ app.post("/api/teachers", async (req, res) => {
     kelas: isWaliKelas ? String(kelas || "").trim() : "",
     isEkskulTeacher: isEks,
     ekskulName: cleanEkskulName,
+    ekskulNames: isEks ? finalEkskuls : [],
   };
 
   db.teachers.push(newTeacher);
 
-  // Sync with db.ekskul
-  if (isEks && cleanEkskulName) {
-    let matchedEks = db.ekskul.find(
-      (e: any) => e.name.toLowerCase().trim() === cleanEkskulName.toLowerCase().trim()
-    );
+  // Sync with db.ekskul for all assigned ekskuls
+  if (isEks && finalEkskuls.length > 0) {
+    finalEkskuls.forEach((eksName) => {
+      let matchedEks = db.ekskul.find(
+        (e: any) => e.name.toLowerCase().trim() === eksName.toLowerCase().trim()
+      );
 
-    if (!matchedEks) {
-      matchedEks = {
-        id: "e_" + Date.now(),
-        name: cleanEkskulName,
-        type: "Pilihan",
-        teacherId: newTeacher.id,
-        teacherName: newTeacher.name,
-      };
-      db.ekskul.push(matchedEks);
-    } else {
-      matchedEks.teacherId = newTeacher.id;
-      matchedEks.teacherName = newTeacher.name;
-      newTeacher.ekskulName = matchedEks.name;
-    }
+      if (!matchedEks) {
+        matchedEks = {
+          id: "e_" + Date.now() + Math.random().toString(36).substr(2, 4),
+          name: eksName,
+          type: "Pilihan",
+          teacherId: newTeacher.id,
+          teacherName: newTeacher.name,
+        };
+        db.ekskul.push(matchedEks);
+      } else {
+        matchedEks.teacherId = newTeacher.id;
+        matchedEks.teacherName = newTeacher.name;
+      }
+    });
   }
 
   await writeDB(db);
@@ -525,8 +539,14 @@ app.put("/api/teachers/:id", async (req, res) => {
   }
   const finalSubjectStr = finalSubjects.join(", ");
 
-  const isEks = Boolean(isEkskulTeacher);
-  const cleanEkskulName = isEks ? String(ekskulName || "").trim() : "";
+  let finalEkskuls: string[] = [];
+  if (Array.isArray(req.body.ekskulNames) && req.body.ekskulNames.length > 0) {
+    finalEkskuls = Array.from(new Set(req.body.ekskulNames.map((s: any) => String(s || '').trim()).filter(Boolean)));
+  } else if (req.body.ekskulName) {
+    finalEkskuls = Array.from(new Set(String(req.body.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
+  }
+  const isEks = Boolean(isEkskulTeacher && finalEkskuls.length > 0);
+  const cleanEkskulName = isEks ? finalEkskuls.join(", ") : "";
 
   db.teachers[index] = {
     ...db.teachers[index],
@@ -539,39 +559,39 @@ app.put("/api/teachers/:id", async (req, res) => {
     kelas: isWaliKelas ? String(kelas || "").trim() : "",
     isEkskulTeacher: isEks,
     ekskulName: cleanEkskulName,
+    ekskulNames: isEks ? finalEkskuls : [],
   };
 
-  // Synchronize db.ekskul
-  let matchedEks = null;
-  if (isEks && cleanEkskulName) {
-    matchedEks = db.ekskul.find(
-      (e: any) => e.name.toLowerCase().trim() === cleanEkskulName.toLowerCase().trim()
-    );
+  // Synchronize db.ekskul for all assigned ekskuls
+  if (isEks && finalEkskuls.length > 0) {
+    finalEkskuls.forEach((eksName) => {
+      let matchedEks = db.ekskul.find(
+        (e: any) => e.name.toLowerCase().trim() === eksName.toLowerCase().trim()
+      );
 
-    if (!matchedEks) {
-      matchedEks = {
-        id: "e_" + Date.now(),
-        name: cleanEkskulName,
-        type: "Pilihan",
-        teacherId: id,
-        teacherName: db.teachers[index].name,
-      };
-      db.ekskul.push(matchedEks);
-    } else {
-      matchedEks.teacherId = id;
-      matchedEks.teacherName = db.teachers[index].name;
-      db.teachers[index].ekskulName = matchedEks.name;
-    }
+      if (!matchedEks) {
+        matchedEks = {
+          id: "e_" + Date.now() + Math.random().toString(36).substr(2, 4),
+          name: eksName,
+          type: "Pilihan",
+          teacherId: id,
+          teacherName: db.teachers[index].name,
+        };
+        db.ekskul.push(matchedEks);
+      } else {
+        matchedEks.teacherId = id;
+        matchedEks.teacherName = db.teachers[index].name;
+      }
+    });
   }
 
-  // Clear teacher from any other ekskul
+  // Clear teacher only from ekskuls that are NOT in finalEkskuls
   db.ekskul.forEach((e: any) => {
-    if (matchedEks && e.id !== matchedEks.id && String(e.teacherId) === String(id)) {
-      e.teacherId = "";
-      e.teacherName = "";
-    } else if (!isEks && String(e.teacherId) === String(id)) {
-      e.teacherId = "";
-      e.teacherName = "";
+    if (String(e.teacherId) === String(id)) {
+      if (!isEks || !finalEkskuls.some((fn) => fn.toLowerCase().trim() === e.name.toLowerCase().trim())) {
+        e.teacherId = "";
+        e.teacherName = "";
+      }
     }
   });
 
@@ -1364,27 +1384,35 @@ app.post("/api/ekskul/:id/assign-teacher", async (req, res) => {
     if (tIdx !== -1) {
       assignedTeacherName = db.teachers[tIdx].name;
       db.teachers[tIdx].isEkskulTeacher = true;
-      db.teachers[tIdx].ekskulName = ekskul.name;
+      if (!Array.isArray(db.teachers[tIdx].ekskulNames)) {
+        db.teachers[tIdx].ekskulNames = db.teachers[tIdx].ekskulName
+          ? db.teachers[tIdx].ekskulName.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [];
+      }
+      if (!db.teachers[tIdx].ekskulNames.includes(ekskul.name)) {
+        db.teachers[tIdx].ekskulNames.push(ekskul.name);
+      }
+      db.teachers[tIdx].ekskulName = db.teachers[tIdx].ekskulNames.join(", ");
     }
   }
 
-  // Clear previous teacher if replaced or unset
+  // Update previous teacher if changed
   if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
     const prevTIdx = db.teachers.findIndex((t: any) => String(t.id) === String(oldTeacherId));
     if (prevTIdx !== -1) {
-      db.teachers[prevTIdx].isEkskulTeacher = false;
-      db.teachers[prevTIdx].ekskulName = "";
-    }
-  }
-
-  // Clear any other ekskul that had this teacher
-  if (teacherId) {
-    db.ekskul.forEach((e: any) => {
-      if (e.id !== id && String(e.teacherId) === String(teacherId)) {
-        e.teacherId = "";
-        e.teacherName = "";
+      const remainingEkskuls = db.ekskul.filter(
+        (e: any) => String(e.id) !== String(id) && String(e.teacherId) === String(oldTeacherId)
+      );
+      if (remainingEkskuls.length > 0) {
+        db.teachers[prevTIdx].isEkskulTeacher = true;
+        db.teachers[prevTIdx].ekskulNames = remainingEkskuls.map((e: any) => e.name);
+        db.teachers[prevTIdx].ekskulName = db.teachers[prevTIdx].ekskulNames.join(", ");
+      } else {
+        db.teachers[prevTIdx].isEkskulTeacher = false;
+        db.teachers[prevTIdx].ekskulNames = [];
+        db.teachers[prevTIdx].ekskulName = "";
       }
-    });
+    }
   }
 
   db.ekskul[idx].teacherId = teacherId || "";
@@ -1473,18 +1501,19 @@ const DEFAULT_SUBJECTS = [
   "PPKN",
   "Bahasa Indonesia",
   "Matematika",
-  "IPA",
-  "IPS",
-  "Bahasa Inggris",
+  "IPAS",
   "PJOK",
+  "Seni Budaya",
   "Prakarya",
-  "Informatika",
   "Bahasa Arab",
-  "Keislaman",
+  "Bahasa Inggris",
+  "TIK",
+  "Life Skill",
   "Tahsin ABaTaTsa",
   "Tahfizh Al-Qur’an",
   "Do’a Harian dan Hadits",
   "Wudhu dan Sholat",
+  "Sirah Nabawiyah",
 ];
 
 app.get("/api/subjects", async (req, res) => {
