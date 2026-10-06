@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Teacher, Student, SUBJECT_LIST, EkskulItem } from "../types";
+import { Teacher, Student, SUBJECT_LIST, EkskulItem, getSubjectTps, matchTpClass, normalizeSubjectKey } from "../types";
 import { isFirebaseConfigured, firebaseApi } from "../lib/firebase";
 import {
   Users,
@@ -1336,6 +1336,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
 
       setTpForm((prev) => ({ ...prev, text: "" }));
       await fetchAllData();
+      onRefreshTrigger();
       showSuccess(`Tujuan Pembelajaran untuk Kelas ${tpForm.kelas} berhasil ditambahkan!`);
     } catch (err: any) {
       setError(err.message || "Terjadi kesalahan.");
@@ -2572,14 +2573,11 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
           {/* Group display of subject templates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             {subjectsList.map((subject) => {
-              const allItems = tpsTemplates[subject] || [];
+              const allItems = getSubjectTps(tpsTemplates, subject);
               const items =
                 tpFilterClass === "all"
                   ? allItems
-                  : allItems.filter(
-                      (item: any) =>
-                        String(item.kelas || "").trim() === tpFilterClass
-                    );
+                  : allItems.filter((item: any) => matchTpClass(item.kelas, tpFilterClass));
 
               return (
                 <div

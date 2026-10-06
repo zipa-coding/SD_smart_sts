@@ -13,6 +13,7 @@ import {
   where 
 } from "firebase/firestore";
 import dbData from "../data/db.json";
+import { normalizeSubjectKey, getSubjectTps, matchTpClass } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -1099,49 +1100,104 @@ export const firebaseApi = {
   // 6. GET, POST, DELETE /api/tps
   getTPs: async (kelas?: string) => {
     const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
-    if (!db) return fallback;
-    try {
-      const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 3500);
-      if (snap && !snap.empty) {
-        const templates: any = {};
-        snap.docs.forEach(docSnap => {
-          let tpsList = docSnap.data().tps || [];
-          if (kelas) {
-            tpsList = tpsList.filter((item: any) => String(item.kelas || '').trim() === String(kelas).trim());
-          }
-          templates[docSnap.id] = tpsList;
-        });
-        return templates;
+    let templates: Record<string, any[]> = { ...fallback };
+
+    if (db) {
+      try {
+        const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 3500);
+        if (snap && !snap.empty) {
+          snap.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            const subjectId = docSnap.id;
+            let tpsList = Array.isArray(data.tps) ? data.tps : [];
+            if (tpsList.length > 0) {
+              templates[subjectId] = tpsList;
+              const normKey = normalizeSubjectKey(subjectId);
+              if (normKey && normKey !== subjectId) {
+                templates[normKey] = tpsList;
+              }
+            }
+          });
+        }
+      } catch (e) {
+        // Fallback gracefully to local storage
       }
-    } catch (e) {}
-    return fallback;
+    }
+
+    if (kelas) {
+      const filtered: Record<string, any[]> = {};
+      for (const [sub, list] of Object.entries(templates)) {
+        if (Array.isArray(list)) {
+          filtered[sub] = list.filter((item: any) => matchTpClass(item.kelas, kelas));
+        }
+      }
+      return filtered;
+    }
+
+    return templates;
   },
   postTP: async (body: any) => {
-    const { subject, tpText, kelas } = body;
-    const newTP = { id: "tp_" + Date.now(), text: tpText, kelas: kelas ? String(kelas).trim() : "1" };
+    const { subject, tpText, kelas } = body || {};
+    const cleanSubject = String(subject || "").trim();
+    const newTP = {
+      id: "tp_" + Date.now(),
+      text: String(tpText || "").trim(),
+      kelas: kelas ? String(kelas).trim() : "1"
+    };
     
-    // Update local
+    // Update local storage and fallback
     try {
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem("smart_sts_db");
         const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
         if (!dbObj.tujuan_pembelajaran_templates) dbObj.tujuan_pembelajaran_templates = {};
-        if (!dbObj.tujuan_pembelajaran_templates[subject]) dbObj.tujuan_pembelajaran_templates[subject] = [];
-        dbObj.tujuan_pembelajaran_templates[subject].push(newTP);
+
+        // Find existing key matching this subject
+        let targetKey = cleanSubject;
+        for (const k of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
+          if (k === cleanSubject || normalizeSubjectKey(k) === normalizeSubjectKey(cleanSubject)) {
+            targetKey = k;
+            break;
+          }
+        }
+        if (!Array.isArray(dbObj.tujuan_pembelajaran_templates[targetKey])) {
+          dbObj.tujuan_pembelajaran_templates[targetKey] = [];
+        }
+        dbObj.tujuan_pembelajaran_templates[targetKey].push(newTP);
+
+        // Also ensure cleanSubject key is populated
+        if (targetKey !== cleanSubject) {
+          dbObj.tujuan_pembelajaran_templates[cleanSubject] = dbObj.tujuan_pembelajaran_templates[targetKey];
+        }
         localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
       }
     } catch (e) {}
 
+    // Save to Firestore with preservation of existing templates
     if (db) {
       try {
-        const ref = doc(db, "tujuan_pembelajaran_templates", subject);
+        const safeDocId = cleanSubject.replace(/\//g, "_");
+        const ref = doc(db, "tujuan_pembelajaran_templates", safeDocId);
         const docSnap = await withTimeout(getDoc(ref), 2500).catch(() => null);
-        let tpsList = [];
-        if (docSnap && docSnap.exists()) {
-          tpsList = docSnap.data().tps || [];
+        
+        let tpsList: any[] = [];
+        if (docSnap && docSnap.exists() && Array.isArray(docSnap.data().tps)) {
+          tpsList = [...docSnap.data().tps];
+        } else {
+          // Initialize from fallback so default templates aren't lost!
+          const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
+          const existing = getSubjectTps(fallback, cleanSubject);
+          tpsList = Array.isArray(existing) ? [...existing] : [];
         }
-        tpsList.push(newTP);
-        await withTimeout(setDoc(ref, { tps: tpsList }), 2500);
+        
+        // Avoid duplicate ID if any
+        if (!tpsList.some((x: any) => x.id === newTP.id)) {
+          tpsList.push(newTP);
+        }
+        await withTimeout(
+          setDoc(ref, { tps: tpsList, subject: cleanSubject, updatedAt: new Date().toISOString() }, { merge: true }),
+          3000
+        );
       } catch (err) {
         console.warn("Firestore postTP write error:", err);
       }
@@ -1161,9 +1217,8 @@ export const firebaseApi = {
         if (raw) {
           const dbObj = JSON.parse(raw);
           if (dbObj.tujuan_pembelajaran_templates) {
-            const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
             for (const key of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
-              if (!cleanSubject || key === cleanSubject || norm(key) === norm(cleanSubject)) {
+              if (!cleanSubject || key === cleanSubject || normalizeSubjectKey(key) === normalizeSubjectKey(cleanSubject)) {
                 if (Array.isArray(dbObj.tujuan_pembelajaran_templates[key])) {
                   dbObj.tujuan_pembelajaran_templates[key] = dbObj.tujuan_pembelajaran_templates[key].filter(
                     (x: any) => String(x.id).trim() !== cleanTpId
@@ -1171,7 +1226,7 @@ export const firebaseApi = {
                 }
               }
             }
-            // Global search
+            // Global scan
             for (const key of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
               if (Array.isArray(dbObj.tujuan_pembelajaran_templates[key])) {
                 dbObj.tujuan_pembelajaran_templates[key] = dbObj.tujuan_pembelajaran_templates[key].filter(
@@ -1185,15 +1240,16 @@ export const firebaseApi = {
       }
     } catch (e) {}
 
+    // Firestore update
     if (db) {
       try {
         if (cleanSubject) {
-          const ref = doc(db, "tujuan_pembelajaran_templates", cleanSubject);
+          const safeDocId = cleanSubject.replace(/\//g, "_");
+          const ref = doc(db, "tujuan_pembelajaran_templates", safeDocId);
           const docSnap = await withTimeout(getDoc(ref), 2500).catch(() => null);
-          if (docSnap && docSnap.exists()) {
-            const tpsList = docSnap.data().tps || [];
-            const filtered = tpsList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
-            await withTimeout(setDoc(ref, { tps: filtered }), 2500);
+          if (docSnap && docSnap.exists() && Array.isArray(docSnap.data().tps)) {
+            const filtered = docSnap.data().tps.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
+            await withTimeout(setDoc(ref, { tps: filtered, updatedAt: new Date().toISOString() }, { merge: true }), 2500);
           }
         }
         // Also check all documents in collection to ensure thorough deletion
@@ -1203,7 +1259,7 @@ export const firebaseApi = {
             const tpsList = docItem.data().tps || [];
             if (tpsList.some((tp: any) => String(tp.id).trim() === cleanTpId)) {
               const filtered = tpsList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
-              await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", docItem.id), { tps: filtered }), 2500);
+              await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", docItem.id), { tps: filtered, updatedAt: new Date().toISOString() }, { merge: true }), 2500);
             }
           }
         }
@@ -1211,7 +1267,7 @@ export const firebaseApi = {
         console.warn("Firestore deleteTP error:", err);
       }
     }
-    return { message: "TP berhasil dihapus." };
+    return { success: true, id: cleanTpId };
   },
 
   // 7. GET & POST /api/settings

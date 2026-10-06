@@ -1,5 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Teacher, Student, Grade, TPItem, getTeacherAssignedSubjects } from "../types";
+import {
+  Teacher,
+  Student,
+  Grade,
+  TPItem,
+  getTeacherAssignedSubjects,
+  normalizeSubjectKey,
+  matchTpClass,
+  getSubjectTps,
+} from "../types";
 import {
   BookOpen,
   User,
@@ -10,6 +19,8 @@ import {
   RefreshCw,
   Plus,
   Trash2,
+  Edit,
+  X,
   Award,
   ChevronRight,
 } from "lucide-react";
@@ -180,6 +191,9 @@ export default function TeacherPanel({
   // Manage TP template state for teacher
   const [newTpText, setNewTpText] = useState("");
   const [tpSubmitLoading, setTpSubmitLoading] = useState(false);
+  const [editingTpId, setEditingTpId] = useState<string | null>(null);
+  const [editingTpText, setEditingTpText] = useState("");
+  const [editingTpLoading, setEditingTpLoading] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -188,11 +202,9 @@ export default function TeacherPanel({
 
   // Filter TP templates specifically for activeSubject and selectedClass
   const tpTemplates = useMemo(() => {
-    const allSubjectTps = Array.isArray(allTpObj[activeSubject])
-      ? allTpObj[activeSubject]
-      : [];
+    const allSubjectTps = getSubjectTps(allTpObj, activeSubject);
     return allSubjectTps.filter(
-      (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
+      (t: any) => t && t.id && matchTpClass(t.kelas, selectedClass)
     );
   }, [allTpObj, activeSubject, selectedClass]);
 
@@ -227,11 +239,9 @@ export default function TeacherPanel({
       setEkskulList(eksArr);
 
       // Filter TP templates for activeSubject & selectedClass
-      const allSubjectTps = Array.isArray(tpObj[activeSubject])
-        ? tpObj[activeSubject]
-        : [];
+      const allSubjectTps = getSubjectTps(tpObj, activeSubject);
       const classTps = allSubjectTps.filter(
-        (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
+        (t: any) => t && t.id && matchTpClass(t.kelas, selectedClass)
       );
 
       // Auto-select first student in this class if available
@@ -648,13 +658,33 @@ export default function TeacherPanel({
     setSuccess("");
     setTpSubmitLoading(true);
 
+    const textToSave = newTpText.trim();
+    const tempId = "tp_" + Date.now();
+    const newCreatedTp = {
+      id: tempId,
+      text: textToSave,
+      kelas: selectedClass,
+    };
+
+    // Optimistically update allTpObj immediately
+    setAllTpObj((prev) => {
+      const next = { ...prev };
+      const key = activeSubject;
+      const currentList = Array.isArray(next[key]) ? [...next[key]] : [];
+      if (!currentList.some((x: any) => x.id === tempId)) {
+        currentList.push(newCreatedTp);
+      }
+      next[key] = currentList;
+      return next;
+    });
+
     try {
       const response = await fetch("/api/tps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: activeSubject,
-          tpText: newTpText.trim(),
+          tpText: textToSave,
           kelas: selectedClass,
         }),
       });
@@ -663,21 +693,92 @@ export default function TeacherPanel({
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan TP.");
 
       setNewTpText("");
-      setSuccess(`Tujuan Pembelajaran ${activeSubject} Kelas ${selectedClass} berhasil ditambahkan!`);
+      setSuccess(`Tujuan Pembelajaran ${activeSubject} Kelas ${selectedClass} berhasil disimpan!`);
+      onRefreshTrigger();
 
-      // Reload TP templates
+      // Reload TP templates to get canonical state
       const resTp = await fetch("/api/tps");
       const tpData = await resTp.json();
-      setAllTpObj(tpData);
+      if (tpData && typeof tpData === "object") {
+        setAllTpObj(tpData);
+      }
 
       setTpAchievements((prev) => ({
         ...prev,
-        [data.id]: true,
+        [data.id || tempId]: true,
       }));
     } catch (err: any) {
       setError(err.message || "Gagal menambahkan TP.");
+      // Rollback optimistic add if failed
+      setAllTpObj((prev) => {
+        const next = { ...prev };
+        if (Array.isArray(next[activeSubject])) {
+          next[activeSubject] = next[activeSubject].filter((x: any) => x.id !== tempId);
+        }
+        return next;
+      });
     } finally {
       setTpSubmitLoading(false);
+    }
+  };
+
+  // Edit TP template by teacher
+  const handleSaveEditLocalTp = async (tpId: string) => {
+    if (!editingTpText.trim()) return;
+    setError("");
+    setSuccess("");
+    setEditingTpLoading(true);
+
+    const nextText = editingTpText.trim();
+
+    // Optimistic update
+    setAllTpObj((prev) => {
+      const updated: typeof prev = {};
+      for (const key of Object.keys(prev)) {
+        if (Array.isArray(prev[key])) {
+          updated[key] = prev[key].map((item: any) => {
+            if (String(item.id).trim() === String(tpId).trim()) {
+              return { ...item, text: nextText };
+            }
+            return item;
+          });
+        }
+      }
+      return updated;
+    });
+
+    try {
+      const response = await fetch(`/api/tps/${encodeURIComponent(activeSubject)}/${encodeURIComponent(tpId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: nextText, kelas: selectedClass }),
+      });
+
+      if (!response.ok) {
+        // Fallback: delete and re-create if PUT not supported by an older client
+        await fetch(`/api/tps/${encodeURIComponent(activeSubject)}/${encodeURIComponent(tpId)}`, { method: "DELETE" }).catch(() => null);
+        await fetch("/api/tps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: activeSubject, tpText: nextText, kelas: selectedClass }),
+        }).catch(() => null);
+      }
+
+      setSuccess("Tujuan Pembelajaran berhasil diperbarui.");
+      setEditingTpId(null);
+      setEditingTpText("");
+      onRefreshTrigger();
+
+      const resTp = await fetch("/api/tps");
+      const tpData = await resTp.json();
+      if (tpData && typeof tpData === "object") {
+        setAllTpObj(tpData);
+      }
+    } catch (err: any) {
+      setError(err.message || "Gagal memperbarui TP.");
+      await fetchData();
+    } finally {
+      setEditingTpLoading(false);
     }
   };
 
@@ -1690,33 +1791,86 @@ export default function TeacherPanel({
                 ) : (
                   tpTemplates
                     .filter((tp) => tp && tp.id)
-                    .map((tp, idx) => (
-                      <div
-                        key={tp.id}
-                        className="p-2.5 flex items-start justify-between gap-3 bg-white hover:bg-slate-50/50 transition"
-                      >
-                        <div className="flex gap-2">
-                          <span className="text-[10px] font-mono text-slate-350">
-                            {idx + 1}.
-                          </span>
-                          <div>
-                            <p className="text-[11px] text-slate-700 font-medium leading-relaxed">
-                              {tp.text}
-                            </p>
-                            <span className="inline-block mt-1 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
-                              Kelas {tp.kelas || selectedClass}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteLocalTp(tp.id)}
-                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer shrink-0"
-                          title="Hapus TP"
+                    .map((tp, idx) => {
+                      const isEditing = editingTpId === tp.id;
+                      return (
+                        <div
+                          key={tp.id}
+                          className="p-2.5 flex items-start justify-between gap-3 bg-white hover:bg-slate-50/50 transition"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
+                          <div className="flex gap-2 flex-1">
+                            <span className="text-[10px] font-mono text-slate-350 shrink-0 mt-0.5">
+                              {idx + 1}.
+                            </span>
+                            <div className="flex-1">
+                              {isEditing ? (
+                                <div className="space-y-1.5">
+                                  <input
+                                    type="text"
+                                    value={editingTpText}
+                                    onChange={(e) => setEditingTpText(e.target.value)}
+                                    className="w-full p-1.5 bg-slate-50 border border-emerald-500 rounded text-xs focus:outline-none"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      type="button"
+                                      disabled={editingTpLoading || !editingTpText.trim()}
+                                      onClick={() => handleSaveEditLocalTp(tp.id)}
+                                      className="px-2 py-0.5 bg-emerald-800 text-white rounded text-[10px] font-bold hover:bg-emerald-900 transition cursor-pointer flex items-center gap-1"
+                                    >
+                                      <Save className="w-3 h-3" /> Simpan
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingTpId(null);
+                                        setEditingTpText("");
+                                      }}
+                                      className="px-2 py-0.5 bg-slate-200 text-slate-700 rounded text-[10px] font-bold hover:bg-slate-300 transition cursor-pointer flex items-center gap-1"
+                                    >
+                                      <X className="w-3 h-3" /> Batal
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <p className="text-[11px] text-slate-700 font-medium leading-relaxed">
+                                    {tp.text}
+                                  </p>
+                                  <span className="inline-block mt-1 text-[8px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                    Kelas {tp.kelas || selectedClass}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          {!isEditing && (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTpId(tp.id);
+                                  setEditingTpText(tp.text);
+                                }}
+                                className="text-emerald-700 hover:text-emerald-900 p-1 rounded hover:bg-emerald-50 transition cursor-pointer"
+                                title="Edit TP"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLocalTp(tp.id)}
+                                className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition cursor-pointer"
+                                title="Hapus TP"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                 )}
               </div>
             </div>

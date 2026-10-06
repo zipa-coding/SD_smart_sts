@@ -13,6 +13,7 @@ import {
   getDoc, 
   deleteDoc 
 } from "firebase/firestore";
+import { normalizeSubjectKey, matchTpClass, getSubjectTps } from "./src/types";
 
 const app = express();
 const PORT = 3000;
@@ -972,11 +973,16 @@ app.get("/api/tps", async (req, res) => {
 
   // If specific subject requested
   if (subject && typeof subject === "string") {
-    let items = templates[subject] || [];
+    let items: any[] = [];
+    const normTarget = normalizeSubjectKey(subject);
+    for (const [subKey, list] of Object.entries(templates)) {
+      if ((subKey === subject || normalizeSubjectKey(subKey) === normTarget) && Array.isArray(list)) {
+        items = list;
+        break;
+      }
+    }
     if (kelas && typeof kelas === "string") {
-      items = items.filter(
-        (item: any) => String(item.kelas || "").trim() === String(kelas).trim()
-      );
+      items = items.filter((item: any) => matchTpClass(item.kelas, kelas));
     }
     return res.json(items);
   }
@@ -986,9 +992,7 @@ app.get("/api/tps", async (req, res) => {
     const filtered: Record<string, any[]> = {};
     for (const [sub, list] of Object.entries(templates)) {
       if (Array.isArray(list)) {
-        filtered[sub] = list.filter(
-          (item: any) => String(item.kelas || "").trim() === String(kelas).trim()
-        );
+        filtered[sub] = list.filter((item: any) => matchTpClass(item.kelas, kelas));
       }
     }
     return res.json(filtered);
@@ -1009,19 +1013,73 @@ app.post("/api/tps", async (req, res) => {
   if (!db.tujuan_pembelajaran_templates) {
     db.tujuan_pembelajaran_templates = {};
   }
-  if (!db.tujuan_pembelajaran_templates[subject]) {
-    db.tujuan_pembelajaran_templates[subject] = [];
+
+  const cleanSubject = String(subject).trim();
+  const normTarget = normalizeSubjectKey(cleanSubject);
+
+  // Find existing key matching subject
+  let targetKey = cleanSubject;
+  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (k === cleanSubject || normalizeSubjectKey(k) === normTarget) {
+      targetKey = k;
+      break;
+    }
+  }
+
+  if (!Array.isArray(db.tujuan_pembelajaran_templates[targetKey])) {
+    db.tujuan_pembelajaran_templates[targetKey] = [];
   }
 
   const newTP = {
     id: "tp_" + Date.now(),
-    text: tpText,
+    text: String(tpText).trim(),
     kelas: kelas ? String(kelas).trim() : "1",
   };
 
-  db.tujuan_pembelajaran_templates[subject].push(newTP);
+  db.tujuan_pembelajaran_templates[targetKey].push(newTP);
+
+  // If targetKey is different from cleanSubject, mirror it so both keys have it
+  if (targetKey !== cleanSubject) {
+    db.tujuan_pembelajaran_templates[cleanSubject] = db.tujuan_pembelajaran_templates[targetKey];
+  }
+
   await writeDB(db);
   res.status(201).json(newTP);
+});
+
+app.put("/api/tps/:subject/:tpId", async (req, res) => {
+  const { subject, tpId } = req.params;
+  const { text, kelas } = req.body;
+  const decodedSubject = decodeURIComponent(subject || "").trim();
+  const cleanTpId = decodeURIComponent(tpId || "").trim();
+  const db = await readDB();
+
+  if (!db.tujuan_pembelajaran_templates) {
+    return res.status(404).json({ error: "TP tidak ditemukan." });
+  }
+
+  let updated = false;
+  const normTarget = normalizeSubjectKey(decodedSubject);
+
+  for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (!decodedSubject || key === decodedSubject || normalizeSubjectKey(key) === normTarget) {
+      const list = db.tujuan_pembelajaran_templates[key];
+      if (Array.isArray(list)) {
+        const item = list.find((tp: any) => String(tp.id).trim() === cleanTpId);
+        if (item) {
+          if (text !== undefined) item.text = String(text).trim();
+          if (kelas !== undefined) item.kelas = String(kelas).trim();
+          updated = true;
+        }
+      }
+    }
+  }
+
+  if (updated) {
+    await writeDB(db);
+    return res.json({ success: true, message: "TP berhasil diperbarui." });
+  }
+  res.status(404).json({ error: "TP tidak ditemukan." });
 });
 
 const deleteTpHandler = async (req: any, res: any) => {
