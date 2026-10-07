@@ -2357,7 +2357,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   ) return true;
                   return false;
                 });
-                const tpsCount = tpsTemplates[sub]?.length || 0;
+                const tpsCount = getSubjectTps(tpsTemplates, sub).length;
                 const isDeleting = deletingSubject === sub;
 
                 return (

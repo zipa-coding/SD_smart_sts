@@ -455,11 +455,9 @@ export default function TeacherPanel({
     setSuccess("");
     setError("");
 
-    const allSubjectTps = Array.isArray(allTpObj[subId])
-      ? allTpObj[subId]
-      : [];
+    const allSubjectTps = getSubjectTps(allTpObj, subId);
     const classTps = allSubjectTps.filter(
-      (t: any) => String(t.kelas || "").trim() === String(selectedClass).trim()
+      (t: any) => t && t.id && matchTpClass(t.kelas, selectedClass)
     );
 
     if (selectedStudent) {
@@ -1377,13 +1375,20 @@ export default function TeacherPanel({
                   id="tp-grading-list"
                 >
                   {!Array.isArray(tpTemplates) || tpTemplates.length === 0 ? (
-                    <div className="p-3 bg-slate-50 text-slate-600 text-xs rounded border border-slate-200 text-center">
-                      <p className="font-semibold text-slate-700 mb-0.5">
-                        Belum ada template Tujuan Pembelajaran (TP) {activeSubject} Kelas {selectedClass}
+                    <div className="p-3.5 bg-slate-50 text-slate-600 text-xs rounded-xl border border-dashed border-slate-300 text-center space-y-2">
+                      <p className="font-bold text-slate-700">
+                        Belum ada Tujuan Pembelajaran (TP) {activeSubject} Kelas {selectedClass} yang diinputkan.
                       </p>
                       <p className="text-[11px] text-slate-500">
-                        Anda tetap dapat menyimpan nilai serta menuliskan narasi deskripsi raport secara manual pada kolom di bawah.
+                        Sistem sekarang hanya menggunakan TP yang diinputkan langsung oleh Guru/Admin (tanpa sample dummy).
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveViewTab("tps")}
+                        className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Inputkan TP {activeSubject} Sekarang
+                      </button>
                     </div>
                   ) : (
                     tpTemplates

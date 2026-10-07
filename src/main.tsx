@@ -4,7 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import dbData from './data/db.json';
 import { isFirebaseConfigured, firebaseApi, isDummyTeacher } from './lib/firebase';
-import { normalizeSubjectKey, matchTpClass } from './types';
+import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList } from './types';
 import { registerSW } from 'virtual:pwa-register';
 
 // Automatically register and update PWA service worker in production
@@ -119,8 +119,20 @@ function initializeLocalStorage() {
 
         // Initialize TP templates if completely missing
         if (!clientDbCache.tujuan_pembelajaran_templates || typeof clientDbCache.tujuan_pembelajaran_templates !== 'object') {
-          clientDbCache.tujuan_pembelajaran_templates = dbData.tujuan_pembelajaran_templates;
+          clientDbCache.tujuan_pembelajaran_templates = {};
           changed = true;
+        } else {
+          // Purge any legacy sample / dummy TPs from clientDbCache
+          for (const key of Object.keys(clientDbCache.tujuan_pembelajaran_templates)) {
+            const list = clientDbCache.tujuan_pembelajaran_templates[key];
+            if (Array.isArray(list)) {
+              const prevLen = list.length;
+              clientDbCache.tujuan_pembelajaran_templates[key] = cleanTpList(list);
+              if (clientDbCache.tujuan_pembelajaran_templates[key].length !== prevLen) {
+                changed = true;
+              }
+            }
+          }
         }
 
         if (changed) {
@@ -131,7 +143,14 @@ function initializeLocalStorage() {
       }
     } else {
       clientDbCache = dbData;
-      localStorage.setItem('smart_sts_db', JSON.stringify(dbData));
+      if (clientDbCache.tujuan_pembelajaran_templates && typeof clientDbCache.tujuan_pembelajaran_templates === 'object') {
+        for (const key of Object.keys(clientDbCache.tujuan_pembelajaran_templates)) {
+          if (Array.isArray(clientDbCache.tujuan_pembelajaran_templates[key])) {
+            clientDbCache.tujuan_pembelajaran_templates[key] = cleanTpList(clientDbCache.tujuan_pembelajaran_templates[key]);
+          }
+        }
+      }
+      localStorage.setItem('smart_sts_db', JSON.stringify(clientDbCache));
     }
   }
 }
@@ -364,6 +383,44 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           } catch (e) {}
 
           return new Response(JSON.stringify(tp), { status: 201, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        // PUT /api/tps/:subject/:tpId or /api/tp/:subject/:tpId
+        if ((path.startsWith('/api/tps/') || path.startsWith('/api/tp/')) && method === 'PUT') {
+          try {
+            originalFetch(urlStr, init).catch((err) => console.warn("Backend tps put sync:", err));
+          } catch (e) {}
+
+          const raw = path.replace(/^\/api\/(?:tps|tp)\//, '');
+          const parts = raw.split('/');
+          const tpId = decodeURIComponent(parts.pop() || '').trim();
+          const subject = decodeURIComponent(parts.join('/') || '').trim();
+          const res = await firebaseApi.updateTP(subject, tpId, body);
+
+          try {
+            const db = getDB();
+            if (db.tujuan_pembelajaran_templates) {
+              for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+                if (!subject || key === subject || normalizeSubjectKey(key) === normalizeSubjectKey(subject)) {
+                  if (Array.isArray(db.tujuan_pembelajaran_templates[key])) {
+                    db.tujuan_pembelajaran_templates[key] = db.tujuan_pembelajaran_templates[key].map((item: any) => {
+                      if (String(item.id).trim() === tpId) {
+                        return {
+                          ...item,
+                          ...(body?.text !== undefined ? { text: String(body.text).trim() } : {}),
+                          ...(body?.kelas !== undefined ? { kelas: String(body.kelas).trim() } : {}),
+                        };
+                      }
+                      return item;
+                    });
+                  }
+                }
+              }
+            }
+            saveDB(db);
+          } catch (e) {}
+
+          return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
         // DELETE /api/tps/:subject/:tpId or /api/tp/:subject/:tpId
@@ -940,7 +997,13 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // 6. GET /api/tps
     if (path === '/api/tps' && method === 'GET') {
       const db = getDB();
-      const templates = db.tujuan_pembelajaran_templates || {};
+      const rawTemplates = db.tujuan_pembelajaran_templates || {};
+      const templates: Record<string, any[]> = {};
+      for (const [k, v] of Object.entries(rawTemplates)) {
+        if (Array.isArray(v)) {
+          templates[k] = cleanTpList(v);
+        }
+      }
       const urlObj = new URL(urlStr, 'http://localhost');
       const kelas = urlObj.searchParams.get('kelas');
       const subject = urlObj.searchParams.get('subject');
@@ -1000,6 +1063,44 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       }
       saveDB(db);
       return new Response(JSON.stringify(newTP), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // PUT /api/tps/:subject/:tpId or /api/tp/:subject/:tpId
+    if ((path.startsWith('/api/tps/') || path.startsWith('/api/tp/')) && method === 'PUT') {
+      try {
+        originalFetch(urlStr, init).catch((err) => console.warn("Backend fallback tps put sync:", err));
+      } catch (e) {}
+
+      const raw = path.replace(/^\/api\/(?:tps|tp)\//, '');
+      const parts = raw.split('/');
+      const tpId = decodeURIComponent(parts.pop() || '').trim();
+      const subject = decodeURIComponent(parts.join('/') || '').trim();
+      const db = getDB();
+      if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+
+      const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
+      const targetNorm = norm(subject);
+
+      for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
+        if (!subject || key === subject || norm(key) === targetNorm) {
+          const list = db.tujuan_pembelajaran_templates[key];
+          if (Array.isArray(list)) {
+            db.tujuan_pembelajaran_templates[key] = list.map((tp: any) => {
+              if (String(tp.id).trim() === tpId) {
+                return {
+                  ...tp,
+                  ...(body?.text !== undefined ? { text: String(body.text).trim() } : {}),
+                  ...(body?.kelas !== undefined ? { kelas: String(body.kelas).trim() } : {}),
+                };
+              }
+              return tp;
+            });
+          }
+        }
+      }
+
+      saveDB(db);
+      return new Response(JSON.stringify({ message: "TP berhasil diperbarui.", id: tpId }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // DELETE /api/tps/:subject/:tpId or /api/tp/:subject/:tpId

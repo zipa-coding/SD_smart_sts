@@ -13,7 +13,7 @@ import {
   where 
 } from "firebase/firestore";
 import dbData from "../data/db.json";
-import { normalizeSubjectKey, getSubjectTps, matchTpClass } from "../types";
+import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -93,6 +93,17 @@ export function getLocalFallbackData() {
                 updated = true;
               }
             });
+          }
+          if (parsed.tujuan_pembelajaran_templates && typeof parsed.tujuan_pembelajaran_templates === 'object') {
+            for (const key of Object.keys(parsed.tujuan_pembelajaran_templates)) {
+              if (Array.isArray(parsed.tujuan_pembelajaran_templates[key])) {
+                const prevLen = parsed.tujuan_pembelajaran_templates[key].length;
+                parsed.tujuan_pembelajaran_templates[key] = parsed.tujuan_pembelajaran_templates[key].filter((tp: any) => !isSampleTp(tp));
+                if (parsed.tujuan_pembelajaran_templates[key].length !== prevLen) {
+                  updated = true;
+                }
+              }
+            }
           }
           if (updated) {
             localStorage.setItem("smart_sts_db", JSON.stringify(parsed));
@@ -268,10 +279,13 @@ export async function seedFirestoreIfEmpty() {
       }
     }
 
-    // 5. TP Templates
+    // 5. TP Templates (Only sync genuine teacher/admin created TPs)
     if (sourceData.tujuan_pembelajaran_templates) {
       for (const [subject, tps] of Object.entries(sourceData.tujuan_pembelajaran_templates)) {
-        writePromises.push(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps }));
+        const cleanList = cleanTpList(tps as any[]);
+        if (cleanList.length > 0) {
+          writePromises.push(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps: cleanList }));
+        }
       }
     }
 
@@ -357,8 +371,11 @@ export async function syncAllToFirestore(onProgress?: (msg: string) => void): Pr
     onProgress?.("Menyinkronkan Template Tujuan Pembelajaran (TP)...");
     if (sourceData.tujuan_pembelajaran_templates) {
       for (const [subject, tps] of Object.entries(sourceData.tujuan_pembelajaran_templates)) {
-        await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps }), 6000);
-        counts.tps++;
+        const cleanList = cleanTpList(tps as any[]);
+        if (cleanList.length > 0) {
+          await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps: cleanList }), 6000);
+          counts.tps += cleanList.length;
+        }
       }
     }
 
@@ -1100,7 +1117,12 @@ export const firebaseApi = {
   // 6. GET, POST, DELETE /api/tps
   getTPs: async (kelas?: string) => {
     const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
-    let templates: Record<string, any[]> = { ...fallback };
+    let templates: Record<string, any[]> = {};
+    for (const [sub, list] of Object.entries(fallback)) {
+      if (Array.isArray(list)) {
+        templates[sub] = cleanTpList(list);
+      }
+    }
 
     if (db) {
       try {
@@ -1109,13 +1131,11 @@ export const firebaseApi = {
           snap.docs.forEach((docSnap) => {
             const data = docSnap.data();
             const subjectId = docSnap.id;
-            let tpsList = Array.isArray(data.tps) ? data.tps : [];
-            if (tpsList.length > 0) {
-              templates[subjectId] = tpsList;
-              const normKey = normalizeSubjectKey(subjectId);
-              if (normKey && normKey !== subjectId) {
-                templates[normKey] = tpsList;
-              }
+            let tpsList = Array.isArray(data.tps) ? cleanTpList(data.tps) : [];
+            templates[subjectId] = tpsList;
+            const normKey = normalizeSubjectKey(subjectId);
+            if (normKey && normKey !== subjectId) {
+              templates[normKey] = tpsList;
             }
           });
         }
@@ -1163,6 +1183,8 @@ export const firebaseApi = {
         if (!Array.isArray(dbObj.tujuan_pembelajaran_templates[targetKey])) {
           dbObj.tujuan_pembelajaran_templates[targetKey] = [];
         }
+        // Clean out any sample TPs
+        dbObj.tujuan_pembelajaran_templates[targetKey] = cleanTpList(dbObj.tujuan_pembelajaran_templates[targetKey]);
         dbObj.tujuan_pembelajaran_templates[targetKey].push(newTP);
 
         // Also ensure cleanSubject key is populated
@@ -1173,7 +1195,7 @@ export const firebaseApi = {
       }
     } catch (e) {}
 
-    // Save to Firestore with preservation of existing templates
+    // Save to Firestore with preservation of existing teacher templates
     if (db) {
       try {
         const safeDocId = cleanSubject.replace(/\//g, "_");
@@ -1182,12 +1204,11 @@ export const firebaseApi = {
         
         let tpsList: any[] = [];
         if (docSnap && docSnap.exists() && Array.isArray(docSnap.data().tps)) {
-          tpsList = [...docSnap.data().tps];
+          tpsList = cleanTpList(docSnap.data().tps);
         } else {
-          // Initialize from fallback so default templates aren't lost!
           const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
           const existing = getSubjectTps(fallback, cleanSubject);
-          tpsList = Array.isArray(existing) ? [...existing] : [];
+          tpsList = cleanTpList(existing);
         }
         
         // Avoid duplicate ID if any
@@ -1203,6 +1224,103 @@ export const firebaseApi = {
       }
     }
     return newTP;
+  },
+  updateTP: async (subject: string, tpId: string, updates: { text?: string; kelas?: string }) => {
+    const cleanSubject = decodeURIComponent(subject || '').trim();
+    const cleanTpId = decodeURIComponent(tpId || '').trim();
+    const nextText = updates?.text !== undefined ? String(updates.text).trim() : undefined;
+    const nextKelas = updates?.kelas !== undefined ? String(updates.kelas).trim() : undefined;
+
+    // Update local storage
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = localStorage.getItem("smart_sts_db");
+        if (raw) {
+          const dbObj = JSON.parse(raw);
+          if (dbObj.tujuan_pembelajaran_templates) {
+            for (const key of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
+              if (!cleanSubject || key === cleanSubject || normalizeSubjectKey(key) === normalizeSubjectKey(cleanSubject)) {
+                if (Array.isArray(dbObj.tujuan_pembelajaran_templates[key])) {
+                  dbObj.tujuan_pembelajaran_templates[key] = dbObj.tujuan_pembelajaran_templates[key].map((item: any) => {
+                    if (String(item.id).trim() === cleanTpId) {
+                      return {
+                        ...item,
+                        ...(nextText !== undefined ? { text: nextText } : {}),
+                        ...(nextKelas !== undefined ? { kelas: nextKelas } : {}),
+                      };
+                    }
+                    return item;
+                  });
+                }
+              }
+            }
+            // Global search
+            for (const key of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
+              if (Array.isArray(dbObj.tujuan_pembelajaran_templates[key])) {
+                dbObj.tujuan_pembelajaran_templates[key] = dbObj.tujuan_pembelajaran_templates[key].map((item: any) => {
+                  if (String(item.id).trim() === cleanTpId) {
+                    return {
+                      ...item,
+                      ...(nextText !== undefined ? { text: nextText } : {}),
+                      ...(nextKelas !== undefined ? { kelas: nextKelas } : {}),
+                    };
+                  }
+                  return item;
+                });
+              }
+            }
+            localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Firestore update
+    if (db) {
+      try {
+        if (cleanSubject) {
+          const safeDocId = cleanSubject.replace(/\//g, "_");
+          const ref = doc(db, "tujuan_pembelajaran_templates", safeDocId);
+          const docSnap = await withTimeout(getDoc(ref), 2500).catch(() => null);
+          if (docSnap && docSnap.exists() && Array.isArray(docSnap.data().tps)) {
+            const updatedList = docSnap.data().tps.map((tp: any) => {
+              if (String(tp.id).trim() === cleanTpId) {
+                return {
+                  ...tp,
+                  ...(nextText !== undefined ? { text: nextText } : {}),
+                  ...(nextKelas !== undefined ? { kelas: nextKelas } : {}),
+                };
+              }
+              return tp;
+            });
+            await withTimeout(setDoc(ref, { tps: updatedList, updatedAt: new Date().toISOString() }, { merge: true }), 2500);
+          }
+        }
+        // Also check all documents in collection
+        const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 2500).catch(() => null);
+        if (snap && !snap.empty) {
+          for (const docItem of snap.docs) {
+            const tpsList = docItem.data().tps || [];
+            if (tpsList.some((tp: any) => String(tp.id).trim() === cleanTpId)) {
+              const updatedList = tpsList.map((tp: any) => {
+                if (String(tp.id).trim() === cleanTpId) {
+                  return {
+                    ...tp,
+                    ...(nextText !== undefined ? { text: nextText } : {}),
+                    ...(nextKelas !== undefined ? { kelas: nextKelas } : {}),
+                  };
+                }
+                return tp;
+              });
+              await withTimeout(setDoc(doc(db, "tujuan_pembelajaran_templates", docItem.id), { tps: updatedList, updatedAt: new Date().toISOString() }, { merge: true }), 2500);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Firestore updateTP error:", err);
+      }
+    }
+    return { success: true, id: cleanTpId, text: nextText, kelas: nextKelas };
   },
   deleteTP: async (subject: string, tpId: string) => {
     const cleanSubject = decodeURIComponent(subject || '').trim();

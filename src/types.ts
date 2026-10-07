@@ -290,38 +290,74 @@ export function matchTpClass(tKelas?: any, targetKelas?: string): boolean {
   return tk === target;
 }
 
+const KNOWN_SAMPLE_TP_IDS = new Set([
+  "tp_1791000095834",
+  "tp_1791000110170",
+  "tp_1791000123377",
+  "tp_1791000135065",
+]);
+
 /**
- * Safely looks up TP templates for a subject across all variations (casing, quotes, aliases).
+ * Detects if a TP is a legacy dummy/sample template (which should be excluded).
+ * Only real user/teacher inputted TPs are allowed.
+ */
+export function isSampleTp(tp: any): boolean {
+  if (!tp) return true;
+  const text = String(tp.text || "").trim();
+  if (!text) return true;
+  const id = String(tp.id || "").trim();
+  if (!id) return true;
+  if (KNOWN_SAMPLE_TP_IDS.has(id)) return true;
+  if (id === "1" || id === "2" || id === "3" || id === "4" || id === "dummy" || id === "sample") return true;
+  return false;
+}
+
+export function cleanTpList(list: any[]): any[] {
+  if (!Array.isArray(list)) return [];
+  return list.filter((tp) => !isSampleTp(tp));
+}
+
+/**
+ * Safely looks up TP templates for a subject across all variations (casing, quotes, aliases),
+ * strictly excluding any dummy / sample templates.
  */
 export function getSubjectTps(allTps: Record<string, any[]> | undefined | null, subject: string): any[] {
   if (!allTps || typeof allTps !== "object") return [];
+  let found: any[] = [];
   // 1. Direct key match
   if (Array.isArray(allTps[subject]) && allTps[subject].length > 0) {
-    return allTps[subject];
-  }
-  const normTarget = normalizeSubjectKey(subject);
-  // 2. Normalized key match
-  if (Array.isArray(allTps[normTarget]) && allTps[normTarget].length > 0) {
-    return allTps[normTarget];
-  }
-  // 3. Search through all keys in allTps using normalizeSubjectKey
-  for (const [key, list] of Object.entries(allTps)) {
-    if (Array.isArray(list) && list.length > 0) {
-      if (normalizeSubjectKey(key) === normTarget) {
-        return list;
+    found = allTps[subject];
+  } else {
+    const normTarget = normalizeSubjectKey(subject);
+    // 2. Normalized key match
+    if (Array.isArray(allTps[normTarget]) && allTps[normTarget].length > 0) {
+      found = allTps[normTarget];
+    } else {
+      // 3. Search through all keys in allTps using normalizeSubjectKey
+      for (const [key, list] of Object.entries(allTps)) {
+        if (Array.isArray(list) && list.length > 0) {
+          if (normalizeSubjectKey(key) === normTarget) {
+            found = list;
+            break;
+          }
+        }
+      }
+      if (found.length === 0) {
+        // 4. Case/quote-insensitive search
+        const cleanTarget = subject.replace(/[’'`]/g, "'").toLowerCase().trim();
+        for (const [key, list] of Object.entries(allTps)) {
+          if (Array.isArray(list) && list.length > 0) {
+            if (key.replace(/[’'`]/g, "'").toLowerCase().trim() === cleanTarget) {
+              found = list;
+              break;
+            }
+          }
+        }
       }
     }
   }
-  // 4. Case/quote-insensitive search
-  const cleanTarget = subject.replace(/[’'`]/g, "'").toLowerCase().trim();
-  for (const [key, list] of Object.entries(allTps)) {
-    if (Array.isArray(list) && list.length > 0) {
-      if (key.replace(/[’'`]/g, "'").toLowerCase().trim() === cleanTarget) {
-        return list;
-      }
-    }
-  }
-  return [];
+  // Strictly filter out any sample / dummy TPs!
+  return cleanTpList(found);
 }
 
 

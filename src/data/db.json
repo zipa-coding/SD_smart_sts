@@ -2,50 +2,51 @@
   "teachers": [
     {
       "id": "t1",
-      "isWaliKelas": false,
-      "username": "admin",
-      "subject": "Admin",
+      "name": "Admin SD Islam Smart",
       "password": "123",
       "kelas": "",
-      "name": "Admin SD Islam Smart"
+      "subject": "Admin",
+      "username": "admin",
+      "isWaliKelas": false
     },
     {
       "id": "t_1790569810843",
-      "subject": "PJOK",
-      "ekskulName": "Futsal",
-      "username": "Ahmad Jumanda, S.Pd.",
-      "isEkskulTeacher": true,
-      "isWaliKelas": false,
-      "kelas": "",
-      "password": "Pangkalpinang_26",
       "name": "Ahmad Jumanda, S.Pd.",
       "aliases": [
         "zenitracorza",
         "Ahmad Jumanda, S.Pd.",
         "ahmad jumanda, s.pd."
-      ]
+      ],
+      "password": "Pangkalpinang_26",
+      "isEkskulTeacher": true,
+      "isWaliKelas": false,
+      "ekskulName": "Futsal",
+      "subject": "PJOK",
+      "kelas": "",
+      "username": "Ahmad Jumanda, S.Pd."
     },
     {
       "id": "t_1790571092178",
-      "subject": "Keislaman, Siroh",
-      "kelas": "",
+      "isEkskulTeacher": false,
+      "password": "Pangkalpinang_26",
+      "name": "Sumaini, S.Ag.",
       "subjects": [
         "Keislaman",
         "Siroh"
       ],
       "username": "sumaini, s.ag.",
-      "ekskulNames": [],
-      "name": "Sumaini, S.Ag.",
-      "isEkskulTeacher": false,
       "ekskulName": "",
+      "kelas": "",
       "isWaliKelas": false,
-      "password": "Pangkalpinang_26"
+      "subject": "Keislaman, Siroh"
     },
     {
       "id": "t_1790571171866",
-      "isWaliKelas": true,
-      "username": "fefi arfina, s.e.",
       "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill",
+      "kelas": "1",
+      "ekskulName": "",
+      "isEkskulTeacher": false,
+      "username": "fefi arfina, s.e.",
       "subjects": [
         "Bahasa Indonesia",
         "PPKN",
@@ -53,267 +54,244 @@
         "Seni Budaya",
         "Life skill"
       ],
-      "ekskulNames": [],
-      "isEkskulTeacher": false,
-      "ekskulName": "",
-      "kelas": "1",
-      "password": "Pangkalpinang_26",
-      "name": "Fefi Arfina, S.E."
+      "isWaliKelas": true,
+      "name": "Fefi Arfina, S.E.",
+      "password": "Pangkalpinang_26"
     },
     {
       "id": "t_1790911745090",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill, IPAS, TIK",
-      "username": "Sulastri, S.Pd., Gr.",
       "subjects": [
         "Bahasa Indonesia",
         "PPKN",
         "Matematika",
+        "IPAS",
         "Seni Budaya",
         "Life skill",
-        "IPAS",
         "TIK"
       ],
-      "kelas": "5",
-      "isWaliKelas": true,
-      "isEkskulTeacher": false,
-      "password": "Pangkalpinang_26",
+      "username": "sulastri",
       "name": "Sulastri, S.Pd., Gr.",
-      "ekskulName": "",
-      "aliases": [
-        "Sulastri, S.Pd., Gr.",
-        "sulastri",
-        "sulastri, s.pd., gr.",
-        "sulastri, s.pd, gr.",
-        "sulastri, spd, gr",
-        "sulastri_bindokls5",
-        "sulastri_pkn",
-        "sulastri_mtk",
-        "sulastri_senbud",
-        "sulastri_lifskil",
-        "sulastri_ipas",
-        "sulastri_tik"
-      ]
+      "subject": "Bahasa Indonesia, PPKN, Matematika, IPAS, Seni Budaya, Life skill, TIK",
+      "password": "Pangkalpinang_26",
+      "isWaliKelas": true,
+      "kelas": "5",
+      "isEkskulTeacher": false,
+      "ekskulName": ""
     },
     {
       "id": "t_1790914584783",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, IPAS, TIK, Pembina Ekskul",
       "isWaliKelas": true,
+      "ekskulName": "",
+      "username": "Rozalia, S.Pd.",
+      "aliases": [
+        "rozalia_bindokls4",
+        "Rozalia, S.Pd.",
+        "rozalia, s.pd."
+      ],
       "kelas": "4",
-      "name": "Rozalia, S.Pd.",
       "password": "Pangkalpinang_26",
-      "ekskulName": "Pramuka",
-      "isEkskulTeacher": true,
-      "ekskulNames": [
-        "Pramuka"
-      ],
-      "subjects": [
-        "Bahasa Indonesia",
-        "PPKN",
-        "Matematika",
-        "Seni Budaya",
-        "IPAS",
-        "TIK",
-        "Pembina Ekskul"
-      ],
-      "username": "rozalia, s.pd."
+      "isEkskulTeacher": false,
+      "subject": "Bahasa Indonesia",
+      "name": "Rozalia, S.Pd."
     },
     {
       "id": "t_1790914643922",
-      "subjects": [
-        "Bahasa Indonesia",
-        "PPKN",
-        "Matematika",
-        "Seni Budaya",
-        "Life skill",
-        "Pembina Ekskul"
-      ],
+      "kelas": "2",
+      "name": "Kiki Anggun Triana, S.Pd.",
       "username": "kiki anggun triana, s.pd.",
       "isWaliKelas": true,
-      "kelas": "2",
-      "ekskulName": "Pramuka Siaga & Penggalang, Klub Sains & Matematika Cilik",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill, Pembina Ekskul",
+      "subjects": [
+        "Bahasa Indonesia",
+        "PJOK",
+        "PPKN",
+        "Bahasa Inggris",
+        "Matematika"
+      ],
+      "isEkskulTeacher": false,
       "password": "Pangkalpinang_26",
-      "isEkskulTeacher": true,
-      "name": "Kiki Anggun Triana, S.Pd.",
-      "ekskulNames": [
-        "Pramuka Siaga & Penggalang",
-        "Klub Sains & Matematika Cilik"
-      ]
+      "subject": "Bahasa Indonesia, PJOK, PPKN, Bahasa Inggris, Matematika",
+      "ekskulName": ""
     },
     {
       "id": "t_1790914744767",
-      "name": "Siti Nur hayati, S.Pd., Gr.",
-      "isWaliKelas": true,
       "kelas": "3",
+      "ekskulName": "",
+      "isWaliKelas": true,
+      "name": "Siti Nur hayati, S.Pd., Gr.",
       "username": "siti nur hayati, s.pd., gr.",
-      "ekskulName": "Pramuka Siaga & Penggalang, Klub Sains & Matematika Cilik",
-      "isEkskulTeacher": true,
-      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill, IPAS, Pembina Ekskul",
       "subjects": [
         "Bahasa Indonesia",
+        "PAI",
         "PPKN",
         "Matematika",
-        "Seni Budaya",
-        "Life skill",
-        "IPAS",
-        "Pembina Ekskul"
+        "Bahasa Inggris",
+        "PJOK"
       ],
-      "ekskulNames": [
-        "Pramuka Siaga & Penggalang",
-        "Klub Sains & Matematika Cilik"
-      ],
+      "isEkskulTeacher": false,
+      "subject": "Bahasa Indonesia, PAI, PPKN, Matematika, Bahasa Inggris, PJOK",
       "password": "Pangkalpinang_26"
     },
     {
       "id": "t_1790914798965",
-      "username": "cindi pricilia aziizir, s.pd.",
-      "subjects": [
-        "Bahasa Indonesia",
-        "PPKN",
-        "Matematika",
-        "IPAS",
-        "Seni Budaya",
-        "TIK",
-        "Pembina Ekskul",
-        "Bahasa Inggris"
-      ],
-      "isEkskulTeacher": true,
-      "ekskulName": "Pramuka",
       "name": "Cindi Pricilia Aziizir, S.Pd.",
+      "subject": "Bahasa Indonesia",
       "kelas": "6",
+      "isEkskulTeacher": false,
+      "aliases": [
+        "cindi_b.indokls6",
+        "Cindi Pricilia Aziizir, S.Pd.",
+        "cindi pricilia aziizir, s.pd."
+      ],
+      "ekskulName": "",
       "isWaliKelas": true,
-      "password": "Pangkalpinang_26",
-      "subject": "Bahasa Indonesia, PPKN, Matematika, IPAS, Seni Budaya, TIK, Pembina Ekskul, Bahasa Inggris",
-      "ekskulNames": [
-        "Pramuka"
-      ]
+      "username": "Cindi Pricilia Aziizir, S.Pd.",
+      "password": "Pangkalpinang_26"
     },
     {
       "id": "t_1791030920697",
-      "subjects": [
-        "PAI"
-      ],
-      "isEkskulTeacher": false,
-      "ekskulName": "",
-      "username": "jawariah_pai",
-      "isWaliKelas": false,
-      "name": "Jawariah, S.Pd.",
-      "password": "Pangkalpinang_26",
       "kelas": "",
-      "subject": "PAI",
-      "ekskulNames": []
+      "subject": "PAI, PPKN, Bahasa Inggris, Matematika",
+      "isWaliKelas": false,
+      "isEkskulTeacher": false,
+      "name": "Jawariah, S.Pd.",
+      "username": "jawariah_pai",
+      "ekskulName": "",
+      "subjects": [
+        "PAI",
+        "PPKN",
+        "Bahasa Inggris",
+        "Matematika"
+      ],
+      "password": "Pangkalpinang_26"
     },
     {
       "id": "t_1791030984580",
       "password": "Pangkalpinang_26",
       "isWaliKelas": false,
-      "subject": "Bahasa Arab",
-      "name": "Zahrawayna Anelaz Uthorida",
       "subjects": [
         "Bahasa Arab"
       ],
-      "kelas": "",
+      "name": "Zahrawayna Anelaz Uthorida",
       "username": "zahra_b.arab",
+      "ekskulName": "",
+      "kelas": "",
       "isEkskulTeacher": false,
-      "ekskulName": ""
+      "subject": "Bahasa Arab"
     },
     {
       "id": "t_1791031054255",
-      "name": "Sindi Kalaudia",
-      "password": "Pangkalpinang_26",
-      "kelas": "",
-      "isEkskulTeacher": false,
-      "ekskulName": "",
-      "subject": "Bahasa Arab",
       "subjects": [
         "Bahasa Arab"
       ],
       "username": "sindi_b.arab",
-      "isWaliKelas": false
+      "isEkskulTeacher": false,
+      "password": "Pangkalpinang_26",
+      "isWaliKelas": false,
+      "ekskulName": "",
+      "subject": "Bahasa Arab",
+      "name": "Sindi Kalaudia",
+      "kelas": ""
     },
     {
       "id": "t_1791031092974",
-      "isWaliKelas": false,
+      "name": "Haminudin, S.Sos.",
+      "kelas": "",
+      "ekskulName": "",
       "password": "Pangkalpinang_26",
-      "ekskulName": "Futsal",
-      "isEkskulTeacher": true,
-      "subject": "Bahasa Arab, PJOK, Pembina Ekskul",
+      "isWaliKelas": false,
+      "subject": "Bahasa Arab, PJOK",
       "subjects": [
         "Bahasa Arab",
-        "PJOK",
-        "Pembina Ekskul"
+        "PJOK"
       ],
-      "kelas": "",
-      "name": "Haminudin, S.Sos.",
-      "username": "haminudin_b.arab"
+      "username": "haminudin_b.arab",
+      "isEkskulTeacher": false
     },
     {
       "id": "t_1791031311091",
-      "password": "Pangkalpinang_26",
-      "isEkskulTeacher": false,
       "ekskulName": "",
       "isWaliKelas": false,
       "subject": "PAI",
+      "password": "Pangkalpinang_26",
+      "username": "noriyah_pai",
+      "kelas": "",
       "subjects": [
         "PAI"
       ],
-      "username": "noriyah_pai",
-      "kelas": "",
-      "name": "Noriyah, S.Pd.I."
+      "name": "Noriyah, S.Pd.I.",
+      "isEkskulTeacher": false
     },
     {
       "id": "t_1791031367621",
-      "kelas": "",
-      "subject": "Bahasa Inggris",
-      "password": "Pangkalpinang_26",
-      "isEkskulTeacher": false,
-      "name": "Nurun Nissa",
-      "isWaliKelas": false,
+      "ekskulName": "",
       "subjects": [
         "Bahasa Inggris"
       ],
+      "name": "Nurun Nissa",
       "username": "nissa_b.ingris",
-      "ekskulName": ""
+      "password": "Pangkalpinang_26",
+      "isEkskulTeacher": false,
+      "isWaliKelas": false,
+      "subject": "Bahasa Inggris",
+      "kelas": ""
+    },
+    {
+      "id": "t_1791174063864",
+      "isEkskulTeacher": false,
+      "isWaliKelas": true,
+      "name": "Fefi Arfina, S.E.",
+      "ekskulName": "",
+      "password": "123",
+      "kelas": "1",
+      "subjects": [
+        "Bahasa Indonesia",
+        "PPKN",
+        "Matematika",
+        "Seni Budaya",
+        "Life skill"
+      ],
+      "username": "fefi_arfina",
+      "subject": "Bahasa Indonesia, PPKN, Matematika, Seni Budaya, Life skill"
     },
     {
       "id": "t_1791174418787",
+      "kelas": "",
+      "subject": "Siroh",
+      "ekskulName": "",
+      "password": "Pangkalpinang_26",
+      "isEkskulTeacher": false,
+      "isWaliKelas": false,
       "subjects": [
         "Siroh"
       ],
-      "username": "inun_siroh",
-      "kelas": "",
-      "isEkskulTeacher": false,
-      "subject": "Siroh",
-      "password": "Pangkalpinang_26",
-      "ekskulName": "",
-      "isWaliKelas": false,
-      "name": "Nurmainah"
+      "name": "Nurmainah",
+      "username": "inun_siroh"
     }
   ],
   "students": [
     {
       "id": "s_1790568732862_1",
       "name": "Ahmad Al Ghifari",
-      "kelas": "6",
-      "nisn": "3144707189"
+      "nisn": "3144707189",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732865_2",
-      "nisn": "0142239739",
+      "name": "AKHMAD RAFLI ALGHIFARI",
       "kelas": "6",
-      "name": "AKHMAD RAFLI ALGHIFARI"
+      "nisn": "0142239739"
     },
     {
       "id": "s_1790568732866_3",
       "kelas": "6",
-      "name": "Al Haadiy Fatha Nur Rayjib",
-      "nisn": "3158568812"
+      "nisn": "3158568812",
+      "name": "Al Haadiy Fatha Nur Rayjib"
     },
     {
       "id": "s_1790568732869_4",
       "nisn": "0157125197",
-      "name": "AL RIZKY ABIYYU",
-      "kelas": "6"
+      "kelas": "6",
+      "name": "AL RIZKY ABIYYU"
     },
     {
       "id": "s_1790568732871_5",
@@ -323,26 +301,26 @@
     },
     {
       "id": "s_1790568732873_6",
-      "kelas": "6",
       "nisn": "0156956461",
+      "kelas": "6",
       "name": "Audy Al Qudsha"
     },
     {
       "id": "s_1790568732876_7",
-      "kelas": "6",
       "nisn": "0151599931",
+      "kelas": "6",
       "name": "CALISTA RAYA FAIQA"
     },
     {
       "id": "s_1790568732877_8",
-      "nisn": "3159489521",
+      "kelas": "6",
       "name": "Davina Gladis Viallen",
-      "kelas": "6"
+      "nisn": "3159489521"
     },
     {
       "id": "s_1790568732878_10",
-      "kelas": "6",
       "nisn": "0147972607",
+      "kelas": "6",
       "name": "FARIZ ATTAMIMI"
     },
     {
@@ -353,21 +331,21 @@
     },
     {
       "id": "s_1790568732879_11",
-      "name": "KALISHA NAILA ANDINI",
       "kelas": "6",
-      "nisn": "3155674943"
+      "nisn": "3155674943",
+      "name": "KALISHA NAILA ANDINI"
     },
     {
       "id": "s_1790568732880_12",
-      "kelas": "6",
       "name": "KENZIE AL RASYID",
-      "nisn": "0144324938"
+      "nisn": "0144324938",
+      "kelas": "6"
     },
     {
       "id": "s_1790568732881_13",
+      "nisn": "3143198571",
       "name": "MUHAMAD FATIH ALLANDI",
-      "kelas": "6",
-      "nisn": "3143198571"
+      "kelas": "6"
     },
     {
       "id": "s_1790568732883_14",
@@ -377,45 +355,45 @@
     },
     {
       "id": "s_1790568732885_15",
-      "nisn": "3151706407",
       "name": "Muhammad Azzam Aditya Pratama",
-      "kelas": "6"
+      "kelas": "6",
+      "nisn": "3151706407"
     },
     {
       "id": "s_1790568732886_16",
+      "name": "Muhammad Qaiser Jakeem El Zamby",
       "kelas": "6",
-      "nisn": "3149465565",
-      "name": "Muhammad Qaiser Jakeem El Zamby"
+      "nisn": "3149465565"
     },
     {
       "id": "s_1790568732887_17",
       "kelas": "6",
-      "name": "Muhammad Zidan Kasyafi",
-      "nisn": "0136986858"
+      "nisn": "0136986858",
+      "name": "Muhammad Zidan Kasyafi"
     },
     {
       "id": "s_1790568732889_18",
       "nisn": "0148305672",
-      "name": "Nyayu Adzkia Syakira",
-      "kelas": "6"
+      "kelas": "6",
+      "name": "Nyayu Adzkia Syakira"
     },
     {
       "id": "s_1790568732890_19",
-      "kelas": "6",
       "name": "SYARIFAH NADHIF RAISANI",
+      "kelas": "6",
       "nisn": "3159211614"
     },
     {
       "id": "s_1790568732891_20",
+      "nisn": "3145740021",
       "kelas": "6",
-      "name": "Syifa Abidah Mecca",
-      "nisn": "3145740021"
+      "name": "Syifa Abidah Mecca"
     },
     {
       "id": "s_1790568732892_21",
-      "kelas": "6",
+      "nisn": "0147161088",
       "name": "Zaqiya Al-Zahsy",
-      "nisn": "0147161088"
+      "kelas": "6"
     },
     {
       "id": "s_1790568873974_1",
@@ -425,51 +403,51 @@
     },
     {
       "id": "s_1790568873975_2",
+      "nisn": "3163017500",
       "name": "ADIBA  KHOIRIAH  MAULIDA",
-      "kelas": "5",
-      "nisn": "3163017500"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873976_3",
-      "nisn": "0155448497",
+      "kelas": "5",
       "name": "AFIF AFFAN AL GHIFARI",
-      "kelas": "5"
+      "nisn": "0155448497"
     },
     {
       "id": "s_1790568873977_4",
+      "kelas": "5",
       "nisn": "3161815542",
-      "name": "ALWANOJA KHODIJAH LISTUHAYU FADANTYA",
-      "kelas": "5"
+      "name": "ALWANOJA KHODIJAH LISTUHAYU FADANTYA"
     },
     {
       "id": "s_1790568873978_5",
-      "kelas": "5",
       "name": "Anindita Keisha Azzahra",
-      "nisn": "0153346868"
+      "nisn": "0153346868",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873978_6",
       "kelas": "5",
-      "nisn": "3166292912",
-      "name": "ASHEEQA YUMASAKHI"
+      "name": "ASHEEQA YUMASAKHI",
+      "nisn": "3166292912"
     },
     {
       "id": "s_1790568873979_7",
+      "nisn": "0168236871",
       "kelas": "5",
-      "name": "ASYIFA ZULIMAH PUTERI OSMOZA",
-      "nisn": "0168236871"
+      "name": "ASYIFA ZULIMAH PUTERI OSMOZA"
     },
     {
       "id": "s_1790568873980_8",
-      "kelas": "5",
       "nisn": "3169847227",
+      "kelas": "5",
       "name": "AZQA ALQIZA WIRADHAN"
     },
     {
       "id": "s_1790568873981_9",
-      "kelas": "5",
+      "name": "BERYL HAMIZAN FARABI",
       "nisn": "0162792460",
-      "name": "BERYL HAMIZAN FARABI"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873982_10",
@@ -479,15 +457,15 @@
     },
     {
       "id": "s_1790568873985_11",
-      "kelas": "5",
+      "name": "EARLYTA ARSYFA SALSABILA",
       "nisn": "3154119618",
-      "name": "EARLYTA ARSYFA SALSABILA"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873987_12",
       "kelas": "5",
-      "name": "HUSNA ALFATHUNISSA",
-      "nisn": "3164652783"
+      "nisn": "3164652783",
+      "name": "HUSNA ALFATHUNISSA"
     },
     {
       "id": "s_1790568873988_13",
@@ -497,9 +475,9 @@
     },
     {
       "id": "s_1790568873989_14",
+      "nisn": "3165591363",
       "name": "Malik Al Khafi",
-      "kelas": "5",
-      "nisn": "3165591363"
+      "kelas": "5"
     },
     {
       "id": "s_1790568873991_15",
@@ -509,9 +487,9 @@
     },
     {
       "id": "s_1790568873992_16",
-      "nisn": "3157054166",
       "name": "MUHAMMAD FAIZ ABQORY",
-      "kelas": "5"
+      "kelas": "5",
+      "nisn": "3157054166"
     },
     {
       "id": "s_1790568873992_17",
@@ -522,20 +500,20 @@
     {
       "id": "s_1790568873993_18",
       "nisn": "3167455950",
-      "name": "Nabhan Abul Hasan",
-      "kelas": "5"
+      "kelas": "5",
+      "name": "Nabhan Abul Hasan"
     },
     {
       "id": "s_1790568873994_19",
-      "kelas": "5",
       "name": "Naura Aisyah Putri Hartono",
-      "nisn": "3161086196"
+      "nisn": "3161086196",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873994_20",
+      "name": "NINDYA PUTRI SEKARWANGI",
       "kelas": "5",
-      "nisn": "0159923344",
-      "name": "NINDYA PUTRI SEKARWANGI"
+      "nisn": "0159923344"
     },
     {
       "id": "s_1790568873995_21",
@@ -546,56 +524,56 @@
     {
       "id": "s_1790568873996_22",
       "name": "RAFARDHAN GIBRAN ATHALLA",
-      "kelas": "5",
-      "nisn": "0169269416"
+      "nisn": "0169269416",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873996_23",
-      "kelas": "5",
       "name": "Ratifa Inara",
-      "nisn": "3159620251"
+      "nisn": "3159620251",
+      "kelas": "5"
     },
     {
       "id": "s_1790568873997_24",
-      "nisn": "3157026957",
       "name": "Salman Alfarezi",
-      "kelas": "5"
+      "kelas": "5",
+      "nisn": "3157026957"
     },
     {
       "id": "s_1790568873998_25",
+      "kelas": "5",
       "nisn": "0163777392",
-      "name": "Syafia Kinanti Qurratal Ain",
-      "kelas": "5"
+      "name": "Syafia Kinanti Qurratal Ain"
     },
     {
       "id": "s_1790568873999_26",
-      "nisn": "3165943084",
       "name": "ZAHWA QONITA",
-      "kelas": "5"
+      "kelas": "5",
+      "nisn": "3165943084"
     },
     {
       "id": "s_1790568874000_27",
-      "kelas": "5",
       "name": "Zein Malik Habibullah",
-      "nisn": "3160798017"
+      "nisn": "3160798017",
+      "kelas": "5"
     },
     {
       "id": "s_1790568874001_28",
-      "name": "Zian Al Farisy",
       "kelas": "5",
+      "name": "Zian Al Farisy",
       "nisn": "3150543180"
     },
     {
       "id": "s_1790568998019_1",
-      "name": "ABID RAFIZKY ALFARIQ",
       "nisn": "3177624581",
-      "kelas": "4"
+      "kelas": "4",
+      "name": "ABID RAFIZKY ALFARIQ"
     },
     {
       "id": "s_1790568998021_2",
-      "kelas": "4",
       "name": "ABYAN RAKA ARKANANTA",
-      "nisn": "0166360691"
+      "nisn": "0166360691",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998022_3",
@@ -605,33 +583,33 @@
     },
     {
       "id": "s_1790568998024_4",
-      "nisn": "3166349654",
+      "kelas": "4",
       "name": "ALESHA ZAHRA CALLISTA",
-      "kelas": "4"
+      "nisn": "3166349654"
     },
     {
       "id": "s_1790568998025_5",
-      "kelas": "4",
       "nisn": "3167018276",
-      "name": "ALKHALIFI ZIKRI FARESY"
+      "name": "ALKHALIFI ZIKRI FARESY",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998026_6",
       "name": "ALZIO RAFFASYA PRADIPTA",
-      "kelas": "4",
-      "nisn": "3174302822"
+      "nisn": "3174302822",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998026_7",
-      "kelas": "4",
       "nisn": "3179285088",
+      "kelas": "4",
       "name": "AMEERA MYEASHA AFSEEN"
     },
     {
       "id": "s_1790568998028_8",
+      "name": "ARSYIL KHAYRU KURNIAWAN",
       "kelas": "4",
-      "nisn": "3165552577",
-      "name": "ARSYIL KHAYRU KURNIAWAN"
+      "nisn": "3165552577"
     },
     {
       "id": "s_1790568998028_9",
@@ -641,57 +619,57 @@
     },
     {
       "id": "s_1790568998029_10",
-      "kelas": "4",
       "name": "Gazela Meilbina Karzethy",
+      "kelas": "4",
       "nisn": "3168420131"
     },
     {
       "id": "s_1790568998030_11",
-      "nisn": "3177117715",
       "name": "IQMI",
-      "kelas": "4"
+      "kelas": "4",
+      "nisn": "3177117715"
     },
     {
       "id": "s_1790568998031_12",
-      "name": "Izora Farzana Alesha",
+      "kelas": "4",
       "nisn": "3175590696",
-      "kelas": "4"
+      "name": "Izora Farzana Alesha"
     },
     {
       "id": "s_1790568998033_13",
-      "nisn": "3176620084",
       "name": "KANZIA NAZAHA",
+      "nisn": "3176620084",
       "kelas": "4"
     },
     {
       "id": "s_1790568998036_14",
-      "nisn": "3172136125",
       "name": "KARIM ABDUL JALIL",
-      "kelas": "4"
+      "kelas": "4",
+      "nisn": "3172136125"
     },
     {
       "id": "s_1790568998038_15",
-      "nisn": "3175013111",
       "name": "MAHEERA SABELA",
-      "kelas": "4"
+      "kelas": "4",
+      "nisn": "3175013111"
     },
     {
       "id": "s_1790568998040_16",
-      "kelas": "4",
       "name": "Malika Rachel Dinara",
+      "kelas": "4",
       "nisn": "3175132911"
     },
     {
       "id": "s_1790568998041_17",
-      "nisn": "3178497362",
+      "name": "MAULIDINA ARIN NALADHIFA",
       "kelas": "4",
-      "name": "MAULIDINA ARIN NALADHIFA"
+      "nisn": "3178497362"
     },
     {
       "id": "s_1790568998042_18",
-      "name": "MUHAMMAD ATHAR FIRTA",
       "nisn": "3178993817",
-      "kelas": "4"
+      "kelas": "4",
+      "name": "MUHAMMAD ATHAR FIRTA"
     },
     {
       "id": "s_1790568998043_19",
@@ -701,45 +679,45 @@
     },
     {
       "id": "s_1790568998044_20",
+      "nisn": "3169994606",
       "kelas": "4",
-      "name": "NAMIRA PUTRI ASHARI",
-      "nisn": "3169994606"
+      "name": "NAMIRA PUTRI ASHARI"
     },
     {
       "id": "s_1790568998044_21",
-      "kelas": "4",
       "name": "PARULIAN RAAKAAN DZAKIIR",
-      "nisn": "3176667313"
+      "nisn": "3176667313",
+      "kelas": "4"
     },
     {
       "id": "s_1790568998046_22",
-      "kelas": "4",
+      "nisn": "3170836149",
       "name": "RAFAN DZAKIANDRA ALMAIR",
-      "nisn": "3170836149"
+      "kelas": "4"
     },
     {
       "id": "s_1790568998047_23",
-      "nisn": "0177981714",
       "kelas": "4",
+      "nisn": "0177981714",
       "name": "RAIHAN FATHUR RAMADHAN"
     },
     {
       "id": "s_1790568998048_24",
-      "nisn": "3163742716",
+      "name": "REYHAN ARIF ARIANTO",
       "kelas": "4",
-      "name": "REYHAN ARIF ARIANTO"
+      "nisn": "3163742716"
     },
     {
       "id": "s_1790568998049_25",
-      "kelas": "4",
       "nisn": "3172149618",
+      "kelas": "4",
       "name": "Risciko Al Hanan"
     },
     {
       "id": "s_1790568998052_26",
-      "nisn": "3173131741",
       "kelas": "4",
-      "name": "SALSABILA SHAFANA WANSAH"
+      "name": "SALSABILA SHAFANA WANSAH",
+      "nisn": "3173131741"
     },
     {
       "id": "s_1790568998054_27",
@@ -749,15 +727,15 @@
     },
     {
       "id": "s_1790569388930_1",
+      "nisn": "3178740475",
       "name": "Ahmad Husein Badali",
-      "kelas": "3",
-      "nisn": "3178740475"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388932_2",
+      "nisn": "3185271472",
       "kelas": "3",
-      "name": "AKHMAD DJATI GUNAWAN",
-      "nisn": "3185271472"
+      "name": "AKHMAD DJATI GUNAWAN"
     },
     {
       "id": "s_1790569388933_3",
@@ -767,27 +745,27 @@
     },
     {
       "id": "s_1790569388934_4",
-      "name": "ASHADIYA MISHA ILMIAWAN",
       "kelas": "3",
-      "nisn": "3172917535"
+      "nisn": "3172917535",
+      "name": "ASHADIYA MISHA ILMIAWAN"
     },
     {
       "id": "s_1790569388935_5",
-      "name": "ATHIF MALIK IBRAHIM",
       "kelas": "3",
-      "nisn": "3188395605"
+      "nisn": "3188395605",
+      "name": "ATHIF MALIK IBRAHIM"
     },
     {
       "id": "s_1790569388936_6",
       "nisn": "3175200416",
-      "name": "Azkadina Noura Setyawan",
-      "kelas": "3"
+      "kelas": "3",
+      "name": "Azkadina Noura Setyawan"
     },
     {
       "id": "s_1790569388937_7",
-      "name": "Dafran Wafi Rafiqi",
       "nisn": "0179915797",
-      "kelas": "3"
+      "kelas": "3",
+      "name": "Dafran Wafi Rafiqi"
     },
     {
       "id": "s_1790569388939_8",
@@ -797,15 +775,15 @@
     },
     {
       "id": "s_1790569388940_9",
+      "kelas": "3",
       "nisn": "3187450237",
-      "name": "GALANT ZAVIER FAEYZA",
-      "kelas": "3"
+      "name": "GALANT ZAVIER FAEYZA"
     },
     {
       "id": "s_1790569388941_10",
+      "name": "Ifra Athirah",
       "kelas": "3",
-      "nisn": "3171573450",
-      "name": "Ifra Athirah"
+      "nisn": "3171573450"
     },
     {
       "id": "s_1790569388942_11",
@@ -815,21 +793,21 @@
     },
     {
       "id": "s_1790569388943_12",
+      "name": "KEMAS MUHAMMAD ZIAN",
       "nisn": "3176039186",
-      "kelas": "3",
-      "name": "KEMAS MUHAMMAD ZIAN"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388945_13",
       "name": "KENZI RABBANI PUTRA UMBARA",
-      "nisn": "3174618346",
-      "kelas": "3"
+      "kelas": "3",
+      "nisn": "3174618346"
     },
     {
       "id": "s_1790569388946_14",
-      "kelas": "3",
+      "name": "Mildzam Novianto",
       "nisn": "3185609708",
-      "name": "Mildzam Novianto"
+      "kelas": "3"
     },
     {
       "id": "s_1790569388951_15",
@@ -845,105 +823,105 @@
     },
     {
       "id": "s_1790569388954_17",
-      "name": "NADYA FARRAH AZZAHRA",
+      "kelas": "3",
       "nisn": "3183717925",
-      "kelas": "3"
+      "name": "NADYA FARRAH AZZAHRA"
     },
     {
       "id": "s_1790569388955_18",
-      "name": "Nafasha Syafiq Hisyam",
+      "kelas": "3",
       "nisn": "3187224399",
-      "kelas": "3"
+      "name": "Nafasha Syafiq Hisyam"
     },
     {
       "id": "s_1790569388956_19",
       "name": "NAHLA KHAIRIN ALIFYA",
-      "nisn": "3179706308",
-      "kelas": "3"
+      "kelas": "3",
+      "nisn": "3179706308"
     },
     {
       "id": "s_1790569388957_20",
-      "name": "NAMIRA YASMINE ASHSHABIRA",
       "nisn": "3175682542",
-      "kelas": "3"
+      "kelas": "3",
+      "name": "NAMIRA YASMINE ASHSHABIRA"
     },
     {
       "id": "s_1790569388958_21",
-      "nisn": "3179175936",
       "kelas": "3",
+      "nisn": "3179175936",
       "name": "Qiana Sri Azzarine"
     },
     {
       "id": "s_1790569388959_22",
+      "nisn": "3186413358",
       "kelas": "3",
-      "name": "RAFARDHAN FAUZAN ALFATIH",
-      "nisn": "3186413358"
+      "name": "RAFARDHAN FAUZAN ALFATIH"
     },
     {
       "id": "s_1790569388961_23",
-      "nisn": "3177953309",
+      "name": "Ratisya Hafis Kharismanda",
       "kelas": "3",
-      "name": "Ratisya Hafis Kharismanda"
+      "nisn": "3177953309"
     },
     {
       "id": "s_1790569388963_24",
       "nisn": "3182434709",
-      "name": "SALMA SYUA DANEZA",
-      "kelas": "3"
+      "kelas": "3",
+      "name": "SALMA SYUA DANEZA"
     },
     {
       "id": "s_1790569388966_25",
-      "nisn": "3172245115",
+      "name": "Syafa Khirani Almaira",
       "kelas": "3",
-      "name": "Syafa Khirani Almaira"
+      "nisn": "3172245115"
     },
     {
       "id": "s_1790569388968_26",
+      "kelas": "3",
       "nisn": "3181046452",
-      "name": "SYAKILLA MUZDALIFAH NAMIAH",
-      "kelas": "3"
+      "name": "SYAKILLA MUZDALIFAH NAMIAH"
     },
     {
       "id": "s_1790569388969_27",
-      "name": "YUSUF AL MUHAIMIN",
       "nisn": "3187420906",
-      "kelas": "3"
+      "kelas": "3",
+      "name": "YUSUF AL MUHAIMIN"
     },
     {
       "id": "s_1790569388971_28",
-      "nisn": "3175816489",
       "name": "ZAMEER MAULANA IBADURRAHMAN",
-      "kelas": "3"
+      "kelas": "3",
+      "nisn": "3175816489"
     },
     {
       "id": "s_1790569388972_29",
-      "name": "Zikra Ar Rahman",
+      "kelas": "3",
       "nisn": "3184231725",
-      "kelas": "3"
+      "name": "Zikra Ar Rahman"
     },
     {
       "id": "s_1790569540608_1",
-      "nisn": "3180786045",
+      "kelas": "2",
       "name": "Abqari Kamayel Gustiyan",
-      "kelas": "2"
+      "nisn": "3180786045"
     },
     {
       "id": "s_1790569540609_2",
-      "kelas": "2",
       "name": "Adzkia Syafa Alfatunissa",
-      "nisn": "3191028289"
+      "nisn": "3191028289",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540610_3",
       "kelas": "2",
-      "name": "AHMAD FARABI ZAIN ARADONI",
-      "nisn": "3194527156"
+      "nisn": "3194527156",
+      "name": "AHMAD FARABI ZAIN ARADONI"
     },
     {
       "id": "s_1790569540612_4",
       "nisn": "3198548168",
-      "kelas": "2",
-      "name": "ALFATHIR DZIKRI ARISANDI"
+      "name": "ALFATHIR DZIKRI ARISANDI",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540613_5",
@@ -954,19 +932,19 @@
     {
       "id": "s_1790569540614_6",
       "nisn": "3189345919",
-      "name": "AQIFA ANNAFSI DAREK TENA",
-      "kelas": "2"
+      "kelas": "2",
+      "name": "AQIFA ANNAFSI DAREK TENA"
     },
     {
       "id": "s_1790569540616_7",
       "nisn": "3185010110",
-      "name": "AQILA NAZIHA EFFENDY",
-      "kelas": "2"
+      "kelas": "2",
+      "name": "AQILA NAZIHA EFFENDY"
     },
     {
       "id": "s_1790569540620_8",
-      "kelas": "2",
       "nisn": "3190257623",
+      "kelas": "2",
       "name": "ARKHAN KHENZU KURNIAWAN"
     },
     {
@@ -977,21 +955,21 @@
     },
     {
       "id": "s_1790569540623_10",
-      "kelas": "2",
       "nisn": "3191367016",
+      "kelas": "2",
       "name": "ELVANO RASHAAD DIANDRA"
     },
     {
       "id": "s_1790569540625_11",
+      "kelas": "2",
       "nisn": "3181302541",
-      "name": "HANNA HUMAIRAH",
-      "kelas": "2"
+      "name": "HANNA HUMAIRAH"
     },
     {
       "id": "s_1790569540628_12",
-      "kelas": "2",
       "name": "Izzah Althafunnisa",
-      "nisn": "0183999741"
+      "nisn": "0183999741",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540629_13",
@@ -1001,50 +979,50 @@
     },
     {
       "id": "s_1790569540631_14",
-      "kelas": "2",
       "name": "LETISHA SHANUM",
+      "kelas": "2",
       "nisn": "3180037269"
     },
     {
       "id": "s_1790569540632_15",
-      "kelas": "2",
+      "nisn": "3180941670",
       "name": "MUHAMMAD ANAS MUTTAQI",
-      "nisn": "3180941670"
+      "kelas": "2"
     },
     {
       "id": "s_1790569540634_16",
-      "kelas": "2",
+      "name": "MUHAMMAD ARKHAN RAFISQY SATRIA",
       "nisn": "3197152100",
-      "name": "MUHAMMAD ARKHAN RAFISQY SATRIA"
+      "kelas": "2"
     },
     {
       "id": "s_1790569540635_17",
-      "name": "MUHAMMAD ATHAR NUR IKRAM",
       "kelas": "2",
+      "name": "MUHAMMAD ATHAR NUR IKRAM",
       "nisn": "3194205396"
     },
     {
       "id": "s_1790569540638_18",
-      "kelas": "2",
       "name": "MUHAMMAD FARDHAN AL HAFIDZ",
-      "nisn": "3196327876"
-    },
-    {
-      "id": "s_1790569540641_19",
-      "nisn": "3190802704",
-      "name": "MUHAMMAD HIBBAN SETIA",
+      "nisn": "3196327876",
       "kelas": "2"
     },
     {
-      "id": "s_1790569540643_20",
+      "id": "s_1790569540641_19",
+      "name": "MUHAMMAD HIBBAN SETIA",
       "kelas": "2",
+      "nisn": "3190802704"
+    },
+    {
+      "id": "s_1790569540643_20",
       "name": "MUHAMMAD RAFFASYA ALFAREZI",
+      "kelas": "2",
       "nisn": "3188051235"
     },
     {
       "id": "s_1790569540644_21",
-      "kelas": "2",
       "name": "MUHAMMAD SYAM MITRA",
+      "kelas": "2",
       "nisn": "3186911136"
     },
     {
@@ -1056,50 +1034,50 @@
     {
       "id": "s_1790569540646_23",
       "nisn": "3192447616",
-      "kelas": "2",
-      "name": "Nayyira Kusuma"
+      "name": "Nayyira Kusuma",
+      "kelas": "2"
     },
     {
       "id": "s_1790569540647_24",
-      "nisn": "3194016264",
+      "name": "RAIHAN NABHAN ABDURRAHMAN",
       "kelas": "2",
-      "name": "RAIHAN NABHAN ABDURRAHMAN"
+      "nisn": "3194016264"
     },
     {
       "id": "s_1790569540649_25",
       "nisn": "3186836693",
-      "name": "RANA MAHDIYA NAWAR CANDRA",
-      "kelas": "2"
+      "kelas": "2",
+      "name": "RANA MAHDIYA NAWAR CANDRA"
     },
     {
       "id": "s_1790569540653_26",
+      "nisn": "3184911783",
       "kelas": "2",
-      "name": "SAID ZUBAIR ARRAFI",
-      "nisn": "3184911783"
+      "name": "SAID ZUBAIR ARRAFI"
     },
     {
       "id": "s_1790569540657_27",
-      "kelas": "2",
       "nisn": "3181603677",
+      "kelas": "2",
       "name": "SHEZA SHANUM WIGUNA"
     },
     {
       "id": "s_1790569540658_28",
       "name": "SHIZA SHANUM WIGUNA",
-      "kelas": "2",
-      "nisn": "3180110290"
+      "nisn": "3180110290",
+      "kelas": "2"
     },
     {
       "id": "s_1790569686984_1",
+      "name": "AHMAD HAFEEZHAN BAYANAKA",
       "kelas": "1",
-      "nisn": "3196509328",
-      "name": "AHMAD HAFEEZHAN BAYANAKA"
+      "nisn": "3196509328"
     },
     {
       "id": "s_1790569686986_2",
-      "nisn": "3190146479",
       "kelas": "1",
-      "name": "AHMAD RAFA HAZIQ"
+      "name": "AHMAD RAFA HAZIQ",
+      "nisn": "3190146479"
     },
     {
       "id": "s_1790569686988_3",
@@ -1109,9 +1087,9 @@
     },
     {
       "id": "s_1790569686990_4",
+      "name": "ALESHA ZAHRA ILMIAWAN",
       "kelas": "1",
-      "nisn": "3195123844",
-      "name": "ALESHA ZAHRA ILMIAWAN"
+      "nisn": "3195123844"
     },
     {
       "id": "s_1790569686991_5",
@@ -1121,21 +1099,21 @@
     },
     {
       "id": "s_1790569686992_6",
+      "nisn": "3200658211",
       "kelas": "1",
-      "name": "ASSYIFA YUMANAHLA",
-      "nisn": "3200658211"
+      "name": "ASSYIFA YUMANAHLA"
     },
     {
       "id": "s_1790569686993_7",
+      "name": "AYUDIA INARA",
       "kelas": "1",
-      "nisn": "3195138370",
-      "name": "AYUDIA INARA"
+      "nisn": "3195138370"
     },
     {
       "id": "s_1790569686994_8",
-      "name": "FARIZ NAUFAL RABBANI",
       "nisn": "3194643865",
-      "kelas": "1"
+      "kelas": "1",
+      "name": "FARIZ NAUFAL RABBANI"
     },
     {
       "id": "s_1790569686995_9",
@@ -1151,15 +1129,15 @@
     },
     {
       "id": "s_1790569686999_11",
-      "nisn": "3190014542",
+      "kelas": "1",
       "name": "Haziq Mahasin Silangit",
-      "kelas": "1"
+      "nisn": "3190014542"
     },
     {
       "id": "s_1790569687003_12",
-      "nisn": "3193290253",
       "name": "HILYA BINAR MAFAZA",
-      "kelas": "1"
+      "kelas": "1",
+      "nisn": "3193290253"
     },
     {
       "id": "s_1790569687006_13",
@@ -1175,15 +1153,15 @@
     },
     {
       "id": "s_1790569687008_15",
-      "nisn": "3193998629",
       "kelas": "1",
+      "nisn": "3193998629",
       "name": "MUHAMMAD ALZUBAIR ARIN SINAGA"
     },
     {
       "id": "s_1790569687009_16",
+      "name": "MUHAMMAD RAFIF WINANTA",
       "nisn": "3192471873",
-      "kelas": "1",
-      "name": "MUHAMMAD RAFIF WINANTA"
+      "kelas": "1"
     },
     {
       "id": "s_1790569687010_17",
@@ -1193,21 +1171,21 @@
     },
     {
       "id": "s_1790569687011_18",
-      "name": "NABILA FATTANA",
       "nisn": "3196098011",
+      "name": "NABILA FATTANA",
       "kelas": "1"
     },
     {
       "id": "s_1790569687013_19",
-      "name": "NAHLA SYAFIQA QUEENZA",
       "nisn": "3192002296",
-      "kelas": "1"
+      "kelas": "1",
+      "name": "NAHLA SYAFIQA QUEENZA"
     },
     {
       "id": "s_1790569687017_20",
-      "nisn": "3205982139",
       "name": "NASHA KHAYRA",
-      "kelas": "1"
+      "kelas": "1",
+      "nisn": "3205982139"
     },
     {
       "id": "s_1790569687020_21",
@@ -1217,9 +1195,9 @@
     },
     {
       "id": "s_1790569687022_22",
+      "nisn": "3207334894",
       "kelas": "1",
-      "name": "Queenza Arunika Gunara",
-      "nisn": "3207334894"
+      "name": "Queenza Arunika Gunara"
     },
     {
       "id": "s_1790569687023_23",
@@ -1229,15 +1207,15 @@
     },
     {
       "id": "s_1790569687024_24",
+      "name": "RAZQYA AYUDIA DINATA",
       "kelas": "1",
-      "nisn": "3193865455",
-      "name": "RAZQYA AYUDIA DINATA"
+      "nisn": "3193865455"
     },
     {
       "id": "s_1790569687025_25",
-      "kelas": "1",
       "name": "RHEANA ZIDNI SABHIRA",
-      "nisn": "3191621086"
+      "nisn": "3191621086",
+      "kelas": "1"
     },
     {
       "id": "s_1790569687026_26",
@@ -1247,21 +1225,21 @@
     },
     {
       "id": "s_1790569687027_27",
-      "nisn": "3201019849",
       "name": "Shakila Yusma Inara",
+      "nisn": "3201019849",
       "kelas": "1"
     },
     {
       "id": "s_1790569687029_28",
       "nisn": "3196964481",
-      "name": "SYAFIL IBAD RIWASI",
-      "kelas": "1"
+      "kelas": "1",
+      "name": "SYAFIL IBAD RIWASI"
     },
     {
       "id": "s_1790569687030_29",
-      "kelas": "1",
       "name": "SYARIFAH HAFSHAH AZKIYA",
-      "nisn": "3205383425"
+      "nisn": "3205383425",
+      "kelas": "1"
     }
   ],
   "grades": [
@@ -15070,1992 +15048,29 @@
     }
   },
   "tujuan_pembelajaran_templates": {
-    "Bahasa Arab": [
-      {
-        "kelas": "1",
-        "id": "bahasa_arab_1_1",
-        "text": "Melafalkan salam dan perkenalan diri sederhana dalam bahasa Arab (Ismi...)"
-      },
-      {
-        "id": "bahasa_arab_1_2",
-        "kelas": "1",
-        "text": "Menyebutkan angka 1 sampai 10 (Wahidun, Itsnani...) dalam bahasa Arab"
-      },
-      {
-        "text": "Mengenal kosakata anggota keluarga (Ummi, Abi, Akhi, Ukhti) dengan fasih",
-        "kelas": "1",
-        "id": "bahasa_arab_1_3"
-      },
-      {
-        "id": "bahasa_arab_2_1",
-        "kelas": "2",
-        "text": "Menyebutkan nama-nama perlengkapan sekolah (Qalamun, Kitabun, Maktabun)"
-      },
-      {
-        "kelas": "2",
-        "text": "Menyebutkan nama-nama warna dasar dalam bahasa Arab",
-        "id": "bahasa_arab_2_2"
-      },
-      {
-        "kelas": "2",
-        "id": "bahasa_arab_2_3",
-        "text": "Menirukan pelafalan mufrodat anggota tubuh (Ra'sun, 'Ainun, Yadun)"
-      },
-      {
-        "id": "bahasa_arab_3_1",
-        "kelas": "3",
-        "text": "Menyebutkan nama-nama hewan peliharaan dan binatang ternak dalam bahasa Arab"
-      },
-      {
-        "text": "Menyebutkan nama-nama ruangan di rumah dan madrasah",
-        "id": "bahasa_arab_3_2",
-        "kelas": "3"
-      },
-      {
-        "id": "bahasa_arab_3_3",
-        "text": "Membaca kata sambung berharakat lengkap dengan makhraj yang tepat",
-        "kelas": "3"
-      },
-      {
-        "kelas": "4",
-        "id": "bahasa_arab_4_1",
-        "text": "Mendeskripsikan profesi dan cita-cita (Thabibun, Mudarrisun, Muhandisun)"
-      },
-      {
-        "id": "bahasa_arab_4_2",
-        "text": "Menggunakan kata tunjuk (Hadza, Hadzihi, Dzalika, Tilka) dalam kalimat pendek",
-        "kelas": "4"
-      },
-      {
-        "id": "bahasa_arab_4_3",
-        "text": "Membaca teks cerita pendek tentang kegiatan sehari-hari di madrasah",
-        "kelas": "4"
-      },
-      {
-        "id": "bahasa_arab_5_1",
-        "text": "Menyebutkan jam dan waktu (As-Sa'ah) serta aktivitas harian santun",
-        "kelas": "5"
-      },
-      {
-        "kelas": "5",
-        "text": "Menggunakan dhomir (kata ganti: Ana, Anta, Anti, Huwa, Hiya) secara tepat",
-        "id": "bahasa_arab_5_2"
-      },
-      {
-        "kelas": "5",
-        "id": "bahasa_arab_5_3",
-        "text": "Menyusun kalimat sederhana dari mufrodat acak dengan struktur yang benar"
-      },
-      {
-        "id": "bahasa_arab_6_1",
-        "text": "Melakukan dialog percakapan sederhana tentang liburan dan cita-cita",
-        "kelas": "6"
-      },
-      {
-        "kelas": "6",
-        "text": "Memahami teks bacaan tentang keindahan alam dan tempat ibadah",
-        "id": "bahasa_arab_6_2"
-      },
-      {
-        "text": "Menerjemahkan kalimat pendek bahasa Arab ke dalam bahasa Indonesia",
-        "id": "bahasa_arab_6_3",
-        "kelas": "6"
-      }
-    ],
-    "Bahasa Indonesia": [
-      {
-        "kelas": "1",
-        "text": "Mengenal bunyi huruf abjad, suku kata, dan membaca kata-kata sederhana",
-        "id": "bahasa_indonesia_1_1"
-      },
-      {
-        "id": "bahasa_indonesia_1_2",
-        "text": "Menirukan dan membaca nyaring kalimat pendek dengan lafal yang jelas",
-        "kelas": "1"
-      },
-      {
-        "id": "bahasa_indonesia_1_3",
-        "kelas": "1",
-        "text": "Menulis huruf lepas dan kata sederhana dengan kerapian yang baik"
-      },
-      {
-        "kelas": "2",
-        "text": "Membaca lancar teks narasi fiksi anak dengan intonasi yang tepat",
-        "id": "bahasa_indonesia_2_1"
-      },
-      {
-        "kelas": "2",
-        "id": "bahasa_indonesia_2_2",
-        "text": "Menemukan informasi penting dari bacaan dan menceritakan kembali"
-      },
-      {
-        "kelas": "2",
-        "id": "bahasa_indonesia_2_3",
-        "text": "Menulis kalimat lengkap dengan penggunaan huruf kapital dan tanda titik"
-      },
-      {
-        "kelas": "3",
-        "text": "Mengidentifikasi gagasan utama dan informasi pendukung dalam teks paragraf",
-        "id": "bahasa_indonesia_3_1"
-      },
-      {
-        "kelas": "3",
-        "id": "bahasa_indonesia_3_2",
-        "text": "Menceritakan pengalaman pribadi dengan pilihan kosakata yang santun"
-      },
-      {
-        "text": "Menulis teks deskripsi dan petunjuk sederhana dengan kalimat efektif",
-        "kelas": "3",
-        "id": "bahasa_indonesia_3_3"
-      },
-      {
-        "id": "bahasa_indonesia_4_1",
-        "text": "Menemukan ide pokok dalam teks laporan hasil pengamatan lingkungan",
-        "kelas": "4"
-      },
-      {
-        "text": "Menyampaikan pendapat secara runtut dan santun dalam diskusi kelas",
-        "kelas": "4",
-        "id": "bahasa_indonesia_4_2"
-      },
-      {
-        "kelas": "4",
-        "id": "bahasa_indonesia_4_3",
-        "text": "Menulis puisi anak dan teks narasi pendek dengan imajinasi kreatif"
-      },
-      {
-        "text": "Menelaah unsur intrinsik cerita (tema, tokoh, latar, dan amanat)",
-        "kelas": "5",
-        "id": "bahasa_indonesia_5_1"
-      },
-      {
-        "id": "bahasa_indonesia_5_2",
-        "text": "Menyusun ringkasan teks eksplanasi ilmiah dengan kata-kata sendiri",
-        "kelas": "5"
-      },
-      {
-        "kelas": "5",
-        "text": "Menulis teks narasi sejarah dan laporan wawancara secara terstruktur",
-        "id": "bahasa_indonesia_5_3"
-      },
-      {
-        "id": "tp_1791000095834",
-        "text": "Mampu mengidentifikasi tokoh dan alur dalam cerita melalui kegiatan membaca memindai dengan tepat.",
-        "kelas": "6"
-      },
-      {
-        "kelas": "6",
-        "text": "Mampu membedakan ciri, tujuan, dan struktur surat resmi dan surat pribadi dengan tepat.",
-        "id": "tp_1791000110170"
-      },
-      {
-        "kelas": "6",
-        "text": "Mampu menulis surel dengan memperhatikan tujuan, struktur, dan penggunaan bahasa yang sesuai.",
-        "id": "tp_1791000123377"
-      },
-      {
-        "kelas": "6",
-        "text": "Mampu mengisi formulir dengan lengkap, tepat, dan sesuai dengan informasi yang diperlukan.",
-        "id": "tp_1791000135065"
-      },
-      {
-        "id": "bindo_5_1",
-        "kelas": "5",
-        "text": "Menyimak, membaca, dan memahami ide pokok teks narasi dan eksplanasi"
-      },
-      {
-        "id": "bindo_5_2",
-        "kelas": "5",
-        "text": "Menulis teks naratif dan deskriptif dengan kaidah ejaan yang baik"
-      },
-      {
-        "id": "bindo_5_3",
-        "kelas": "5",
-        "text": "Menyampaikan gagasan secara runtut dan percaya diri dalam diskusi"
-      }
-    ],
-    "Bahasa Inggris": [
-      {
-        "text": "Mengenal salam (Greetings: Good morning, hello) and self introduction",
-        "kelas": "1",
-        "id": "bahasa_inggris_1_1"
-      },
-      {
-        "id": "bahasa_inggris_1_2",
-        "text": "Menyebutkan angka 1-10 dan warna-warna dasar (colors) dalam bahasa Inggris",
-        "kelas": "1"
-      },
-      {
-        "id": "bahasa_inggris_1_3",
-        "text": "Menyebutkan nama-nama anggota keluarga (family members) secara lisan",
-        "kelas": "1"
-      },
-      {
-        "text": "Menyebutkan nama-nama hewan peliharaan (animals) dan suaranya",
-        "kelas": "2",
-        "id": "bahasa_inggris_2_1"
-      },
-      {
-        "id": "bahasa_inggris_2_2",
-        "kelas": "2",
-        "text": "Menyebutkan nama-nama benda di dalam kelas (classroom objects)"
-      },
-      {
-        "text": "Merespon instruksi sederhana guru di kelas (Listen, stand up, sit down)",
-        "kelas": "2",
-        "id": "bahasa_inggris_2_3"
-      },
-      {
-        "text": "Mengekspresikan hobi dan kesukaan (likes and dislikes: I like fruits)",
-        "kelas": "3",
-        "id": "bahasa_inggris_3_1"
-      },
-      {
-        "id": "bahasa_inggris_3_2",
-        "kelas": "3",
-        "text": "Menyebutkan nama-nama bagian tubuh (parts of the body) dengan benar"
-      },
-      {
-        "text": "Menyebutkan hari, bulan, dan waktu sederhana (days of the week)",
-        "kelas": "3",
-        "id": "bahasa_inggris_3_3"
-      },
-      {
-        "id": "bahasa_inggris_4_1",
-        "kelas": "4",
-        "text": "Mendeskripsikan ruangan di rumah dan aktivitas sehari-hari (daily routines)"
-      },
-      {
-        "text": "Menggunakan kata tanya (Wh-questions: What, Where, Who) dalam percakapan",
-        "kelas": "4",
-        "id": "bahasa_inggris_4_2"
-      },
-      {
-        "id": "bahasa_inggris_4_3",
-        "text": "Membaca dan memahami teks deskriptif bergambar tentang benda favorit",
-        "kelas": "4"
-      },
-      {
-        "kelas": "5",
-        "text": "Mengekspresikan kemampuan dan kemauan (can and cannot) dengan santun",
-        "id": "bahasa_inggris_5_1"
-      },
-      {
-        "kelas": "5",
-        "id": "bahasa_inggris_5_2",
-        "text": "Menceritakan peristiwa masa lampau sederhana (Simple Past Tense fiksi)"
-      },
-      {
-        "kelas": "5",
-        "text": "Membaca cerita pendek narasi fabel dan menjawab pertanyaan pemahaman",
-        "id": "bahasa_inggris_5_3"
-      },
-      {
-        "kelas": "6",
-        "text": "Menulis surat atau pesan singkat ramah kepada teman sebaya",
-        "id": "bahasa_inggris_6_1"
-      },
-      {
-        "id": "bahasa_inggris_6_2",
-        "kelas": "6",
-        "text": "Melakukan dialog percakapan di tempat umum (restaurant, library, market)"
-      },
-      {
-        "kelas": "6",
-        "id": "bahasa_inggris_6_3",
-        "text": "Menganalisis teks informasi umum dan menyusun paragraf singkat"
-      }
-    ],
-    "Do’a Harian dan Hadits": [
-      {
-        "text": "Menghafal doa sebelum dan sesudah makan, serta doa sebelum tidur dan bangun tidur",
-        "kelas": "1",
-        "id": "do_a_harian_dan_hadits_1_1"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_1_2",
-        "text": "Menghafal doa masuk dan keluar kamar mandi beserta adab-adabnya",
-        "kelas": "1"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_1_3",
-        "kelas": "1",
-        "text": "Menghafal hadits tentang kebersihan adalah sebagian dari iman"
-      },
-      {
-        "kelas": "2",
-        "id": "do_a_harian_dan_hadits_2_1",
-        "text": "Menghafal doa kedua orang tua dan doa kebaikan dunia akhirat (Sapu Jagad)"
-      },
-      {
-        "kelas": "2",
-        "text": "Menghafal doa berpakaian dan doa bercermin dengan tartil",
-        "id": "do_a_harian_dan_hadits_2_2"
-      },
-      {
-        "kelas": "2",
-        "text": "Menghafal hadits tentang senyum adalah sedekah (Tabassumuka...)",
-        "id": "do_a_harian_dan_hadits_2_3"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_3_1",
-        "text": "Menghafal doa masuk dan keluar masjid serta doa sebelum belajar",
-        "kelas": "3"
-      },
-      {
-        "text": "Menghafal doa naik kendaraan darat dan doa ketika hujan turun",
-        "id": "do_a_harian_dan_hadits_3_2",
-        "kelas": "3"
-      },
-      {
-        "text": "Menghafal hadits tentang menuntut ilmu adalah kewajiban setiap muslim",
-        "kelas": "3",
-        "id": "do_a_harian_dan_hadits_3_3"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_4_1",
-        "kelas": "4",
-        "text": "Menghafal doa ketika mendengar petir dan doa melihat keindahan alam"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_4_2",
-        "kelas": "4",
-        "text": "Menghafal doa menjenguk orang sakit dan memohon kesembuhan"
-      },
-      {
-        "kelas": "4",
-        "id": "do_a_harian_dan_hadits_4_3",
-        "text": "Menghafal hadits tentang larangan marah (Laa taghdhab wa lakal jannah)"
-      },
-      {
-        "text": "Menghafal doa saat menghadapi kesulitan dan memohon kemudahan urusan",
-        "id": "do_a_harian_dan_hadits_5_1",
-        "kelas": "5"
-      },
-      {
-        "text": "Menghafal doa keluar rumah (Bismillahi tawakkaltu 'alallah)",
-        "kelas": "5",
-        "id": "do_a_harian_dan_hadits_5_2"
-      },
-      {
-        "kelas": "5",
-        "text": "Menghafal hadits tentang persaudaraan sesama muslim laksana satu bangunan",
-        "id": "do_a_harian_dan_hadits_5_3"
-      },
-      {
-        "kelas": "6",
-        "id": "do_a_harian_dan_hadits_6_1",
-        "text": "Menghafal doa memohon keteguhan iman dan hati serta perlindungan dari fitnah"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_6_2",
-        "text": "Menghafal doa husnul khatimah dan doa kafaratul majlis",
-        "kelas": "6"
-      },
-      {
-        "id": "do_a_harian_dan_hadits_6_3",
-        "text": "Menghafal hadits tentang niat (Innamal a'maalu bin niyyaat) dan kejujuran",
-        "kelas": "6"
-      }
-    ],
-    "IPA": [
-      {
-        "kelas": "1",
-        "id": "ipa_1_1",
-        "text": "Mengenal panca indra dan fungsinya dalam kehidupan sehari-hari"
-      },
-      {
-        "id": "ipa_1_2",
-        "text": "Membedakan benda hidup dan benda tak hidup di lingkungan sekitar",
-        "kelas": "1"
-      },
-      {
-        "text": "Mengenal cara merawat kesehatan tubuh dan kebersihan lingkungan",
-        "kelas": "1",
-        "id": "ipa_1_3"
-      },
-      {
-        "text": "Mengidentifikasi bagian-bagian tubuh hewan dan tumbuhan di sekitar",
-        "kelas": "2",
-        "id": "ipa_2_1"
-      },
-      {
-        "text": "Memahami pertumbuhan hewan dan tumbuhan serta siklus hidup sederhana",
-        "id": "ipa_2_2",
-        "kelas": "2"
-      },
-      {
-        "text": "Mengenal tempat hidup (habitat) makhluk hidup darat dan air",
-        "kelas": "2",
-        "id": "ipa_2_3"
-      },
-      {
-        "id": "ipa_3_1",
-        "kelas": "3",
-        "text": "Memahami wujud benda (padat, cair, gas) serta perubahan sifat wujudnya"
-      },
-      {
-        "id": "ipa_3_2",
-        "text": "Menjelaskan daur hidup kupu-kupu, katak, dan hewan di lingkungan",
-        "kelas": "3"
-      },
-      {
-        "text": "Mengenal sumber energi panas, gerak, dan bunyi di sekitar rumah",
-        "kelas": "3",
-        "id": "ipa_3_3"
-      },
-      {
-        "id": "ipa_4_1",
-        "text": "Mengidentifikasi bentuk dan fungsi bagian tubuh tumbuhan (akar, daun, bunga)",
-        "kelas": "4"
-      },
-      {
-        "kelas": "4",
-        "text": "Memahami hubungan antarmakhluk hidup dalam rantai makanan ekosistem",
-        "id": "ipa_4_2"
-      },
-      {
-        "id": "ipa_4_3",
-        "kelas": "4",
-        "text": "Menganalisis sifat-sifat gaya dan pengaruhnya terhadap gerak benda"
-      },
-      {
-        "kelas": "5",
-        "text": "Memahami sistem pernapasan dan sistem pencernaan pada manusia dan hewan",
-        "id": "ipa_5_1"
-      },
-      {
-        "text": "Menganalisis perpindahan kalor secara konduksi, konveksi, dan radiasi",
-        "id": "ipa_5_2",
-        "kelas": "5"
-      },
-      {
-        "id": "ipa_5_3",
-        "text": "Menjelaskan siklus air dan pentingnya konservasi air bersih bagi bumi",
-        "kelas": "5"
-      },
-      {
-        "id": "ipa_6_1",
-        "text": "Memahami perkembangbiakan tumbuhan dan hewan secara generatif dan vegetatif",
-        "kelas": "6"
-      },
-      {
-        "id": "ipa_6_2",
-        "kelas": "6",
-        "text": "Mengidentifikasi ciri-ciri pubertas pada anak laki-laki dan perempuan"
-      },
-      {
-        "kelas": "6",
-        "id": "ipa_6_3",
-        "text": "Mengenal sistem tata surya, orbit planet, dan gerak rotasi revolusi bumi"
-      }
-    ],
-    "IPS": [
-      {
-        "id": "ips_1_1",
-        "kelas": "1",
-        "text": "Mengenal identitas diri, anggota keluarga, dan kerabat terdekat"
-      },
-      {
-        "kelas": "1",
-        "text": "Menceritakan pengalaman kebersamaan dalam keluarga di rumah",
-        "id": "ips_1_2"
-      },
-      {
-        "id": "ips_1_3",
-        "text": "Mengenal denah sederhana ruangan di dalam rumah dan sekolah",
-        "kelas": "1"
-      },
-      {
-        "kelas": "2",
-        "text": "Menceritakan dokumen dan benda penting keluarga serta cara merawatnya",
-        "id": "ips_2_1"
-      },
-      {
-        "id": "ips_2_2",
-        "kelas": "2",
-        "text": "Menjelaskan peristiwa penting dalam sejarah keluarga secara kronologis"
-      },
-      {
-        "text": "Mengenal lingkungan alam dan buatan di sekitar permukiman",
-        "kelas": "2",
-        "id": "ips_2_3"
-      },
-      {
-        "kelas": "3",
-        "text": "Mengenal denah arah mata angin dan lingkungan tempat tinggal sekitar",
-        "id": "ips_3_1"
-      },
-      {
-        "id": "ips_3_2",
-        "text": "Mengidentifikasi jenis-jenis pekerjaan orang tua dan warga masyarakat",
-        "kelas": "3"
-      },
-      {
-        "kelas": "3",
-        "id": "ips_3_3",
-        "text": "Memahami pentingnya semangat kerja sama dan tolong-menolong di RT/RW"
-      },
-      {
-        "text": "Mengidentifikasi keragaman sosial, ekonomi, budaya, dan agama di provinsi",
-        "id": "ips_4_1",
-        "kelas": "4"
-      },
-      {
-        "kelas": "4",
-        "id": "ips_4_2",
-        "text": "Menjelaskan aktivitas ekonomi masyarakat di daerah pantai, dataran, dan gunung"
-      },
-      {
-        "kelas": "4",
-        "text": "Meneladani peninggalan sejarah kerajaan Hindu-Buddha dan Islam di Nusantara",
-        "id": "ips_4_3"
-      },
-      {
-        "text": "Memahami letak geografis dan bentang alam kepulauan Indonesia",
-        "kelas": "5",
-        "id": "ips_5_1"
-      },
-      {
-        "kelas": "5",
-        "id": "ips_5_2",
-        "text": "Menganalisis interaksi manusia dengan lingkungan alam dan sosialnya"
-      },
-      {
-        "id": "ips_5_3",
-        "kelas": "5",
-        "text": "Menghargai perjuangan para pahlawan dalam melawan penjajahan kolonial"
-      },
-      {
-        "id": "ips_6_1",
-        "kelas": "6",
-        "text": "Mengenal posisi dan karakteristik negara-negara anggota ASEAN"
-      },
-      {
-        "kelas": "6",
-        "text": "Menganalisis perubahan sosial budaya masyarakat akibat modernisasi",
-        "id": "ips_6_2"
-      },
-      {
-        "id": "ips_6_3",
-        "kelas": "6",
-        "text": "Memahami peran Indonesia dalam kerja sama ekonomi dan politik internasional"
-      }
-    ],
-    "Informatika": [
-      {
-        "id": "tik_5_1",
-        "kelas": "5",
-        "text": "Mengenal perangkat keras, lunak, dan etika dasar penggunaan teknologi informasi"
-      },
-      {
-        "id": "tik_5_2",
-        "kelas": "5",
-        "text": "Mengoperasikan aplikasi dasar pengolah kata dan dokumen digital"
-      },
-      {
-        "id": "tik_5_3",
-        "kelas": "5",
-        "text": "Memahami keamanan internet dan pemanfaatan media digital secara bijak"
-      },
-      {
-        "id": "tik_4_1",
-        "kelas": "4",
-        "text": "Mengenal bagian perangkat komputer dan fungsi dasar mouse serta keyboard"
-      },
-      {
-        "id": "tik_4_2",
-        "kelas": "4",
-        "text": "Mempraktikkan mengetik santun dan membuka program pengolah dokumen"
-      },
-      {
-        "id": "tik_4_3",
-        "kelas": "4",
-        "text": "Memahami aturan keselamatan dan etika penggunaan komputer di sekolah"
-      },
-      {
-        "id": "tik_6_1",
-        "kelas": "6",
-        "text": "Memanfaatkan internet sehat untuk pencarian sumber belajar dan edukasi"
-      },
-      {
-        "id": "tik_6_2",
-        "kelas": "6",
-        "text": "Membuat presentasi digital sederhana dengan teks dan gambar terpadu"
-      },
-      {
-        "id": "tik_6_3",
-        "kelas": "6",
-        "text": "Memahami perlindungan data pribadi dan etika berkomunikasi di media digital"
-      }
-    ],
-    "Matematika": [
-      {
-        "text": "Membilang, membaca, dan menulis bilangan cacah 1 sampai dengan 20",
-        "kelas": "1",
-        "id": "matematika_1_1"
-      },
-      {
-        "kelas": "1",
-        "id": "matematika_1_2",
-        "text": "Menyelesaikan operasi penjumlahan dan pengurangan sederhana bilangan cacah"
-      },
-      {
-        "id": "matematika_1_3",
-        "text": "Mengenal bentuk-bentuk bangun datar dasar (lingkaran, segitiga, persegi)",
-        "kelas": "1"
-      },
-      {
-        "id": "matematika_2_1",
-        "kelas": "2",
-        "text": "Membaca dan menulis bilangan cacah hingga 100 serta nilai tempat"
-      },
-      {
-        "text": "Menyelesaikan penjumlahan dan pengurangan bersusun bilangan hingga 100",
-        "kelas": "2",
-        "id": "matematika_2_2"
-      },
-      {
-        "text": "Mengenal satuan baku panjang (cm, m) dan berat (gram, kg) sederhana",
-        "id": "matematika_2_3",
-        "kelas": "2"
-      },
-      {
-        "kelas": "3",
-        "id": "matematika_3_1",
-        "text": "Menyelesaikan operasi hitung perkalian dan pembagian bilangan cacah"
-      },
-      {
-        "id": "matematika_3_2",
-        "text": "Mengenal konsep dasar pecahan sederhana (1/2, 1/3, 1/4) dan representasinya",
-        "kelas": "3"
-      },
-      {
-        "kelas": "3",
-        "text": "Menghitung keliling dan luas persegi serta persegi panjang pada petak",
-        "id": "matematika_3_3"
-      },
-      {
-        "text": "Menguasai perkalian dan pembagian bersusun ratusan hingga ribuan",
-        "kelas": "4",
-        "id": "matematika_4_1"
-      },
-      {
-        "id": "matematika_4_2",
-        "kelas": "4",
-        "text": "Menyelesaikan operasi hitung pecahan senilai dan pecahan campuran"
-      },
-      {
-        "text": "Menghitung luas dan keliling bangun datar serta sudut bangun",
-        "kelas": "4",
-        "id": "matematika_4_3"
-      },
-      {
-        "kelas": "5",
-        "id": "matematika_5_1",
-        "text": "Menyelesaikan penjumlahan, pengurangan, perkalian, dan pembagian pecahan"
-      },
-      {
-        "id": "matematika_5_2",
-        "text": "Memahami konsep perbandingan, skala peta, dan kecepatan laju tempuh",
-        "kelas": "5"
-      },
-      {
-        "id": "matematika_5_3",
-        "text": "Menghitung volume kubus dan balok dengan satuan kubik",
-        "kelas": "5"
-      },
-      {
-        "text": "Memahami konsep bilangan bulat positif dan negatif serta operasinya",
-        "kelas": "6",
-        "id": "matematika_6_1"
-      },
-      {
-        "text": "Menghitung keliling dan luas lingkaran dengan formula pi yang tepat",
-        "kelas": "6",
-        "id": "matematika_6_2"
-      },
-      {
-        "id": "matematika_6_3",
-        "kelas": "6",
-        "text": "Menyajikan dan menafsirkan data dalam bentuk diagram batang dan lingkaran"
-      },
-      {
-        "id": "mtk_5_1",
-        "kelas": "5",
-        "text": "Memahami operasi hitung pecahan dan bilangan desimal"
-      },
-      {
-        "id": "mtk_5_2",
-        "kelas": "5",
-        "text": "Menyelesaikan masalah keliling dan luas bangun datar"
-      },
-      {
-        "id": "mtk_5_3",
-        "kelas": "5",
-        "text": "Membaca, menyajikan, dan menganalisis data dalam bentuk diagram"
-      }
-    ],
-    "PAI": [
-      {
-        "kelas": "1",
-        "text": "Mengenal huruf hijaiyah harakat fathah, kasrah, dan dhammah dengan benar",
-        "id": "pai_1_1"
-      },
-      {
-        "id": "pai_1_2",
-        "text": "Mengenal rukun iman terutama iman kepada Allah SWT dan ciptaan-Nya",
-        "kelas": "1"
-      },
-      {
-        "id": "pai_1_3",
-        "text": "Membiasakan berdoa sebelum dan sesudah belajar serta makan",
-        "kelas": "1"
-      },
-      {
-        "id": "pai_2_1",
-        "text": "Mengenal pesan pokok QS An-Nas dan Al-Falaq dengan fasih",
-        "kelas": "2"
-      },
-      {
-        "kelas": "2",
-        "text": "Memahami Asmaul Husna Al-Quddus, As-Salam, dan Al-Khaliq",
-        "id": "pai_2_2"
-      },
-      {
-        "text": "Membiasakan perilaku hidup bersih dan bersuci dari hadats kecil",
-        "id": "pai_2_3",
-        "kelas": "2"
-      },
-      {
-        "id": "pai_3_1",
-        "kelas": "3",
-        "text": "Membaca dan menghafal QS Al-Kautsar dan Al-Ikhlas dengan tartil"
-      },
-      {
-        "text": "Meyakini sifat-sifat wajib bagi Allah SWT dan keteladanan para Rasul",
-        "kelas": "3",
-        "id": "pai_3_2"
-      },
-      {
-        "id": "pai_3_3",
-        "text": "Memahami tata cara sholat fardhu 5 waktu dengan tertib dan benar",
-        "kelas": "3"
-      },
-      {
-        "text": "Membaca dan menghayati QS Al-Hujurat ayat 13 tentang keragaman manusia",
-        "id": "pai_4_1",
-        "kelas": "4"
-      },
-      {
-        "id": "pai_4_2",
-        "text": "Mengenal kitab-kitab suci Allah dan malaikat-malaikat yang wajib diimani",
-        "kelas": "4"
-      },
-      {
-        "id": "pai_4_3",
-        "text": "Menunjukkan sikap santun kepada orang tua, guru, dan teman",
-        "kelas": "4"
-      },
-      {
-        "id": "pai_5_1",
-        "kelas": "5",
-        "text": "Membaca dan menghafal QS Al-Ma'un dan At-Tin serta memahami maknanya"
-      },
-      {
-        "kelas": "5",
-        "text": "Meyakini peristiwa Hari Kiamat dan mempersiapkan amal sholeh",
-        "id": "pai_5_2"
-      },
-      {
-        "id": "pai_5_3",
-        "text": "Memahami ketentuan ibadah puasa Ramadhan dan sholat tarawih",
-        "kelas": "5"
-      },
-      {
-        "id": "pai_6_1",
-        "text": "Membaca QS Al-Kafirun dan Al-Hujurat dengan hukum tajwid yang sahih",
-        "kelas": "6"
-      },
-      {
-        "kelas": "6",
-        "id": "pai_6_2",
-        "text": "Meyakini Qadha dan Qadar Allah dalam menerima setiap takdir"
-      },
-      {
-        "text": "Memahami ketentuan zakat fitrah, infaq, dan sedekah dalam kehidupan",
-        "id": "pai_6_3",
-        "kelas": "6"
-      }
-    ],
-    "PJOK": [
-      {
-        "id": "pjok_1_1",
-        "kelas": "1",
-        "text": "Mempraktikkan gerak dasar lokomotor (berjalan, berlari, melompat) berirama"
-      },
-      {
-        "id": "pjok_1_2",
-        "kelas": "1",
-        "text": "Mempraktikkan gerak dasar non-lokomotor (menekuk, memutar, mengayun)"
-      },
-      {
-        "id": "pjok_1_3",
-        "text": "Menjaga kebersihan pakaian dan anggota badan setelah berolahraga",
-        "kelas": "1"
-      },
-      {
-        "text": "Mempraktikkan variasi gerak manipulatif (melempar dan menangkap bola)",
-        "kelas": "2",
-        "id": "pjok_2_1"
-      },
-      {
-        "text": "Mempraktikkan sikap tubuh tegak saat berdiri, berjalan, dan duduk",
-        "kelas": "2",
-        "id": "pjok_2_2"
-      },
-      {
-        "text": "Mengenal manfaat istirahat dan tidur yang cukup bagi kebugaran jasmani",
-        "kelas": "2",
-        "id": "pjok_2_3"
-      },
-      {
-        "id": "pjok_3_1",
-        "kelas": "3",
-        "text": "Mempraktikkan kombinasi gerak dasar dalam permainan kasti dan sepak bola mini"
-      },
-      {
-        "text": "Mempraktikkan senam lantai sederhana seperti berguling dan keseimbangan",
-        "kelas": "3",
-        "id": "pjok_3_2"
-      },
-      {
-        "kelas": "3",
-        "id": "pjok_3_3",
-        "text": "Memilih jajanan sehat dan memahami cara menjaga kebersihan lingkungan"
-      },
-      {
-        "id": "pjok_4_1",
-        "text": "Mempraktikkan variasi gerak dasar lokomotor dan manipulatif bola voli mini",
-        "kelas": "4"
-      },
-      {
-        "id": "pjok_4_2",
-        "kelas": "4",
-        "text": "Mempraktikkan gerak dasar renang gaya dada dan keselamatan di kolam air"
-      },
-      {
-        "kelas": "4",
-        "id": "pjok_4_3",
-        "text": "Memahami bahaya merokok dan zat berbahaya bagi kesehatan jasmani"
-      },
-      {
-        "id": "pjok_5_1",
-        "text": "Mempraktikkan pola gerak dasar langkah kaki dan ayunan lengan senam irama",
-        "kelas": "5"
-      },
-      {
-        "text": "Melakukan latihan kebugaran jasmani (daya tahan, kekuatan otot, kelenturan)",
-        "id": "pjok_5_2",
-        "kelas": "5"
-      },
-      {
-        "id": "pjok_5_3",
-        "kelas": "5",
-        "text": "Mempraktikkan pertolongan pertama pada cedera ringan (P3K sederhana)"
-      },
-      {
-        "text": "Mempraktikkan taktik permainan bola besar (basket, futsal) beregu sportif",
-        "kelas": "6",
-        "id": "pjok_6_1"
-      },
-      {
-        "id": "pjok_6_2",
-        "text": "Mempraktikkan variasi lari jarak pendek dan teknik lompat jauh",
-        "kelas": "6"
-      },
-      {
-        "id": "pjok_6_3",
-        "text": "Menerapkan pola hidup sehat dan pencegahan penyakit menular sejak dini",
-        "kelas": "6"
-      }
-    ],
-    "PPKN": [
-      {
-        "text": "Mengenal simbol-simbol sila Pancasila dalam lambang burung Garuda",
-        "id": "ppkn_1_1",
-        "kelas": "1"
-      },
-      {
-        "text": "Mengidentifikasi aturan dan tata tertib yang berlaku di rumah dan sekolah",
-        "kelas": "1",
-        "id": "ppkn_1_2"
-      },
-      {
-        "text": "Menunjukkan sikap saling menghormati perbedaan fisik dan suku teman",
-        "kelas": "1",
-        "id": "ppkn_1_3"
-      },
-      {
-        "id": "ppkn_2_1",
-        "kelas": "2",
-        "text": "Menerapkan nilai-nilai Pancasila dalam interaksi bersama teman sebaya"
-      },
-      {
-        "kelas": "2",
-        "id": "ppkn_2_2",
-        "text": "Mentaati aturan saat bermain dan belajar di lingkungan kelas"
-      },
-      {
-        "text": "Menunjukkan sikap gotong royong dan tolong-menolong di sekolah",
-        "kelas": "2",
-        "id": "ppkn_2_3"
-      },
-      {
-        "text": "Menjelaskan makna lambang Garuda Pancasila dan semboyan Bhinneka Tunggal Ika",
-        "kelas": "3",
-        "id": "ppkn_3_1"
-      },
-      {
-        "id": "ppkn_3_2",
-        "text": "Melaksanakan hak dan kewajiban sebagai anggota keluarga dan warga sekolah",
-        "kelas": "3"
-      },
-      {
-        "kelas": "3",
-        "text": "Menghargai keragaman budaya, makanan khas, dan tradisi nusantara",
-        "id": "ppkn_3_3"
-      },
-      {
-        "id": "ppkn_4_1",
-        "text": "Menganalisis penerapan nilai-nilai Pancasila dalam memecahkan masalah",
-        "kelas": "4"
-      },
-      {
-        "kelas": "4",
-        "text": "Memahami bentuk norma hukum, kesopanan, dan kesusilaan di masyarakat",
-        "id": "ppkn_4_2"
-      },
-      {
-        "kelas": "4",
-        "id": "ppkn_4_3",
-        "text": "Menjaga kerukunan dalam keberagaman suku, agama, dan adat istiadat"
-      },
-      {
-        "kelas": "5",
-        "text": "Meneladani para tokoh perumus Pancasila dan pejuang kemerdekaan",
-        "id": "ppkn_5_1"
-      },
-      {
-        "id": "ppkn_5_2",
-        "text": "Memahami makna persatuan dan kesatuan bangsa dalam wadah NKRI",
-        "kelas": "5"
-      },
-      {
-        "text": "Melaksanakan tanggung jawab sebagai warga masyarakat dengan disiplin",
-        "id": "ppkn_5_3",
-        "kelas": "5"
-      },
-      {
-        "id": "ppkn_6_1",
-        "text": "Menganalisis penerapan nilai-nilai Pancasila dalam kehidupan berbangsa",
-        "kelas": "6"
-      },
-      {
-        "kelas": "6",
-        "text": "Memahami pelaksanaan hak, kewajiban, dan tanggung jawab warga negara",
-        "id": "ppkn_6_2"
-      },
-      {
-        "id": "ppkn_6_3",
-        "kelas": "6",
-        "text": "Menunjukkan komitmen bela negara dan cinta tanah air Indonesia"
-      },
-      {
-        "id": "ppkn_5_1",
-        "kelas": "5",
-        "text": "Memahami makna dan pengamalan nilai-nilai Pancasila dalam kehidupan sehari-hari"
-      },
-      {
-        "id": "ppkn_5_2",
-        "kelas": "5",
-        "text": "Mengidentifikasi norma, hak, dan kewajiban sebagai warga negara"
-      },
-      {
-        "id": "ppkn_5_3",
-        "kelas": "5",
-        "text": "Menghargai keragaman budaya dan suku bangsa dalam bingkai NKRI"
-      }
-    ],
-    "Prakarya": [
-      {
-        "text": "Mengenal aneka garis, bentuk, dan warna melalui kegiatan menggambar bebas",
-        "id": "prakarya_1_1",
-        "kelas": "1"
-      },
-      {
-        "id": "prakarya_1_2",
-        "kelas": "1",
-        "text": "Membuat karya kolase sederhana dari bahan kertas warna dan daun kering"
-      },
-      {
-        "id": "prakarya_1_3",
-        "kelas": "1",
-        "text": "Menyanyikan lagu anak-anak nasional dengan nada dan tempo yang tepat"
-      },
-      {
-        "text": "Membuat karya cetak dengan cap bahan alam (pelepah pisang, buah)",
-        "id": "prakarya_2_1",
-        "kelas": "2"
-      },
-      {
-        "kelas": "2",
-        "id": "prakarya_2_2",
-        "text": "Membuat karya origami melipat kertas membentuk hewan dan bunga"
-      },
-      {
-        "id": "prakarya_2_3",
-        "text": "Mengenal pola irama sederhana melalui tepuk tangan dan alat musik ritmis",
-        "kelas": "2"
-      },
-      {
-        "id": "prakarya_3_1",
-        "text": "Membuat karya dekoratif dengan motif hias nusantara pada bidang datar",
-        "kelas": "3"
-      },
-      {
-        "id": "prakarya_3_2",
-        "text": "Membuat kerajinan anyaman sederhana dari kertas atau pita plastik",
-        "kelas": "3"
-      },
-      {
-        "text": "Memperagakan gerak tari kreasi daerah dengan keselarasan irama musik",
-        "id": "prakarya_3_3",
-        "kelas": "3"
-      },
-      {
-        "id": "prakarya_4_1",
-        "kelas": "4",
-        "text": "Membuat karya seni rupa dua dimensi dan tiga dimensi dari bahan tanah liat/plastisin"
-      },
-      {
-        "text": "Mengenal teknik menempel mozaik dan montase dengan rapi dan harmonis",
-        "id": "prakarya_4_2",
-        "kelas": "4"
-      },
-      {
-        "id": "prakarya_4_3",
-        "kelas": "4",
-        "text": "Memainkan alat musik melodis sederhana (pianika/rekorder) dengan tepat"
-      },
-      {
-        "text": "Membuat karya seni batik jumputan (ikat celup) dengan pewarna alami",
-        "kelas": "5",
-        "id": "prakarya_5_1"
-      },
-      {
-        "id": "prakarya_5_2",
-        "text": "Membuat kerajinan tangan fungsional dari bahan daur ulang sampah plastik/kardus",
-        "kelas": "5"
-      },
-      {
-        "text": "Menampilkan gerak tari daerah nusantara dengan properti tari yang sesuai",
-        "kelas": "5",
-        "id": "prakarya_5_3"
-      },
-      {
-        "text": "Membuat patung dari sabun atau bubur kertas dengan detail proporsional",
-        "kelas": "6",
-        "id": "prakarya_6_1"
-      },
-      {
-        "id": "prakarya_6_2",
-        "text": "Membuat produk olahan pangan sederhana sehat khas daerah setempat",
-        "kelas": "6"
-      },
-      {
-        "id": "prakarya_6_3",
-        "text": "Menyajikan pameran mini karya seni rupa kelas dengan tata ruang apik",
-        "kelas": "6"
-      }
-    ],
-    "Tahfizh Al-Qur’an": [
-      {
-        "text": "Menghafal Surat An-Naas, Al-Falaq, dan Al-Ikhlas dengan lancar dan tartil",
-        "kelas": "1",
-        "id": "tahfizh_al_qur_an_1_1"
-      },
-      {
-        "text": "Menghafal Surat Al-Lahab, An-Nashr, dan Al-Kafirun dengan makhraj sahih",
-        "kelas": "1",
-        "id": "tahfizh_al_qur_an_1_2"
-      },
-      {
-        "id": "tahfizh_al_qur_an_1_3",
-        "text": "Menjaga hafalan (murajaah) secara rutin bersama ustadz/ustadzah di kelas",
-        "kelas": "1"
-      },
-      {
-        "kelas": "2",
-        "id": "tahfizh_al_qur_an_2_1",
-        "text": "Menghafal Surat Al-Kautsar, Al-Ma'un, dan Quraisy dengan hafalan mutqin"
-      },
-      {
-        "text": "Menghafal Surat Al-Fiil, Al-Humazah, dan Al-'Ashr dengan makhraj tepat",
-        "id": "tahfizh_al_qur_an_2_2",
-        "kelas": "2"
-      },
-      {
-        "text": "Mendemonstrasikan hafalan surat pendek dalam sholat berjamaah",
-        "id": "tahfizh_al_qur_an_2_3",
-        "kelas": "2"
-      },
-      {
-        "text": "Menghafal Surat At-Takatsur, Al-Qari'ah, dan Al-'Adiyat dengan tartil",
-        "kelas": "3",
-        "id": "tahfizh_al_qur_an_3_1"
-      },
-      {
-        "kelas": "3",
-        "id": "tahfizh_al_qur_an_3_2",
-        "text": "Menghafal Surat Az-Zalzalah, Al-Bayyinah, dan Al-Qadr dengan tajwid sahih"
-      },
-      {
-        "kelas": "3",
-        "text": "Menjaga hafalan surat-surat Juz 30 bagian akhir dengan disiplin murajaah",
-        "id": "tahfizh_al_qur_an_3_3"
-      },
-      {
-        "kelas": "4",
-        "id": "tahfizh_al_qur_an_4_1",
-        "text": "Menghafal Surat Al-'Alaq, At-Tin, dan Al-Insyirah secara mutqin"
-      },
-      {
-        "kelas": "4",
-        "text": "Menghafal Surat Adh-Dhuha, Al-Lail, dan Asy-Syams dengan ketepatan makhraj",
-        "id": "tahfizh_al_qur_an_4_2"
-      },
-      {
-        "kelas": "4",
-        "id": "tahfizh_al_qur_an_4_3",
-        "text": "Mempraktikkan adab mulia para penghafal Al-Qur'an dalam kehidupan sehari-hari"
-      },
-      {
-        "id": "tahfizh_al_qur_an_5_1",
-        "text": "Menghafal Surat Al-Balad, Al-Fajr, dan Al-Ghasyiyah dengan hafalan kuat",
-        "kelas": "5"
-      },
-      {
-        "id": "tahfizh_al_qur_an_5_2",
-        "kelas": "5",
-        "text": "Menghafal Surat Al-A'la, Ath-Thariq, dan Al-Buruj dengan tartil dan tajwid"
-      },
-      {
-        "kelas": "5",
-        "text": "Menyetorkan hafalan juz 30 secara konsisten sesuai target kurikulum tahfizh",
-        "id": "tahfizh_al_qur_an_5_3"
-      },
-      {
-        "id": "tahfizh_al_qur_an_6_1",
-        "text": "Menghafal Surat Al-Insyiqaq, Al-Muthaffifin, Al-Infithar, dan At-Takwir",
-        "kelas": "6"
-      },
-      {
-        "id": "tahfizh_al_qur_an_6_2",
-        "kelas": "6",
-        "text": "Menyempurnakan hafalan Juz 30 (Surat An-Naba' dan An-Nazi'at) secara mutqin"
-      },
-      {
-        "id": "tahfizh_al_qur_an_6_3",
-        "kelas": "6",
-        "text": "Melakukan tasmi' hafalan Juz 30 sekali duduk dengan predikat Mumtaz"
-      }
-    ],
-    "Tahsin ABaTaTsa": [
-      {
-        "id": "tahsin_abatatsa_1_1",
-        "text": "Mengenal dan melafalkan huruf hijaiyah tunggal berharakat fathah dengan makhraj tepat",
-        "kelas": "1"
-      },
-      {
-        "id": "tahsin_abatatsa_1_2",
-        "text": "Membedakan bunyi huruf serupa (Ta-Tha, Dal-Dzal, Sin-Shin, Ha-Kha)",
-        "kelas": "1"
-      },
-      {
-        "id": "tahsin_abatatsa_1_3",
-        "kelas": "1",
-        "text": "Membaca rangkaian dua hingga tiga huruf hijaiyah bersambung dasar"
-      },
-      {
-        "text": "Membaca huruf berharakat kasrah, dhammah, dan fathatain dengan fasih",
-        "id": "tahsin_abatatsa_2_1",
-        "kelas": "2"
-      },
-      {
-        "kelas": "2",
-        "text": "Mengenal tanda baca sukun (mati) dan tasydid (dobel) pada kata",
-        "id": "tahsin_abatatsa_2_2"
-      },
-      {
-        "text": "Mempraktikkan cara membaca huruf mad thobi'i (panjang 2 harakat)",
-        "kelas": "2",
-        "id": "tahsin_abatatsa_2_3"
-      },
-      {
-        "text": "Mengidentifikasi dan mempraktikkan hukum bacaan Nun Sukun dan Tanwin (Idzhar, Ikhfa)",
-        "id": "tahsin_abatatsa_3_1",
-        "kelas": "3"
-      },
-      {
-        "id": "tahsin_abatatsa_3_2",
-        "text": "Membaca ayat dengan kelancaran tarrtil pada buku jilid pembelajaran",
-        "kelas": "3"
-      },
-      {
-        "kelas": "3",
-        "id": "tahsin_abatatsa_3_3",
-        "text": "Menjaga kaidah panjang-pendek bacaan saat membaca potongan ayat Al-Qur'an"
-      },
-      {
-        "id": "tahsin_abatatsa_4_1",
-        "kelas": "4",
-        "text": "Mempraktikkan hukum Idgham Bighunnah, Idgham Bilaghunnah, dan Iqlab"
-      },
-      {
-        "text": "Mengenal hukum bacaan Mim Sukun (Ikhfa Syafawi, Idgham Mimi, Idzhar Syafawi)",
-        "kelas": "4",
-        "id": "tahsin_abatatsa_4_2"
-      },
-      {
-        "id": "tahsin_abatatsa_4_3",
-        "text": "Membaca ayat dengan kejelasan makharijul huruf pada tingkat menengah",
-        "kelas": "4"
-      },
-      {
-        "text": "Mempraktikkan hukum bacaan Alif Lam Qomariyah dan Alif Lam Syamsiyah",
-        "kelas": "5",
-        "id": "tahsin_abatatsa_5_1"
-      },
-      {
-        "kelas": "5",
-        "text": "Mengenal dan menerapkan hukum Mad Wajib Muttashil dan Mad Jaiz Munfashil",
-        "id": "tahsin_abatatsa_5_2"
-      },
-      {
-        "id": "tahsin_abatatsa_5_3",
-        "text": "Membaca tartil surat-surat pendek Juz 30 dengan kesesuaian kaidah tajwid",
-        "kelas": "5"
-      },
-      {
-        "id": "tahsin_abatatsa_6_1",
-        "kelas": "6",
-        "text": "Menerapkan hukum Qalqalah (Sughra dan Kubra) dan Ra Tafkhim/Tarqiq secara tepat"
-      },
-      {
-        "text": "Menguasai tanda waqaf dan ibtida' dalam Al-Qur'an dengan benar",
-        "id": "tahsin_abatatsa_6_2",
-        "kelas": "6"
-      },
-      {
-        "text": "Membaca Al-Qur'an dengan tartil, fasih, dan menjaga keindahan tilawah",
-        "kelas": "6",
-        "id": "tahsin_abatatsa_6_3"
-      }
-    ],
-    "Wudhu dan Sholat": [
-      {
-        "id": "wudhu_dan_sholat_1_1",
-        "kelas": "1",
-        "text": "Menghafal urutan rukun wudhu secara berurutan dan tertib"
-      },
-      {
-        "kelas": "1",
-        "id": "wudhu_dan_sholat_1_2",
-        "text": "Mempraktikkan tata cara berwudhu dengan bimbingan ustadz/ustadzah"
-      },
-      {
-        "id": "wudhu_dan_sholat_1_3",
-        "text": "Mengenal nama-nama 5 sholat fardhu dan jumlah rakaatnya",
-        "kelas": "1"
-      },
-      {
-        "text": "Mempraktikkan wudhu secara mandiri dengan tertib dan hemat air",
-        "kelas": "2",
-        "id": "wudhu_dan_sholat_2_1"
-      },
-      {
-        "text": "Menghafal bacaan takbiratul ihram, ruku, dan sujud dengan tartil",
-        "id": "wudhu_dan_sholat_2_2",
-        "kelas": "2"
-      },
-      {
-        "id": "wudhu_dan_sholat_2_3",
-        "kelas": "2",
-        "text": "Mempraktikkan gerakan sholat fardhu 2 rakaat (sholat Subuh) secara benar"
-      },
-      {
-        "text": "Menghafal bacaan doa iftitah, i'tidal, dan duduk di antara dua sujud",
-        "kelas": "3",
-        "id": "wudhu_dan_sholat_3_1"
-      },
-      {
-        "text": "Menghafal bacaan tasyahhud awal dan tasyahhud akhir beserta sholawat",
-        "kelas": "3",
-        "id": "wudhu_dan_sholat_3_2"
-      },
-      {
-        "id": "wudhu_dan_sholat_3_3",
-        "text": "Mempraktikkan sholat fardhu berjamaah dengan menjaga kekhusyukan",
-        "kelas": "3"
-      },
-      {
-        "id": "wudhu_dan_sholat_4_1",
-        "kelas": "4",
-        "text": "Mempraktikkan sholat fardhu 4 rakaat (Dzuhur/Ashar/Isya) secara sempurna"
-      },
-      {
-        "kelas": "4",
-        "id": "wudhu_dan_sholat_4_2",
-        "text": "Mengenal syarat sah sholat, syarat wajib sholat, dan hal-hal yang membatalkannya"
-      },
-      {
-        "kelas": "4",
-        "id": "wudhu_dan_sholat_4_3",
-        "text": "Mempraktikkan adab adzan dan iqamah serta melafalkan jawabannya"
-      },
-      {
-        "id": "wudhu_dan_sholat_5_1",
-        "text": "Mempraktikkan sholat sunnah rawatib (qabliyyah dan ba'diyyah) serta dhuha",
-        "kelas": "5"
-      },
-      {
-        "kelas": "5",
-        "text": "Memahami dan mempraktikkan tata cara sholat jamak dan qashar saat safar",
-        "id": "wudhu_dan_sholat_5_2"
-      },
-      {
-        "kelas": "5",
-        "id": "wudhu_dan_sholat_5_3",
-        "text": "Mempraktikkan tata cara sujud sahwi dan sujud syukur sesuai sunnah"
-      },
-      {
-        "kelas": "6",
-        "id": "wudhu_dan_sholat_6_1",
-        "text": "Mempraktikkan tata cara sholat jenazah 4 takbir dengan tertib"
-      },
-      {
-        "id": "wudhu_dan_sholat_6_2",
-        "text": "Berlatih menjadi imam sholat berjamaah dan memimpin wirid/doa bakda sholat",
-        "kelas": "6"
-      },
-      {
-        "id": "wudhu_dan_sholat_6_3",
-        "kelas": "6",
-        "text": "Mempraktikkan sholat malam (tahajjud dan witir) dengan khusyuk dan konsisten"
-      }
-    ],
-    "IPAS": [
-      {
-        "id": "ipas_5_1",
-        "kelas": "5",
-        "text": "Memahami sistem pernapasan, pencernaan, dan peredaran darah manusia"
-      },
-      {
-        "id": "ipas_5_2",
-        "kelas": "5",
-        "text": "Menjelaskan interaksi komponen biotik dan abiotik dalam ekosistem"
-      },
-      {
-        "id": "ipas_5_3",
-        "kelas": "5",
-        "text": "Menjelaskan peristiwa perpindahan kalor dan perubahan wujud benda"
-      },
-      {
-        "id": "ipas_3_1",
-        "kelas": "3",
-        "text": "Mengidentifikasi bagian tubuh hewan dan tumbuhan serta fungsinya"
-      },
-      {
-        "id": "ipas_3_2",
-        "kelas": "3",
-        "text": "Memahami siklus hidup makhluk hidup di lingkungan sekitar"
-      },
-      {
-        "id": "ipas_3_3",
-        "kelas": "3",
-        "text": "Mengenal ragam kenampakan alam dan buatan di lingkungan tempat tinggal"
-      },
-      {
-        "id": "ipas_4_1",
-        "kelas": "4",
-        "text": "Memahami proses fotosintesis dan peran tumbuhan bagi kehidupan bumi"
-      },
-      {
-        "id": "ipas_4_2",
-        "kelas": "4",
-        "text": "Mengidentifikasi wujud zat dan perubahan bentuk materi dalam kehidupan"
-      },
-      {
-        "id": "ipas_4_3",
-        "kelas": "4",
-        "text": "Mengenal kearifan lokal, keragaman budaya, dan peta daerah setempat"
-      },
-      {
-        "id": "ipas_6_1",
-        "kelas": "6",
-        "text": "Memahami sistem organ tubuh manusia dan upaya menjaga kesehatannya"
-      },
-      {
-        "id": "ipas_6_2",
-        "kelas": "6",
-        "text": "Menjelaskan perpindahan energi listrik dan pemanfaatan energi alternatif"
-      },
-      {
-        "id": "ipas_6_3",
-        "kelas": "6",
-        "text": "Memahami posisi geografis Indonesia dan hubungan antarnegara tetangga"
-      }
-    ],
-    "Seni Budaya": [
-      {
-        "id": "senbud_5_1",
-        "kelas": "5",
-        "text": "Mengenal dan mengeksplorasi unsur rupa, pola, dan ritme dalam karya seni"
-      },
-      {
-        "id": "senbud_5_2",
-        "kelas": "5",
-        "text": "Mengapresiasi karya seni rupa daerah nusantara dengan rasa bangga"
-      },
-      {
-        "id": "senbud_5_3",
-        "kelas": "5",
-        "text": "Membuat karya seni kriya sederhana dengan media bahan sekitar"
-      },
-      {
-        "id": "senbud_1_1",
-        "kelas": "1",
-        "text": "Mengenal dan mengeksplorasi aneka garis, bentuk, dan warna dasar dalam berkarya"
-      },
-      {
-        "id": "senbud_1_2",
-        "kelas": "1",
-        "text": "Membuat karya seni rupa dua dimensi sederhana dengan media pewarna"
-      },
-      {
-        "id": "senbud_1_3",
-        "kelas": "1",
-        "text": "Menunjukkan sikap percaya diri dan senang dalam berekspresi seni"
-      },
-      {
-        "id": "sb_2_1",
-        "kelas": "2",
-        "text": "Mengenal unsur seni rupa warna, bidang, dan pola ragam hias sederhana"
-      },
-      {
-        "id": "sb_2_2",
-        "kelas": "2",
-        "text": "Mempraktikkan gerak tari tradisional anak dan ketukan pola irama lagu"
-      },
-      {
-        "id": "sb_2_3",
-        "kelas": "2",
-        "text": "Membuat karya kriya sederhana dari bahan kertas dan bahan alam"
-      },
-      {
-        "id": "sb_3_1",
-        "kelas": "3",
-        "text": "Mengeksplorasi komposisi warna dan tekstur dalam lukisan dekoratif"
-      },
-      {
-        "id": "sb_3_2",
-        "kelas": "3",
-        "text": "Menyanyikan lagu anak dan lagu daerah dengan artikulasi serta tempo tepat"
-      },
-      {
-        "id": "sb_3_3",
-        "kelas": "3",
-        "text": "Membuat karya anyaman atau kolase dengan kerapian dan kreativitas tinggi"
-      },
-      {
-        "id": "sb_4_1",
-        "kelas": "4",
-        "text": "Mengidentifikasi motif hias Nusantara dan menggambar ragam flora fauna"
-      },
-      {
-        "id": "sb_4_2",
-        "kelas": "4",
-        "text": "Memahami dinamika tangga nada dan memainkan alat musik melodis sederhana"
-      },
-      {
-        "id": "sb_4_3",
-        "kelas": "4",
-        "text": "Menampilkan gerak tari daerah dengan kekompakan dan ekspresi yang tepat"
-      },
-      {
-        "id": "sb_6_1",
-        "kelas": "6",
-        "text": "Membuat karya seni rupa dua dimensi dan tiga dimensi dengan teknik campuran"
-      },
-      {
-        "id": "sb_6_2",
-        "kelas": "6",
-        "text": "Mengapresiasi karya musik daerah dan kreasi ansambel instrumen sederhana"
-      },
-      {
-        "id": "sb_6_3",
-        "kelas": "6",
-        "text": "Merancang pameran mini karya seni kelas dengan percaya diri dan kerja sama"
-      }
-    ],
-    "Life skill": [
-      {
-        "id": "lifskil_5_1",
-        "kelas": "5",
-        "text": "Menerapkan kemandirian, kedisiplinan, dan tanggung jawab diri"
-      },
-      {
-        "id": "lifskil_5_2",
-        "kelas": "5",
-        "text": "Mempraktikkan keterampilan hidup bersih, sehat, dan kerapian lingkungan"
-      },
-      {
-        "id": "lifskil_5_3",
-        "kelas": "5",
-        "text": "Bekerja sama dan saling tolong-menolong dalam kegiatan tim"
-      },
-      {
-        "id": "lifskil_1_1",
-        "kelas": "1",
-        "text": "Membiasakan kerapian perlengkapan belajar dan kebersihan diri sendiri"
-      },
-      {
-        "id": "lifskil_1_2",
-        "kelas": "1",
-        "text": "Mempraktikkan adab makan, minum, dan mencuci tangan dengan tertib"
-      },
-      {
-        "id": "lifskil_1_3",
-        "kelas": "1",
-        "text": "Menunjukkan sikap mandiri dan santun kepada guru serta teman di sekolah"
-      },
-      {
-        "id": "lifskil_2_1",
-        "kelas": "2",
-        "text": "Membiasakan kemandirian dalam merapikan alat belajar dan kamar sendiri"
-      },
-      {
-        "id": "lifskil_2_2",
-        "kelas": "2",
-        "text": "Mempraktikkan adab bertamu, menyapa, dan bekerja sama dengan tertib"
-      },
-      {
-        "id": "lifskil_2_3",
-        "kelas": "2",
-        "text": "Menunjukkan kepedulian terhadap kebersihan lingkungan kelas dan rumah"
-      },
-      {
-        "id": "lifskil_3_1",
-        "kelas": "3",
-        "text": "Mampu mengelola waktu belajar, ibadah, dan istirahat secara teratur"
-      },
-      {
-        "id": "lifskil_3_2",
-        "kelas": "3",
-        "text": "Mempraktikkan keterampilan dasar memilah sampah dan hemat energi"
-      },
-      {
-        "id": "lifskil_3_3",
-        "kelas": "3",
-        "text": "Menunjukkan sikap tolong-menolong dan empati kepada sesama teman"
-      }
-    ],
-    "TIK": [
-      {
-        "id": "tik_5_1",
-        "kelas": "5",
-        "text": "Mengenal perangkat keras, lunak, dan etika dasar penggunaan teknologi informasi"
-      },
-      {
-        "id": "tik_5_2",
-        "kelas": "5",
-        "text": "Mengoperasikan aplikasi dasar pengolah kata dan dokumen digital"
-      },
-      {
-        "id": "tik_5_3",
-        "kelas": "5",
-        "text": "Memahami keamanan internet dan pemanfaatan media digital secara bijak"
-      },
-      {
-        "id": "tik_4_1",
-        "kelas": "4",
-        "text": "Mengenal bagian perangkat komputer dan fungsi dasar mouse serta keyboard"
-      },
-      {
-        "id": "tik_4_2",
-        "kelas": "4",
-        "text": "Mempraktikkan mengetik santun dan membuka program pengolah dokumen"
-      },
-      {
-        "id": "tik_4_3",
-        "kelas": "4",
-        "text": "Memahami aturan keselamatan dan etika penggunaan komputer di sekolah"
-      },
-      {
-        "id": "tik_6_1",
-        "kelas": "6",
-        "text": "Memanfaatkan internet sehat untuk pencarian sumber belajar dan edukasi"
-      },
-      {
-        "id": "tik_6_2",
-        "kelas": "6",
-        "text": "Membuat presentasi digital sederhana dengan teks dan gambar terpadu"
-      },
-      {
-        "id": "tik_6_3",
-        "kelas": "6",
-        "text": "Memahami perlindungan data pribadi dan etika berkomunikasi di media digital"
-      }
-    ],
-    "Sirah": [
-      {
-        "id": "sirah_1_1",
-        "kelas": "1",
-        "text": "Mengenal silsilah dan masa kelahiran Nabi Muhammad SAW"
-      },
-      {
-        "id": "sirah_1_2",
-        "kelas": "1",
-        "text": "Meneladani sifat jujur (Siddiq) Nabi Muhammad SAW dalam bersikap"
-      },
-      {
-        "id": "sirah_1_3",
-        "kelas": "1",
-        "text": "Mengenal masa kanak-kanak dan kasih sayang pengasuh Nabi SAW"
-      },
-      {
-        "id": "sirah_2_1",
-        "kelas": "2",
-        "text": "Memahami masa remaja Nabi Muhammad SAW dan gelar Al-Amin"
-      },
-      {
-        "id": "sirah_2_2",
-        "kelas": "2",
-        "text": "Mengenal peristiwa peletakan kembali Hajar Aswad secara adil"
-      },
-      {
-        "id": "sirah_2_3",
-        "kelas": "2",
-        "text": "Meneladani sifat amanah dan kejujuran dalam pergaulan"
-      },
-      {
-        "id": "sirah_3_1",
-        "kelas": "3",
-        "text": "Mengenal peristiwa turunnya wahyu pertama di Gua Hira"
-      },
-      {
-        "id": "sirah_3_2",
-        "kelas": "3",
-        "text": "Meneladani keteguhan generasi pertama pemeluk Islam (Assabiqunal Awwalun)"
-      },
-      {
-        "id": "sirah_3_3",
-        "kelas": "3",
-        "text": "Memahami masa awal dakwah sembunyi-sembunyi dan terang-terangan"
-      },
-      {
-        "id": "sirah_4_1",
-        "kelas": "4",
-        "text": "Memahami ketabahan dakwah Nabi Muhammad SAW di Mekkah dan Thaif"
-      },
-      {
-        "id": "sirah_4_2",
-        "kelas": "4",
-        "text": "Memahami peristiwa Isra Miraj dan perintah ibadah shalat 5 waktu"
-      },
-      {
-        "id": "sirah_4_3",
-        "kelas": "4",
-        "text": "Mengenal peristiwa Hijrah ke Madinah dan sambutan kaum Anshar"
-      },
-      {
-        "id": "sirah_5_1",
-        "kelas": "5",
-        "text": "Memahami peristiwa penting pembangunan Masjid Nabawi di Madinah"
-      },
-      {
-        "id": "sirah_5_2",
-        "kelas": "5",
-        "text": "Meneladani persaudaraan kaum Muhajirin dan kaum Anshar"
-      },
-      {
-        "id": "sirah_5_3",
-        "kelas": "5",
-        "text": "Memahami nilai persatuan dalam Piagam Madinah"
-      },
-      {
-        "id": "sirah_6_1",
-        "kelas": "6",
-        "text": "Memahami peristiwa Fathu Makkah dan sikap pemaaf Rasulullah SAW"
-      },
-      {
-        "id": "sirah_6_2",
-        "kelas": "6",
-        "text": "Memahami khutbah perpisahan (Haji Wada) dan pesan persaudaraan umat"
-      },
-      {
-        "id": "sirah_6_3",
-        "kelas": "6",
-        "text": "Meneladani keteladanan Rasulullah SAW sebagai rahmat bagi semesta alam"
-      }
-    ],
-    "Sirah Nabawiyah": [
-      {
-        "id": "sirah_1_1",
-        "kelas": "1",
-        "text": "Mengenal silsilah dan masa kelahiran Nabi Muhammad SAW"
-      },
-      {
-        "id": "sirah_1_2",
-        "kelas": "1",
-        "text": "Meneladani sifat jujur (Siddiq) Nabi Muhammad SAW dalam bersikap"
-      },
-      {
-        "id": "sirah_1_3",
-        "kelas": "1",
-        "text": "Mengenal masa kanak-kanak dan kasih sayang pengasuh Nabi SAW"
-      },
-      {
-        "id": "sirah_2_1",
-        "kelas": "2",
-        "text": "Memahami masa remaja Nabi Muhammad SAW dan gelar Al-Amin"
-      },
-      {
-        "id": "sirah_2_2",
-        "kelas": "2",
-        "text": "Mengenal peristiwa peletakan kembali Hajar Aswad secara adil"
-      },
-      {
-        "id": "sirah_2_3",
-        "kelas": "2",
-        "text": "Meneladani sifat amanah dan kejujuran dalam pergaulan"
-      },
-      {
-        "id": "sirah_3_1",
-        "kelas": "3",
-        "text": "Mengenal peristiwa turunnya wahyu pertama di Gua Hira"
-      },
-      {
-        "id": "sirah_3_2",
-        "kelas": "3",
-        "text": "Meneladani keteguhan generasi pertama pemeluk Islam (Assabiqunal Awwalun)"
-      },
-      {
-        "id": "sirah_3_3",
-        "kelas": "3",
-        "text": "Memahami masa awal dakwah sembunyi-sembunyi dan terang-terangan"
-      },
-      {
-        "id": "sirah_4_1",
-        "kelas": "4",
-        "text": "Memahami ketabahan dakwah Nabi Muhammad SAW di Mekkah dan Thaif"
-      },
-      {
-        "id": "sirah_4_2",
-        "kelas": "4",
-        "text": "Memahami peristiwa Isra Miraj dan perintah ibadah shalat 5 waktu"
-      },
-      {
-        "id": "sirah_4_3",
-        "kelas": "4",
-        "text": "Mengenal peristiwa Hijrah ke Madinah dan sambutan kaum Anshar"
-      },
-      {
-        "id": "sirah_5_1",
-        "kelas": "5",
-        "text": "Memahami peristiwa penting pembangunan Masjid Nabawi di Madinah"
-      },
-      {
-        "id": "sirah_5_2",
-        "kelas": "5",
-        "text": "Meneladani persaudaraan kaum Muhajirin dan kaum Anshar"
-      },
-      {
-        "id": "sirah_5_3",
-        "kelas": "5",
-        "text": "Memahami nilai persatuan dalam Piagam Madinah"
-      },
-      {
-        "id": "sirah_6_1",
-        "kelas": "6",
-        "text": "Memahami peristiwa Fathu Makkah dan sikap pemaaf Rasulullah SAW"
-      },
-      {
-        "id": "sirah_6_2",
-        "kelas": "6",
-        "text": "Memahami khutbah perpisahan (Haji Wada) dan pesan persaudaraan umat"
-      },
-      {
-        "id": "sirah_6_3",
-        "kelas": "6",
-        "text": "Meneladani keteladanan Rasulullah SAW sebagai rahmat bagi semesta alam"
-      }
-    ],
-    "Siroh": [
-      {
-        "id": "sirah_1_1",
-        "kelas": "1",
-        "text": "Mengenal silsilah dan masa kelahiran Nabi Muhammad SAW"
-      },
-      {
-        "id": "sirah_1_2",
-        "kelas": "1",
-        "text": "Meneladani sifat jujur (Siddiq) Nabi Muhammad SAW dalam bersikap"
-      },
-      {
-        "id": "sirah_1_3",
-        "kelas": "1",
-        "text": "Mengenal masa kanak-kanak dan kasih sayang pengasuh Nabi SAW"
-      },
-      {
-        "id": "sirah_2_1",
-        "kelas": "2",
-        "text": "Memahami masa remaja Nabi Muhammad SAW dan gelar Al-Amin"
-      },
-      {
-        "id": "sirah_2_2",
-        "kelas": "2",
-        "text": "Mengenal peristiwa peletakan kembali Hajar Aswad secara adil"
-      },
-      {
-        "id": "sirah_2_3",
-        "kelas": "2",
-        "text": "Meneladani sifat amanah dan kejujuran dalam pergaulan"
-      },
-      {
-        "id": "sirah_3_1",
-        "kelas": "3",
-        "text": "Mengenal peristiwa turunnya wahyu pertama di Gua Hira"
-      },
-      {
-        "id": "sirah_3_2",
-        "kelas": "3",
-        "text": "Meneladani keteguhan generasi pertama pemeluk Islam (Assabiqunal Awwalun)"
-      },
-      {
-        "id": "sirah_3_3",
-        "kelas": "3",
-        "text": "Memahami masa awal dakwah sembunyi-sembunyi dan terang-terangan"
-      },
-      {
-        "id": "sirah_4_1",
-        "kelas": "4",
-        "text": "Memahami ketabahan dakwah Nabi Muhammad SAW di Mekkah dan Thaif"
-      },
-      {
-        "id": "sirah_4_2",
-        "kelas": "4",
-        "text": "Memahami peristiwa Isra Miraj dan perintah ibadah shalat 5 waktu"
-      },
-      {
-        "id": "sirah_4_3",
-        "kelas": "4",
-        "text": "Mengenal peristiwa Hijrah ke Madinah dan sambutan kaum Anshar"
-      },
-      {
-        "id": "sirah_5_1",
-        "kelas": "5",
-        "text": "Memahami peristiwa penting pembangunan Masjid Nabawi di Madinah"
-      },
-      {
-        "id": "sirah_5_2",
-        "kelas": "5",
-        "text": "Meneladani persaudaraan kaum Muhajirin dan kaum Anshar"
-      },
-      {
-        "id": "sirah_5_3",
-        "kelas": "5",
-        "text": "Memahami nilai persatuan dalam Piagam Madinah"
-      },
-      {
-        "id": "sirah_6_1",
-        "kelas": "6",
-        "text": "Memahami peristiwa Fathu Makkah dan sikap pemaaf Rasulullah SAW"
-      },
-      {
-        "id": "sirah_6_2",
-        "kelas": "6",
-        "text": "Memahami khutbah perpisahan (Haji Wada) dan pesan persaudaraan umat"
-      },
-      {
-        "id": "sirah_6_3",
-        "kelas": "6",
-        "text": "Meneladani keteladanan Rasulullah SAW sebagai rahmat bagi semesta alam"
-      }
-    ],
-    "Life Skill": [
-      {
-        "id": "lifskil_5_1",
-        "kelas": "5",
-        "text": "Menerapkan kemandirian, kedisiplinan, dan tanggung jawab diri"
-      },
-      {
-        "id": "lifskil_5_2",
-        "kelas": "5",
-        "text": "Mempraktikkan keterampilan hidup bersih, sehat, dan kerapian lingkungan"
-      },
-      {
-        "id": "lifskil_5_3",
-        "kelas": "5",
-        "text": "Bekerja sama dan saling tolong-menolong dalam kegiatan tim"
-      },
-      {
-        "id": "lifskil_1_1",
-        "kelas": "1",
-        "text": "Membiasakan kerapian perlengkapan belajar dan kebersihan diri sendiri"
-      },
-      {
-        "id": "lifskil_1_2",
-        "kelas": "1",
-        "text": "Mempraktikkan adab makan, minum, dan mencuci tangan dengan tertib"
-      },
-      {
-        "id": "lifskil_1_3",
-        "kelas": "1",
-        "text": "Menunjukkan sikap mandiri dan santun kepada guru serta teman di sekolah"
-      },
-      {
-        "id": "lifskil_2_1",
-        "kelas": "2",
-        "text": "Membiasakan kemandirian dalam merapikan alat belajar dan kamar sendiri"
-      },
-      {
-        "id": "lifskil_2_2",
-        "kelas": "2",
-        "text": "Mempraktikkan adab bertamu, menyapa, dan bekerja sama dengan tertib"
-      },
-      {
-        "id": "lifskil_2_3",
-        "kelas": "2",
-        "text": "Menunjukkan kepedulian terhadap kebersihan lingkungan kelas dan rumah"
-      },
-      {
-        "id": "lifskil_3_1",
-        "kelas": "3",
-        "text": "Mampu mengelola waktu belajar, ibadah, dan istirahat secara teratur"
-      },
-      {
-        "id": "lifskil_3_2",
-        "kelas": "3",
-        "text": "Mempraktikkan keterampilan dasar memilah sampah dan hemat energi"
-      },
-      {
-        "id": "lifskil_3_3",
-        "kelas": "3",
-        "text": "Menunjukkan sikap tolong-menolong dan empati kepada sesama teman"
-      }
-    ]
+    "Bahasa Arab": [],
+    "Bahasa Indonesia": [],
+    "Bahasa Inggris": [],
+    "Do’a Harian dan Hadits": [],
+    "IPA": [],
+    "IPS": [],
+    "Informatika": [],
+    "Matematika": [],
+    "PAI": [],
+    "PJOK": [],
+    "PPKN": [],
+    "Prakarya": [],
+    "Tahfizh Al-Qur’an": [],
+    "Tahsin ABaTaTsa": [],
+    "Wudhu dan Sholat": [],
+    "IPAS": [],
+    "Seni Budaya": [],
+    "Life skill": [],
+    "TIK": [],
+    "Sirah": [],
+    "Sirah Nabawiyah": [],
+    "Siroh": [],
+    "Life Skill": []
   },
   "ekskul": [
     {
@@ -17115,12 +15130,12 @@
   ],
   "settings": {
     "id": "app",
-    "principalNip": "-",
+    "principalNip": "19800101 200501 1 003",
     "format": {
       "tahunPelajaran": "2026/2027",
       "fontFamily": "Times New Roman",
-      "signaturePosition": "tengah",
-      "tanggalRaport": "16 Oktober 2026",
+      "signaturePosition": "kanan",
+      "tanggalRaport": "17 Juni 2026",
       "showAttendance": true,
       "showSosial": true,
       "fontSize": "11pt",
@@ -17128,11 +15143,11 @@
       "watermarkSize": 440,
       "showSpiritual": true,
       "semesterName": "Ganjil",
-      "watermarkOpacity": 0.08,
+      "watermarkOpacity": 0.05,
       "showCatatan": true,
       "showLogo": true
     },
-    "principalName": "Sobariyani, S.Pd., Gr."
+    "principalName": "Sobariyani, S.Pd."
   },
   "subjects": [
     "PAI",

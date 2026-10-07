@@ -13,7 +13,7 @@ import {
   getDoc, 
   deleteDoc 
 } from "firebase/firestore";
-import { normalizeSubjectKey, matchTpClass, getSubjectTps } from "./src/types";
+import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList } from "./src/types";
 
 const app = express();
 const PORT = 3000;
@@ -968,7 +968,13 @@ app.post("/api/walikelas/notes", async (req, res) => {
 // 6. Learning Objectives (TP) Templates CRUD
 app.get("/api/tps", async (req, res) => {
   const db = await readDB();
-  const templates = db.tujuan_pembelajaran_templates || {};
+  const rawTemplates = db.tujuan_pembelajaran_templates || {};
+  const templates: Record<string, any[]> = {};
+  for (const [sub, list] of Object.entries(rawTemplates)) {
+    if (Array.isArray(list)) {
+      templates[sub] = cleanTpList(list);
+    }
+  }
   const { kelas, subject } = req.query;
 
   // If specific subject requested
