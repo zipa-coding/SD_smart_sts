@@ -8,6 +8,7 @@ import {
   normalizeSubjectKey,
   matchTpClass,
   getSubjectTps,
+  isKeislamanSubject,
 } from "../types";
 import {
   BookOpen,
@@ -1343,14 +1344,19 @@ export default function TeacherPanel({
               <div className="border-t border-slate-100 pt-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
                   <div>
-                    <h4 className="font-extrabold text-[10px] text-slate-700 uppercase tracking-wider">
-                      Tujuan Pembelajaran ({activeSubject}) untuk Siswa Ini
+                    <h4 className="font-extrabold text-[10px] text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>Tujuan Pembelajaran ({activeSubject})</span>
+                      <span className="px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded text-[9px] font-bold">
+                        Kelas {selectedClass}
+                      </span>
                     </h4>
                     <p className="text-[10px] text-slate-400 leading-tight">
-                      Centang jika anak sudah optimal (Sangat Baik). Un-centang jika masih butuh bimbingan.
+                      {Array.isArray(tpTemplates) && tpTemplates.length > 0
+                        ? "Centang jika anak sudah optimal (Sangat Baik). Un-centang jika masih butuh bimbingan."
+                        : "Belum ada TP manual yang diinputkan. Guru dapat menambah TP atau mengisi deskripsi langsung secara manual."}
                     </p>
                   </div>
-                  {Array.isArray(tpTemplates) && tpTemplates.length > 0 && (
+                  {Array.isArray(tpTemplates) && tpTemplates.length > 0 ? (
                     <div className="flex items-center gap-1.5 self-start sm:self-auto">
                       <button
                         type="button"
@@ -1366,7 +1372,24 @@ export default function TeacherPanel({
                       >
                         Semua Butuh Bimbingan ⚠️
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveViewTab("tps")}
+                        className="px-2 py-0.5 text-[9px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Kelola TP</span>
+                      </button>
                     </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setActiveViewTab("tps")}
+                      className="px-2.5 py-1 text-[10px] font-bold bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs self-start sm:self-auto"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah TP Manual</span>
+                    </button>
                   )}
                 </div>
 
@@ -1375,20 +1398,13 @@ export default function TeacherPanel({
                   id="tp-grading-list"
                 >
                   {!Array.isArray(tpTemplates) || tpTemplates.length === 0 ? (
-                    <div className="p-3.5 bg-slate-50 text-slate-600 text-xs rounded-xl border border-dashed border-slate-300 text-center space-y-2">
-                      <p className="font-bold text-slate-700">
-                        Belum ada Tujuan Pembelajaran (TP) {activeSubject} Kelas {selectedClass} yang diinputkan.
+                    <div className="p-3 bg-slate-50 text-slate-600 text-xs rounded-xl border border-dashed border-slate-300 text-center space-y-1.5">
+                      <p className="font-bold text-slate-700 text-[11px]">
+                        Belum ada Tujuan Pembelajaran (TP) manual untuk {activeSubject} Kelas {selectedClass}.
                       </p>
-                      <p className="text-[11px] text-slate-500">
-                        Sistem sekarang hanya menggunakan TP yang diinputkan langsung oleh Guru/Admin (tanpa sample dummy).
+                      <p className="text-[10px] text-slate-500">
+                        Guru dapat langsung mengetik narasi deskripsi capaian rapor secara manual pada kolom di bawah, atau klik tombol <strong>Tambah TP Manual</strong> di atas jika ingin menambahkan poin TP sewaktu-waktu.
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setActiveViewTab("tps")}
-                        className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
-                      >
-                        <Plus className="w-3.5 h-3.5" /> Inputkan TP {activeSubject} Sekarang
-                      </button>
                     </div>
                   ) : (
                     tpTemplates
@@ -1442,19 +1458,23 @@ export default function TeacherPanel({
                   <div>
                     <h4 className="font-extrabold text-[10px] text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
                       <span>Narasi Deskripsi Raport ({activeSubject})</span>
-                      {tpTemplates.length > 0 && (
+                      {Array.isArray(tpTemplates) && tpTemplates.length > 0 ? (
                         <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-semibold lowercase">
-                          otomatis memuat nama siswa
+                          sinkron dengan checklist TP
+                        </span>
+                      ) : (
+                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded text-[9px] font-semibold">
+                          input manual
                         </span>
                       )}
                     </h4>
                     <p className="text-[10px] text-slate-500">
-                      {tpTemplates.length > 0
-                        ? `Deskripsi otomatis diperbarui saat ceklist TP diubah (untuk ananda ${selectedStudent.name}). Tetap bisa diedit manual langsung di kolom ini.`
-                        : `Ketik narasi deskripsi capaian raport ananda ${selectedStudent.name} secara manual di bawah.`}
+                      {Array.isArray(tpTemplates) && tpTemplates.length > 0
+                        ? `Deskripsi otomatis disesuaikan dengan checklist TP untuk ananda ${selectedStudent.name}, dan tetap dapat Anda edit langsung secara bebas.`
+                        : `Ketik/edit narasi deskripsi capaian rapor untuk ananda ${selectedStudent.name} secara langsung di bawah.`}
                     </p>
                   </div>
-                  {tpTemplates.length > 0 && (
+                  {Array.isArray(tpTemplates) && tpTemplates.length > 0 && (
                     <button
                       type="button"
                       onClick={handleRegenerateFromTp}
@@ -1724,18 +1744,24 @@ export default function TeacherPanel({
                 {assignedSubjects.map((sub) => {
                   const isAct = activeSubject === sub;
                   const keisl = KEISLAMAN_SUB_SUBJECTS.find((k) => k.id === sub);
+                  const isSubKeisl = isKeislamanSubject(sub);
                   return (
                     <button
                       key={sub}
                       type="button"
                       onClick={() => handleSwitchSubject(sub)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
                         isAct
                           ? "bg-emerald-800 text-white shadow-xs"
                           : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
                       }`}
                     >
-                      {keisl ? keisl.short : sub}
+                      <span>{keisl ? keisl.short : sub}</span>
+                      {isSubKeisl && (
+                        <span className={`text-[9px] px-1 py-0.2 rounded font-normal ${isAct ? "bg-emerald-700 text-emerald-100" : "bg-slate-100 text-slate-500"}`}>
+                          Manual
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -1790,9 +1816,14 @@ export default function TeacherPanel({
               </div>
               <div className="divide-y divide-slate-100 max-h-[300px] overflow-y-auto">
                 {!Array.isArray(tpTemplates) || tpTemplates.length === 0 ? (
-                  <p className="p-4 text-center text-xs text-slate-400 italic">
-                    Belum ada Tujuan Pembelajaran untuk {activeSubject} Kelas {selectedClass}. Silakan tambahkan pada form di atas.
-                  </p>
+                  <div className="p-4 text-center space-y-1">
+                    <p className="text-xs text-slate-600 font-medium">
+                      Belum ada Tujuan Pembelajaran untuk {activeSubject} Kelas {selectedClass}.
+                    </p>
+                    <p className="text-[11px] text-slate-400">
+                      Anda dapat menambahkan TP baru secara manual pada formulir di atas kapan saja.
+                    </p>
+                  </div>
                 ) : (
                   tpTemplates
                     .filter((tp) => tp && tp.id)

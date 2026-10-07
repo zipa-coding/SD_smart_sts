@@ -13,7 +13,7 @@ import {
   getDoc, 
   deleteDoc 
 } from "firebase/firestore";
-import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList } from "./src/types";
+import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject } from "./src/types";
 
 const app = express();
 const PORT = 3000;
@@ -893,7 +893,7 @@ app.post("/api/grades", async (req, res) => {
     studentId,
     subject,
     score: Number(score),
-    tps,
+    tps: Array.isArray(tps) ? cleanTpList(tps) : [],
     usaha: usaha || "B",
     proses: proses || "B",
     capaian: capaian || "B",

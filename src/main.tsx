@@ -4,7 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import dbData from './data/db.json';
 import { isFirebaseConfigured, firebaseApi, isDummyTeacher } from './lib/firebase';
-import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList } from './types';
+import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject } from './types';
 import { registerSW } from 'virtual:pwa-register';
 
 // Automatically register and update PWA service worker in production
@@ -117,22 +117,48 @@ function initializeLocalStorage() {
           }
         } catch (e) {}
 
-        // Initialize TP templates if completely missing
+        // Sync aligned TP templates from canonical dbData
         if (!clientDbCache.tujuan_pembelajaran_templates || typeof clientDbCache.tujuan_pembelajaran_templates !== 'object') {
           clientDbCache.tujuan_pembelajaran_templates = {};
           changed = true;
         } else {
           // Purge any legacy sample / dummy TPs from clientDbCache
           for (const key of Object.keys(clientDbCache.tujuan_pembelajaran_templates)) {
-            const list = clientDbCache.tujuan_pembelajaran_templates[key];
-            if (Array.isArray(list)) {
-              const prevLen = list.length;
-              clientDbCache.tujuan_pembelajaran_templates[key] = cleanTpList(list);
-              if (clientDbCache.tujuan_pembelajaran_templates[key].length !== prevLen) {
+            if (isKeislamanSubject(key)) {
+              if (Array.isArray(clientDbCache.tujuan_pembelajaran_templates[key]) && clientDbCache.tujuan_pembelajaran_templates[key].length > 0) {
+                clientDbCache.tujuan_pembelajaran_templates[key] = [];
                 changed = true;
+              }
+            } else {
+              const list = clientDbCache.tujuan_pembelajaran_templates[key];
+              if (Array.isArray(list)) {
+                const prevLen = list.length;
+                clientDbCache.tujuan_pembelajaran_templates[key] = cleanTpList(list);
+                if (clientDbCache.tujuan_pembelajaran_templates[key].length !== prevLen) {
+                  changed = true;
+                }
               }
             }
           }
+        }
+
+        // Sync and sanitize grades TPs
+        if (Array.isArray(clientDbCache.grades)) {
+          clientDbCache.grades = clientDbCache.grades.map((g: any) => {
+            if (isKeislamanSubject(g.subject)) {
+              if (Array.isArray(g.tps) && g.tps.length > 0) {
+                changed = true;
+                return { ...g, tps: [] };
+              }
+            } else if (Array.isArray(g.tps) && g.tps.length > 0) {
+              const cleaned = cleanTpList(g.tps);
+              if (cleaned.length !== g.tps.length) {
+                changed = true;
+                return { ...g, tps: cleaned };
+              }
+            }
+            return g;
+          });
         }
 
         if (changed) {

@@ -290,6 +290,28 @@ export function matchTpClass(tKelas?: any, targetKelas?: string): boolean {
   return tk === target;
 }
 
+/**
+ * Checks if a subject belongs to Keislaman category (which uses manual narrative descriptions, no TP checklist).
+ */
+export function isKeislamanSubject(subject?: string): boolean {
+  if (!subject) return false;
+  const norm = normalizeSubjectKey(subject).toLowerCase();
+  return (
+    norm === "keislaman" ||
+    norm.includes("doa") ||
+    norm.includes("do’a") ||
+    norm.includes("hadits") ||
+    norm.includes("tahfizh") ||
+    norm.includes("tahfidz") ||
+    norm.includes("tahsin") ||
+    norm.includes("wudhu") ||
+    norm.includes("sholat") ||
+    norm.includes("shalat") ||
+    norm.includes("sirah") ||
+    norm.includes("siroh")
+  );
+}
+
 const KNOWN_SAMPLE_TP_IDS = new Set([
   "tp_1791000095834",
   "tp_1791000110170",
@@ -298,18 +320,32 @@ const KNOWN_SAMPLE_TP_IDS = new Set([
 ]);
 
 /**
- * Detects if a TP is a legacy dummy/sample template (which should be excluded).
- * Only real user/teacher inputted TPs are allowed.
+ * Detects if a TP is a legacy dummy/sample template (which must be completely excluded).
+ * Only real user/teacher inputted TPs (with valid text and generated ID `tp_<timestamp>` or `custom_<timestamp>`) are allowed.
  */
 export function isSampleTp(tp: any): boolean {
   if (!tp) return true;
   const text = String(tp.text || "").trim();
   if (!text) return true;
   const id = String(tp.id || "").trim();
+  const lowerId = id.toLowerCase();
   if (!id) return true;
-  if (KNOWN_SAMPLE_TP_IDS.has(id)) return true;
-  if (id === "1" || id === "2" || id === "3" || id === "4" || id === "dummy" || id === "sample") return true;
-  return false;
+
+  if (KNOWN_SAMPLE_TP_IDS.has(id) || KNOWN_SAMPLE_TP_IDS.has(lowerId)) return true;
+  if (/^[1-9]$/.test(id) || lowerId === "dummy" || lowerId === "sample") return true;
+
+  // Filter out any seeded template ID patterns:
+  // e.g. tp_doa_1_1, tp_tahfizh_1_1, tp_tahsin_1_1, tp_wudhu_1_1, tp_sirah_1_1, tp_pai_1_1, tp_bind_1_1, tp_mtk_1_1, tp_ppkn_1_1, tp_ipas_3_1, tp_pjok_1_1, tp_seni_1_1, tp_tik_4_1, tp_life_1_1, tp_bing_1_1, tp_barab_1_1, pai_1_1, etc.
+  if (/^tp_[a-z_]+_\d+/i.test(id)) return true;
+  if (/^[a-z_]+_\d+_\d+/i.test(id)) return true;
+
+  // Real teacher generated TPs are created with Date.now() timestamp (10+ digits) or custom prefix
+  if (/^tp_\d{10,}$/.test(id) || /^custom_/.test(id)) {
+    return false;
+  }
+
+  // Any other legacy template format is treated as sample/dummy
+  return true;
 }
 
 export function cleanTpList(list: any[]): any[] {
@@ -319,10 +355,11 @@ export function cleanTpList(list: any[]): any[] {
 
 /**
  * Safely looks up TP templates for a subject across all variations (casing, quotes, aliases),
- * strictly excluding any dummy / sample templates.
+ * strictly excluding any dummy / sample templates, while allowing real teacher-inputted manual TPs.
  */
 export function getSubjectTps(allTps: Record<string, any[]> | undefined | null, subject: string): any[] {
   if (!allTps || typeof allTps !== "object") return [];
+
   let found: any[] = [];
   // 1. Direct key match
   if (Array.isArray(allTps[subject]) && allTps[subject].length > 0) {

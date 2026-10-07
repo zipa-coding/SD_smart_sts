@@ -13,7 +13,7 @@ import {
   where 
 } from "firebase/firestore";
 import dbData from "../data/db.json";
-import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList } from "../types";
+import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -98,12 +98,26 @@ export function getLocalFallbackData() {
             for (const key of Object.keys(parsed.tujuan_pembelajaran_templates)) {
               if (Array.isArray(parsed.tujuan_pembelajaran_templates[key])) {
                 const prevLen = parsed.tujuan_pembelajaran_templates[key].length;
-                parsed.tujuan_pembelajaran_templates[key] = parsed.tujuan_pembelajaran_templates[key].filter((tp: any) => !isSampleTp(tp));
+                parsed.tujuan_pembelajaran_templates[key] = cleanTpList(parsed.tujuan_pembelajaran_templates[key]);
                 if (parsed.tujuan_pembelajaran_templates[key].length !== prevLen) {
                   updated = true;
                 }
               }
             }
+          } else {
+            parsed.tujuan_pembelajaran_templates = {};
+            updated = true;
+          }
+          if (Array.isArray(parsed.grades)) {
+            parsed.grades.forEach((g: any) => {
+              if (Array.isArray(g.tps) && g.tps.length > 0) {
+                const filtered = cleanTpList(g.tps);
+                if (filtered.length !== g.tps.length) {
+                  g.tps = filtered;
+                  updated = true;
+                }
+              }
+            });
           }
           if (updated) {
             localStorage.setItem("smart_sts_db", JSON.stringify(parsed));
@@ -1016,17 +1030,26 @@ export const firebaseApi = {
 
   // 4. GET & POST /api/grades
   getGrades: async (): Promise<any[]> => {
-    const fallback = getLocalFallbackData().grades || [];
-    if (!db) return fallback;
+    const rawFallback = getLocalFallbackData().grades || [];
+    const sanitizeGrade = (g: any) => {
+      if (!g) return g;
+      const cleanTps = Array.isArray(g.tps) ? cleanTpList(g.tps) : [];
+      return {
+        ...g,
+        tps: cleanTps,
+      };
+    };
+
+    if (!db) return rawFallback.map(sanitizeGrade);
     try {
       const snap = await withTimeout(getDocs(collection(db, "grades")), 6000);
       if (snap && !snap.empty) {
-        return snap.docs.map(docSnap => docSnap.data());
+        return snap.docs.map(docSnap => sanitizeGrade(docSnap.data()));
       }
     } catch (e) {
       console.warn("Failed to get grades from Firestore:", e);
     }
-    return fallback;
+    return rawFallback.map(sanitizeGrade);
   },
   postGrade: async (body: any) => {
     const { studentId, subject, score, tps, teacherName, usaha, proses, capaian, deskripsi } = body;
@@ -1038,7 +1061,7 @@ export const firebaseApi = {
       studentId,
       subject,
       score: Number(score),
-      tps,
+      tps: Array.isArray(tps) ? cleanTpList(tps) : [],
       usaha: usaha || "B",
       proses: proses || "B",
       capaian: capaian || "B",
@@ -1131,11 +1154,20 @@ export const firebaseApi = {
           snap.docs.forEach((docSnap) => {
             const data = docSnap.data();
             const subjectId = docSnap.id;
-            let tpsList = Array.isArray(data.tps) ? cleanTpList(data.tps) : [];
+            const originalList = Array.isArray(data.tps) ? data.tps : [];
+            let tpsList = cleanTpList(originalList);
             templates[subjectId] = tpsList;
             const normKey = normalizeSubjectKey(subjectId);
             if (normKey && normKey !== subjectId) {
               templates[normKey] = tpsList;
+            }
+            // Auto-clean Firestore doc if it contained dummy templates
+            if (originalList.length !== tpsList.length) {
+              setDoc(
+                doc(db, "tujuan_pembelajaran_templates", docSnap.id),
+                { tps: tpsList, updatedAt: new Date().toISOString() },
+                { merge: true }
+              ).catch(() => {});
             }
           });
         }

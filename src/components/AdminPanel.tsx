@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Teacher, Student, SUBJECT_LIST, EkskulItem, getSubjectTps, matchTpClass, normalizeSubjectKey } from "../types";
+import { Teacher, Student, SUBJECT_LIST, EkskulItem, getSubjectTps, matchTpClass, normalizeSubjectKey, isKeislamanSubject } from "../types";
 import { isFirebaseConfigured, firebaseApi } from "../lib/firebase";
 import {
   Users,
@@ -2586,16 +2586,27 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 border-b border-[#1e2e4a] pb-3 mb-3">
-                      <span className="px-3 py-1 bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 rounded-lg text-xs uppercase tracking-wider font-extrabold font-mono">
-                        {subject}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 rounded-lg text-xs uppercase tracking-wider font-extrabold font-mono">
+                          {subject}
+                        </span>
+                        {isKeislamanSubject(subject) && (
+                          <span className="px-2 py-0.5 bg-emerald-900/60 text-emerald-300 border border-emerald-700/40 rounded text-[10px] font-bold">
+                            Deskripsi Manual
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[11px] font-mono text-slate-400 font-bold">
-                        {items.length} TP {tpFilterClass !== "all" ? `(Kelas ${tpFilterClass})` : "Total"}
+                        {isKeislamanSubject(subject) ? "Manual Guru" : `${items.length} TP ${tpFilterClass !== "all" ? `(Kelas ${tpFilterClass})` : "Total"}`}
                       </span>
                     </div>
 
                     <div className="space-y-2">
-                      {items.length === 0 ? (
+                      {isKeislamanSubject(subject) ? (
+                        <p className="text-xs text-emerald-400/80 italic py-4 text-center bg-[#070d18] rounded-xl border border-dashed border-emerald-900/40">
+                          Mapel Keislaman dinilai langsung dengan Deskripsi Capaian Pembelajaran secara manual pada tiap siswa (tanpa template TP).
+                        </p>
+                      ) : items.length === 0 ? (
                         <p className="text-xs text-slate-500 italic py-4 text-center bg-[#070d18] rounded-xl border border-dashed border-[#1e2e4a]">
                           Belum ada tujuan pembelajaran {tpFilterClass !== "all" ? `untuk Kelas ${tpFilterClass}` : ""} pada mapel ini.
                         </p>
