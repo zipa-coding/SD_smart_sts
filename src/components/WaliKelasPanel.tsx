@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Teacher, Student, Grade, WaliKelasNotesMap } from "../types";
+import { Teacher, Student, Grade, WaliKelasNotesMap, normalizeSubjectKey } from "../types";
 import {
   Printer,
   ChevronRight,
@@ -263,10 +263,27 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     }
   };
 
+  // Robust grade finder that handles exact names, normalized keys, and punctuation variations
+  const findGradeForSub = (subName: string, gList: Grade[] = studentGrades): Grade | undefined => {
+    if (!Array.isArray(gList) || !subName) return undefined;
+    const direct = gList.find((g) => g && g.subject === subName);
+    if (direct) return direct;
+    const normTarget = normalizeSubjectKey(subName);
+    const cleanTarget = subName.replace(/[’'`]/g, "'").toLowerCase().trim();
+    return gList.find((g) => {
+      if (!g || !g.subject) return false;
+      if (normalizeSubjectKey(g.subject) === normTarget) return true;
+      if (g.subject.replace(/[’'`]/g, "'").toLowerCase().trim() === cleanTarget) return true;
+      return false;
+    });
+  };
+
   // Helper getters
   const currentClassStudents = students.filter((s) => s.kelas === selectedClass);
-  const studentGrades = selectedStudent ? grades.filter((g) => g.studentId === selectedStudent.id) : [];
-  const gradesCount = studentGrades.length;
+  const studentGrades = selectedStudent
+    ? grades.filter((g) => String(g.studentId).trim() === String(selectedStudent.id).trim())
+    : [];
+  const gradesCount = subjectsList.filter((sub) => !!findGradeForSub(sub, studentGrades)).length;
 
   if (raportPrintTarget && selectedStudent) {
     const studentNote = allClassNotes[selectedStudent.id] || {
@@ -360,8 +377,8 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
             <p className="text-xs text-slate-450 italic text-center py-3 text-slate-400">Belum ada siswa.</p>
           ) : (
             currentClassStudents.map((s) => {
-              const sGrades = grades.filter((g) => g.studentId === s.id);
-              const count = sGrades.length;
+              const sGrades = grades.filter((g) => String(g.studentId).trim() === String(s.id).trim());
+              const count = subjectsList.filter((sub) => !!findGradeForSub(sub, sGrades)).length;
               const hasNotes = !!allClassNotes[s.id];
               const isSelected = selectedStudent?.id === s.id;
 
@@ -450,7 +467,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
               {/* Visual mini circles representing subjects */}
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2" id="subject-matrix-completion">
                 {subjectsList.map((sub) => {
-                  const xGrade = studentGrades.find((g) => g.subject === sub);
+                  const xGrade = findGradeForSub(sub);
                   const isFilled = !!xGrade;
 
                   return (

@@ -339,6 +339,11 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
         // POST /api/grades
         if (path === '/api/grades' && method === 'POST') {
+          try {
+            // Forward write to backend server so db.json is updated permanently!
+            originalFetch(urlStr, init).catch((err) => console.warn("Backend grades post sync:", err));
+          } catch (e) {}
+
           const g = await firebaseApi.postGrade(body);
           return new Response(JSON.stringify(g), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
@@ -351,6 +356,11 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
         // POST /api/walikelas/notes
         if (path === '/api/walikelas/notes' && method === 'POST') {
+          try {
+            // Forward write to backend server so db.json is updated permanently!
+            originalFetch(urlStr, init).catch((err) => console.warn("Backend notes post sync:", err));
+          } catch (e) {}
+
           const n = await firebaseApi.postWaliKelasNotes(body);
           return new Response(JSON.stringify(n), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
