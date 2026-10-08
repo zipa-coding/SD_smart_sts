@@ -884,20 +884,23 @@ app.post("/api/grades", async (req, res) => {
 
   const db = await readDB();
 
-  // Find if grade already exists for this student and subject
+  const normSub = normalizeSubjectKey(subject);
+  // Find if grade already exists for this student and subject (canonical match)
   const index = db.grades.findIndex(
-    (g: any) => g.studentId === studentId && g.subject === subject,
+    (g: any) =>
+      g.studentId === studentId &&
+      (g.subject === subject || normalizeSubjectKey(g.subject) === normSub),
   );
 
   const updatedGrade = {
     studentId,
-    subject,
+    subject: index !== -1 ? db.grades[index].subject || subject : subject,
     score: Number(score),
     tps: Array.isArray(tps) ? cleanTpList(tps) : [],
     usaha: usaha || "B",
     proses: proses || "B",
     capaian: capaian || "B",
-    deskripsi: deskripsi || "",
+    deskripsi: deskripsi !== undefined ? deskripsi : (index !== -1 ? db.grades[index].deskripsi : ""),
     lastUpdatedBy: teacherName || "Guru Mata Pelajaran",
     lastUpdatedAt: new Date().toISOString(),
   };
@@ -1044,9 +1047,17 @@ app.post("/api/tps", async (req, res) => {
 
   db.tujuan_pembelajaran_templates[targetKey].push(newTP);
 
-  // If targetKey is different from cleanSubject, mirror it so both keys have it
+  // Mirror across cleanSubject, normTarget, and any other normalized alias keys
   if (targetKey !== cleanSubject) {
     db.tujuan_pembelajaran_templates[cleanSubject] = db.tujuan_pembelajaran_templates[targetKey];
+  }
+  if (normTarget && normTarget !== targetKey) {
+    db.tujuan_pembelajaran_templates[normTarget] = db.tujuan_pembelajaran_templates[targetKey];
+  }
+  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (normalizeSubjectKey(k) === normTarget && k !== targetKey) {
+      db.tujuan_pembelajaran_templates[k] = db.tujuan_pembelajaran_templates[targetKey];
+    }
   }
 
   await writeDB(db);

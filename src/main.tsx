@@ -122,21 +122,14 @@ function initializeLocalStorage() {
           clientDbCache.tujuan_pembelajaran_templates = {};
           changed = true;
         } else {
-          // Purge any legacy sample / dummy TPs from clientDbCache
+          // Purge only legacy sample / dummy TPs from clientDbCache across all subjects
           for (const key of Object.keys(clientDbCache.tujuan_pembelajaran_templates)) {
-            if (isKeislamanSubject(key)) {
-              if (Array.isArray(clientDbCache.tujuan_pembelajaran_templates[key]) && clientDbCache.tujuan_pembelajaran_templates[key].length > 0) {
-                clientDbCache.tujuan_pembelajaran_templates[key] = [];
+            const list = clientDbCache.tujuan_pembelajaran_templates[key];
+            if (Array.isArray(list)) {
+              const prevLen = list.length;
+              clientDbCache.tujuan_pembelajaran_templates[key] = cleanTpList(list);
+              if (clientDbCache.tujuan_pembelajaran_templates[key].length !== prevLen) {
                 changed = true;
-              }
-            } else {
-              const list = clientDbCache.tujuan_pembelajaran_templates[key];
-              if (Array.isArray(list)) {
-                const prevLen = list.length;
-                clientDbCache.tujuan_pembelajaran_templates[key] = cleanTpList(list);
-                if (clientDbCache.tujuan_pembelajaran_templates[key].length !== prevLen) {
-                  changed = true;
-                }
               }
             }
           }
@@ -145,12 +138,7 @@ function initializeLocalStorage() {
         // Sync and sanitize grades TPs
         if (Array.isArray(clientDbCache.grades)) {
           clientDbCache.grades = clientDbCache.grades.map((g: any) => {
-            if (isKeislamanSubject(g.subject)) {
-              if (Array.isArray(g.tps) && g.tps.length > 0) {
-                changed = true;
-                return { ...g, tps: [] };
-              }
-            } else if (Array.isArray(g.tps) && g.tps.length > 0) {
+            if (Array.isArray(g.tps) && g.tps.length > 0) {
               const cleaned = cleanTpList(g.tps);
               if (cleaned.length !== g.tps.length) {
                 changed = true;
@@ -389,9 +377,10 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
             const db = getDB();
             if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
             const sub = body?.subject || "PAI";
+            const normTarget = normalizeSubjectKey(sub);
             let targetKey = sub;
             for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
-              if (k === sub || normalizeSubjectKey(k) === normalizeSubjectKey(sub)) {
+              if (k === sub || normalizeSubjectKey(k) === normTarget) {
                 targetKey = k;
                 break;
               }
@@ -404,6 +393,14 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
             }
             if (targetKey !== sub) {
               db.tujuan_pembelajaran_templates[sub] = db.tujuan_pembelajaran_templates[targetKey];
+            }
+            if (normTarget && normTarget !== targetKey) {
+              db.tujuan_pembelajaran_templates[normTarget] = db.tujuan_pembelajaran_templates[targetKey];
+            }
+            for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+              if (normalizeSubjectKey(k) === normTarget && k !== targetKey) {
+                db.tujuan_pembelajaran_templates[k] = db.tujuan_pembelajaran_templates[targetKey];
+              }
             }
             saveDB(db);
           } catch (e) {}
@@ -1072,9 +1069,10 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const db = getDB();
       if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
       const cleanSub = String(subject || "").trim();
+      const normTarget = normalizeSubjectKey(cleanSub);
       let targetKey = cleanSub;
       for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
-        if (k === cleanSub || normalizeSubjectKey(k) === normalizeSubjectKey(cleanSub)) {
+        if (k === cleanSub || normalizeSubjectKey(k) === normTarget) {
           targetKey = k;
           break;
         }
@@ -1086,6 +1084,14 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       db.tujuan_pembelajaran_templates[targetKey].push(newTP);
       if (targetKey !== cleanSub) {
         db.tujuan_pembelajaran_templates[cleanSub] = db.tujuan_pembelajaran_templates[targetKey];
+      }
+      if (normTarget && normTarget !== targetKey) {
+        db.tujuan_pembelajaran_templates[normTarget] = db.tujuan_pembelajaran_templates[targetKey];
+      }
+      for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+        if (normalizeSubjectKey(k) === normTarget && k !== targetKey) {
+          db.tujuan_pembelajaran_templates[k] = db.tujuan_pembelajaran_templates[targetKey];
+        }
       }
       saveDB(db);
       return new Response(JSON.stringify(newTP), { status: 201, headers: { 'Content-Type': 'application/json' } });

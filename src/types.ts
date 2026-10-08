@@ -321,7 +321,7 @@ const KNOWN_SAMPLE_TP_IDS = new Set([
 
 /**
  * Detects if a TP is a legacy dummy/sample template (which must be completely excluded).
- * Only real user/teacher inputted TPs (with valid text and generated ID `tp_<timestamp>` or `custom_<timestamp>`) are allowed.
+ * Only real user/teacher inputted TPs (with valid text) are allowed.
  */
 export function isSampleTp(tp: any): boolean {
   if (!tp) return true;
@@ -332,20 +332,16 @@ export function isSampleTp(tp: any): boolean {
   if (!id) return true;
 
   if (KNOWN_SAMPLE_TP_IDS.has(id) || KNOWN_SAMPLE_TP_IDS.has(lowerId)) return true;
-  if (/^[1-9]$/.test(id) || lowerId === "dummy" || lowerId === "sample") return true;
+  if (/^[1-9]$/.test(id)) return true;
+  if (lowerId === "dummy" || lowerId === "sample" || lowerId.startsWith("dummy_") || lowerId.startsWith("sample_")) return true;
 
-  // Filter out any seeded template ID patterns:
-  // e.g. tp_doa_1_1, tp_tahfizh_1_1, tp_tahsin_1_1, tp_wudhu_1_1, tp_sirah_1_1, tp_pai_1_1, tp_bind_1_1, tp_mtk_1_1, tp_ppkn_1_1, tp_ipas_3_1, tp_pjok_1_1, tp_seni_1_1, tp_tik_4_1, tp_life_1_1, tp_bing_1_1, tp_barab_1_1, pai_1_1, etc.
-  if (/^tp_[a-z_]+_\d+/i.test(id)) return true;
-  if (/^[a-z_]+_\d+_\d+/i.test(id)) return true;
+  // Filter out any legacy seeded template ID patterns:
+  // e.g. tp_doa_1_1, tp_tahfizh_1_1, tp_tahsin_1_1, tp_wudhu_1_1, tp_sirah_1_1, tp_pai_1_1, tp_bind_1_1, tp_mtk_1_1, etc.
+  if (/^tp_[a-z_]+_\d{1,2}_\d{1,2}$/i.test(id)) return true;
+  if (/^[a-z_]+_\d{1,2}_\d{1,2}$/i.test(id)) return true;
 
-  // Real teacher generated TPs are created with Date.now() timestamp (10+ digits) or custom prefix
-  if (/^tp_\d{10,}$/.test(id) || /^custom_/.test(id)) {
-    return false;
-  }
-
-  // Any other legacy template format is treated as sample/dummy
-  return true;
+  // Real teacher generated TPs are accepted
+  return false;
 }
 
 export function cleanTpList(list: any[]): any[] {

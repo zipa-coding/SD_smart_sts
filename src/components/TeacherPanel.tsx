@@ -89,7 +89,12 @@ export default function TeacherPanel({
       user.subject === "Agama Islam / Keislaman" ||
       (Array.isArray(user.subjects) &&
         user.subjects.some((s) => s.toLowerCase().includes("keislaman"))) ||
-      KEISLAMAN_SUB_SUBJECTS.some((k) => k.id === user.subject) ||
+      KEISLAMAN_SUB_SUBJECTS.some(
+        (k) => k.id === user.subject || normalizeSubjectKey(k.id) === normalizeSubjectKey(user.subject)
+      ) ||
+      (user.subject && (user.subject.toLowerCase().includes("sirah") || user.subject.toLowerCase().includes("siroh"))) ||
+      (Array.isArray(user.subjects) &&
+        user.subjects.some((s) => s.toLowerCase().includes("sirah") || s.toLowerCase().includes("siroh"))) ||
       user.subject === "Admin"
     );
   }, [user]);
@@ -337,8 +342,12 @@ export default function TeacherPanel({
       const safeTemplates = Array.isArray(templates) ? templates : [];
 
       // Look up if this student already has a grade for this activeSubject
+      const normSubj = normalizeSubjectKey(subj);
       const existingGrade = safeGrades.find(
-        (g) => g && g.studentId === student?.id && g.subject === subj,
+        (g) =>
+          g &&
+          g.studentId === student?.id &&
+          (g.subject === subj || normalizeSubjectKey(g.subject) === normSubj),
       );
 
       if (existingGrade) {
@@ -368,7 +377,10 @@ export default function TeacherPanel({
         if (existingGrade.deskripsi && existingGrade.deskripsi.trim() !== "") {
           setCustomDescription(existingGrade.deskripsi.trim());
           setIsCustomDescActive(true);
-        } else if (safeTemplates.length > 0) {
+        } else if ((existingGrade as any).description && String((existingGrade as any).description).trim() !== "") {
+          setCustomDescription(String((existingGrade as any).description).trim());
+          setIsCustomDescActive(true);
+        } else if (!isKeislamanSubject(subj) && safeTemplates.length > 0) {
           const auto = generateNarrativeDescription(
             student,
             subj,
@@ -379,7 +391,7 @@ export default function TeacherPanel({
           setIsCustomDescActive(false);
         } else {
           setCustomDescription("");
-          setIsCustomDescActive(false);
+          setIsCustomDescActive(true);
         }
       } else {
         // Clear forms for new entries
@@ -396,7 +408,7 @@ export default function TeacherPanel({
         });
         setTpAchievements(defaultMap);
 
-        if (safeTemplates.length > 0) {
+        if (!isKeislamanSubject(subj) && safeTemplates.length > 0) {
           const auto = generateNarrativeDescription(
             student,
             subj,
@@ -404,10 +416,11 @@ export default function TeacherPanel({
             defaultMap,
           );
           setCustomDescription(auto);
+          setIsCustomDescActive(false);
         } else {
           setCustomDescription("");
+          setIsCustomDescActive(true);
         }
-        setIsCustomDescActive(false);
       }
 
       // Load ekskul grade for this student
@@ -493,7 +506,8 @@ export default function TeacherPanel({
     };
     setTpAchievements(nextMap);
 
-    if (selectedStudent && tpTemplates.length > 0) {
+    // Only auto-generate description if teacher has NOT written/edited a custom manual description and not a Keislaman subject
+    if (!isCustomDescActive && !isKeislamanSubject(activeSubject) && selectedStudent && tpTemplates.length > 0) {
       const updatedDesc = generateNarrativeDescription(
         selectedStudent,
         activeSubject,
@@ -512,7 +526,8 @@ export default function TeacherPanel({
     });
     setTpAchievements(nextMap);
 
-    if (selectedStudent && tpTemplates.length > 0) {
+    // Only auto-generate description if teacher has NOT written/edited a custom manual description and not a Keislaman subject
+    if (!isCustomDescActive && !isKeislamanSubject(activeSubject) && selectedStudent && tpTemplates.length > 0) {
       const updatedDesc = generateNarrativeDescription(
         selectedStudent,
         activeSubject,
@@ -674,6 +689,10 @@ export default function TeacherPanel({
         currentList.push(newCreatedTp);
       }
       next[key] = currentList;
+      const normKey = normalizeSubjectKey(activeSubject);
+      if (normKey && normKey !== key) {
+        next[normKey] = currentList;
+      }
       return next;
     });
 
@@ -836,7 +855,11 @@ export default function TeacherPanel({
   const filledSubjectCount = Array.isArray(grades)
     ? classStudents.filter((s) =>
         grades.some(
-          (g) => g && g.studentId === s.id && g.subject === activeSubject,
+          (g) =>
+            g &&
+            g.studentId === s.id &&
+            (g.subject === activeSubject ||
+              normalizeSubjectKey(g.subject) === normalizeSubjectKey(activeSubject)),
         ),
       ).length
     : 0;
@@ -897,7 +920,10 @@ export default function TeacherPanel({
                 Array.isArray(grades) &&
                 grades.some(
                   (g) =>
-                    g && g.studentId === s.id && g.subject === activeSubject,
+                    g &&
+                    g.studentId === s.id &&
+                    (g.subject === activeSubject ||
+                      normalizeSubjectKey(g.subject) === normalizeSubjectKey(activeSubject)),
                 );
 
               const studentNote = allNotes[s.id];
@@ -910,7 +936,13 @@ export default function TeacherPanel({
               const isSelected = selectedStudent?.id === s.id;
 
               const multiFilledCount = assignedSubjects.filter((sub) =>
-                grades.some((g) => g && g.studentId === s.id && g.subject === sub)
+                grades.some(
+                  (g) =>
+                    g &&
+                    g.studentId === s.id &&
+                    (g.subject === sub ||
+                      normalizeSubjectKey(g.subject) === normalizeSubjectKey(sub)),
+                )
               ).length;
 
               return (
@@ -1109,7 +1141,7 @@ export default function TeacherPanel({
                 </h4>
                 <p className="text-[10px] text-emerald-200/80 leading-tight mt-0.5">
                   {isKeislamanTeacher && assignedSubjects.every((s) => KEISLAMAN_SUB_SUBJECTS.some((k) => k.id === s))
-                    ? "Satu akun untuk menginput seluruh 4 aspek keislaman: Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat."
+                    ? "Satu akun untuk menginput seluruh aspek keislaman: Sirah, Tahsin, Tahfidz, Doa & Hadist, serta Wudhu & Sholat."
                     : `Tersedia ${assignedSubjects.length} mapel: ${assignedSubjects.join(", ")}. Klik salah satu mapel di bawah untuk menginput nilai raport siswa.`}
                 </p>
               </div>
@@ -1120,7 +1152,10 @@ export default function TeacherPanel({
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 border border-emerald-500/50 text-emerald-300">
                     {assignedSubjects.filter((sub) =>
                       grades.some(
-                        (g) => g.studentId === selectedStudent.id && g.subject === sub
+                        (g) =>
+                          g.studentId === selectedStudent.id &&
+                          (g.subject === sub ||
+                            normalizeSubjectKey(g.subject) === normalizeSubjectKey(sub)),
                       )
                     ).length} / {assignedSubjects.length} Mapel Terisi
                   </span>
@@ -1135,7 +1170,10 @@ export default function TeacherPanel({
                 const isFilledForStudent =
                   selectedStudent &&
                   grades.some(
-                    (g) => g.studentId === selectedStudent.id && g.subject === sub
+                    (g) =>
+                      g.studentId === selectedStudent.id &&
+                      (g.subject === sub ||
+                        normalizeSubjectKey(g.subject) === normalizeSubjectKey(sub)),
                   );
                 const keislamanItem = KEISLAMAN_SUB_SUBJECTS.find((k) => k.id === sub);
                 const shortLabel = keislamanItem ? keislamanItem.short : sub;
@@ -1488,7 +1526,10 @@ export default function TeacherPanel({
 
                 <textarea
                   value={customDescription}
-                  onChange={(e) => setCustomDescription(e.target.value)}
+                  onChange={(e) => {
+                    setCustomDescription(e.target.value);
+                    setIsCustomDescActive(true);
+                  }}
                   rows={4}
                   placeholder={
                     selectedStudent
@@ -1759,7 +1800,7 @@ export default function TeacherPanel({
                       <span>{keisl ? keisl.short : sub}</span>
                       {isSubKeisl && (
                         <span className={`text-[9px] px-1 py-0.2 rounded font-normal ${isAct ? "bg-emerald-700 text-emerald-100" : "bg-slate-100 text-slate-500"}`}>
-                          Manual
+                          Keislaman
                         </span>
                       )}
                     </button>

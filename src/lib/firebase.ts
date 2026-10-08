@@ -174,7 +174,19 @@ export function updateLocalFallbackItem(collectionName: 'students' | 'teachers' 
     const raw = localStorage.getItem("smart_sts_db");
     const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
     if (!dbObj[collectionName]) dbObj[collectionName] = [];
-    const idx = dbObj[collectionName].findIndex((x: any) => String(x[idKey]) === String(item[idKey]));
+    
+    let idx = -1;
+    if (collectionName === 'grades') {
+      const normSub = normalizeSubjectKey(item.subject);
+      idx = dbObj.grades.findIndex((x: any) =>
+        x &&
+        x.studentId === item.studentId &&
+        (x.subject === item.subject || normalizeSubjectKey(x.subject) === normSub || String(x[idKey]) === String(item[idKey]))
+      );
+    } else {
+      idx = dbObj[collectionName].findIndex((x: any) => String(x[idKey]) === String(item[idKey]));
+    }
+
     if (idx >= 0) {
       dbObj[collectionName][idx] = { ...dbObj[collectionName][idx], ...item };
     } else {
@@ -1053,7 +1065,8 @@ export const firebaseApi = {
   },
   postGrade: async (body: any) => {
     const { studentId, subject, score, tps, teacherName, usaha, proses, capaian, deskripsi } = body;
-    const cleanSub = subject.replace(/[^a-zA-Z0-9]/g, "_");
+    const normSub = normalizeSubjectKey(subject) || subject;
+    const cleanSub = normSub.replace(/[^a-zA-Z0-9]/g, "_");
     const docId = `${studentId}_${cleanSub}`;
     
     const updatedGrade = {
@@ -1065,7 +1078,7 @@ export const firebaseApi = {
       usaha: usaha || "B",
       proses: proses || "B",
       capaian: capaian || "B",
-      deskripsi: deskripsi || "",
+      deskripsi: deskripsi !== undefined ? deskripsi : "",
       lastUpdatedBy: teacherName || "Guru Mata Pelajaran",
       lastUpdatedAt: new Date().toISOString()
     };
@@ -1205,9 +1218,10 @@ export const firebaseApi = {
         if (!dbObj.tujuan_pembelajaran_templates) dbObj.tujuan_pembelajaran_templates = {};
 
         // Find existing key matching this subject
+        const normTarget = normalizeSubjectKey(cleanSubject);
         let targetKey = cleanSubject;
         for (const k of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
-          if (k === cleanSubject || normalizeSubjectKey(k) === normalizeSubjectKey(cleanSubject)) {
+          if (k === cleanSubject || normalizeSubjectKey(k) === normTarget) {
             targetKey = k;
             break;
           }
@@ -1217,11 +1231,21 @@ export const firebaseApi = {
         }
         // Clean out any sample TPs
         dbObj.tujuan_pembelajaran_templates[targetKey] = cleanTpList(dbObj.tujuan_pembelajaran_templates[targetKey]);
-        dbObj.tujuan_pembelajaran_templates[targetKey].push(newTP);
+        if (!dbObj.tujuan_pembelajaran_templates[targetKey].some((x: any) => x.id === newTP.id)) {
+          dbObj.tujuan_pembelajaran_templates[targetKey].push(newTP);
+        }
 
-        // Also ensure cleanSubject key is populated
+        // Also ensure cleanSubject and normalized keys are populated
         if (targetKey !== cleanSubject) {
           dbObj.tujuan_pembelajaran_templates[cleanSubject] = dbObj.tujuan_pembelajaran_templates[targetKey];
+        }
+        if (normTarget && normTarget !== targetKey) {
+          dbObj.tujuan_pembelajaran_templates[normTarget] = dbObj.tujuan_pembelajaran_templates[targetKey];
+        }
+        for (const k of Object.keys(dbObj.tujuan_pembelajaran_templates)) {
+          if (normalizeSubjectKey(k) === normTarget && k !== targetKey) {
+            dbObj.tujuan_pembelajaran_templates[k] = dbObj.tujuan_pembelajaran_templates[targetKey];
+          }
         }
         localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
       }
@@ -1230,7 +1254,8 @@ export const firebaseApi = {
     // Save to Firestore with preservation of existing teacher templates
     if (db) {
       try {
-        const safeDocId = cleanSubject.replace(/\//g, "_");
+        const normKey = normalizeSubjectKey(cleanSubject) || cleanSubject;
+        const safeDocId = normKey.replace(/\//g, "_");
         const ref = doc(db, "tujuan_pembelajaran_templates", safeDocId);
         const docSnap = await withTimeout(getDoc(ref), 2500).catch(() => null);
         
@@ -1248,9 +1273,17 @@ export const firebaseApi = {
           tpsList.push(newTP);
         }
         await withTimeout(
-          setDoc(ref, { tps: tpsList, subject: cleanSubject, updatedAt: new Date().toISOString() }, { merge: true }),
+          setDoc(ref, { tps: tpsList, subject: normKey, updatedAt: new Date().toISOString() }, { merge: true }),
           3000
         );
+
+        if (cleanSubject !== normKey) {
+          const altRef = doc(db, "tujuan_pembelajaran_templates", cleanSubject.replace(/\//g, "_"));
+          await withTimeout(
+            setDoc(altRef, { tps: tpsList, subject: cleanSubject, updatedAt: new Date().toISOString() }, { merge: true }),
+            3000
+          ).catch(() => null);
+        }
       } catch (err) {
         console.warn("Firestore postTP write error:", err);
       }
