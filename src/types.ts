@@ -238,6 +238,7 @@ export function getTeacherAssignedSubjects(
 
 /**
  * Normalizes subject names into canonical keys to eliminate spelling/alias/casing mismatches.
+ * Strictly prevents cross-subject collisions (e.g. Matematika containing "tik").
  */
 export function normalizeSubjectKey(name?: string): string {
   if (!name) return "";
@@ -247,46 +248,79 @@ export function normalizeSubjectKey(name?: string): string {
 
   const lower = s.toLowerCase();
 
-  // 1. Keislaman sub-subjects
+  // 1. Matematika (Handled early with dedicated keywords so it never matches "tik")
+  if (lower.includes("matematika") || lower === "mtk" || lower === "math") {
+    return "Matematika";
+  }
+
+  // 2. Keislaman sub-subjects
   if (lower.includes("sirah") || lower.includes("siroh")) return "Sirah";
   if (lower.includes("tahsin")) return "Tahsin ABaTaTsa";
   if (lower.includes("tahfizh") || lower.includes("tahfidz")) return "Tahfizh Al-Qur’an";
-  if (lower.includes("do'a") || lower.includes("doa")) return "Do’a Harian dan Hadits";
-  if (lower.includes("wudhu") || lower.includes("sholat") || lower.includes("shalat")) return "Wudhu dan Sholat";
+  if (lower.includes("hadits") || lower.includes("hadist") || lower.includes("do'a") || lower.includes("doa")) {
+    return "Do’a Harian dan Hadits";
+  }
+  if (lower.includes("wudhu") || lower.includes("sholat") || lower.includes("shalat")) {
+    return "Wudhu dan Sholat";
+  }
 
-  // 2. Muatan Lokal
-  if (lower.includes("life skill") || lower.includes("lifeskill")) return "Life Skill";
-  if (lower.includes("tik") || lower.includes("informatika")) return "TIK";
+  // 3. Muatan Lokal & TIK
+  if (lower.includes("life skill") || lower.includes("lifeskill") || lower.includes("keterampilan hidup")) {
+    return "Life Skill";
+  }
+  if (lower === "tik" || lower.startsWith("tik ") || lower.endsWith(" tik") || lower.includes(" tik ")) {
+    return "TIK";
+  }
+  if (lower.includes("informatika") || lower.includes("teknologi informasi") || lower.includes("komputer")) {
+    return "Informatika";
+  }
   if (lower.includes("arab")) return "Bahasa Arab";
-  if (lower.includes("inggris")) return "Bahasa Inggris";
+  if (lower.includes("inggris") || lower === "english" || lower === "bing") return "Bahasa Inggris";
 
-  // 3. Umum / Nasional
-  if (lower === "pai" || lower.includes("agama islam")) return "PAI";
-  if (lower === "ppkn" || lower.includes("pancasila") || lower.includes("kewarganegaraan")) return "PPKN";
-  if (lower.includes("indonesia")) return "Bahasa Indonesia";
-  if (lower.includes("matematika") || lower === "mtk") return "Matematika";
-  if (lower === "ipas" || lower.includes("ilmu pengetahuan alam dan sosial")) return "IPAS";
-  if (lower === "ipa") return "IPA";
-  if (lower === "ips") return "IPS";
-  if (lower === "pjok" || lower.includes("jasmani") || lower.includes("olahraga")) return "PJOK";
-  if (lower.includes("seni")) return "Seni Budaya";
-  if (lower.includes("prakarya")) return "Prakarya";
+  // 4. Umum / Nasional
+  if (lower === "pai" || lower.includes("agama islam") || lower.includes("pendidikan agama")) return "PAI";
+  if (lower === "ppkn" || lower === "pkn" || lower.includes("pancasila") || lower.includes("kewarganegaraan")) return "PPKN";
+  if (lower.includes("indonesia") || lower === "b. indonesia" || lower === "b indonesia" || lower === "bindo") {
+    return "Bahasa Indonesia";
+  }
+  if (lower === "ipas" || lower.includes("alam dan sosial") || lower.includes("ipa dan ips")) return "IPAS";
+  if (lower === "ipa" || lower.includes("pengetahuan alam") || lower === "sains") return "IPA";
+  if (lower === "ips" || lower.includes("pengetahuan sosial") || lower === "sosial") return "IPS";
+  if (lower === "pjok" || lower.includes("jasmani") || lower.includes("olahraga") || lower.includes("penjaskes")) return "PJOK";
+  if (lower.includes("seni") || lower === "sbdp") return "Seni Budaya";
+  if (lower.includes("prakarya") || lower.includes("kewirausahaan")) return "Prakarya";
 
   return s;
 }
 
 /**
  * Robust check if a TP template's class matches the target class.
- * Supports "all", "Semua", "Kelas 1" vs "1", etc.
+ * Strictly separates TPs between classes so that TPs from one class never bleed into another class.
  */
 export function matchTpClass(tKelas?: any, targetKelas?: string): boolean {
   const tk = String(tKelas || "").trim().toLowerCase();
   const target = String(targetKelas || "").trim().toLowerCase();
-  if (!tk || tk === "all" || tk === "semua" || tk === "*" || tk === "semua kelas") return true;
+
+  // If no target class specified or wildcard target, match all
   if (!target || target === "all" || target === "semua" || target === "*") return true;
+
+  // If template explicitly designated for all classes
+  if (tk === "all" || tk === "semua" || tk === "*" || tk === "semua kelas") return true;
+
+  // Extract numeric class identifiers (e.g. "Kelas 1" -> "1", "1" -> "1")
   const numTk = tk.replace(/\D/g, "");
   const numTarget = target.replace(/\D/g, "");
-  if (numTk && numTarget && numTk === numTarget) return true;
+
+  // If both have numbers, they must match exactly
+  if (numTk && numTarget) {
+    return numTk === numTarget;
+  }
+
+  // If template has no class defined at all, match strictly if target is "1" or exact string match
+  if (!tk) {
+    return target === "1" || numTarget === "1";
+  }
+
   return tk === target;
 }
 
@@ -336,7 +370,6 @@ export function isSampleTp(tp: any): boolean {
   if (lowerId === "dummy" || lowerId === "sample" || lowerId.startsWith("dummy_") || lowerId.startsWith("sample_")) return true;
 
   // Filter out any legacy seeded template ID patterns:
-  // e.g. tp_doa_1_1, tp_tahfizh_1_1, tp_tahsin_1_1, tp_wudhu_1_1, tp_sirah_1_1, tp_pai_1_1, tp_bind_1_1, tp_mtk_1_1, etc.
   if (/^tp_[a-z_]+_\d{1,2}_\d{1,2}$/i.test(id)) return true;
   if (/^[a-z_]+_\d{1,2}_\d{1,2}$/i.test(id)) return true;
 
@@ -351,46 +384,51 @@ export function cleanTpList(list: any[]): any[] {
 
 /**
  * Safely looks up TP templates for a subject across all variations (casing, quotes, aliases),
- * strictly excluding any dummy / sample templates, while allowing real teacher-inputted manual TPs.
+ * strictly excluding any dummy / sample templates, while guaranteeing strict isolation between subjects.
  */
 export function getSubjectTps(allTps: Record<string, any[]> | undefined | null, subject: string): any[] {
-  if (!allTps || typeof allTps !== "object") return [];
+  if (!allTps || typeof allTps !== "object" || !subject) return [];
 
-  let found: any[] = [];
-  // 1. Direct key match
-  if (Array.isArray(allTps[subject]) && allTps[subject].length > 0) {
-    found = allTps[subject];
-  } else {
-    const normTarget = normalizeSubjectKey(subject);
-    // 2. Normalized key match
-    if (Array.isArray(allTps[normTarget]) && allTps[normTarget].length > 0) {
-      found = allTps[normTarget];
-    } else {
-      // 3. Search through all keys in allTps using normalizeSubjectKey
-      for (const [key, list] of Object.entries(allTps)) {
-        if (Array.isArray(list) && list.length > 0) {
-          if (normalizeSubjectKey(key) === normTarget) {
-            found = list;
-            break;
-          }
-        }
-      }
-      if (found.length === 0) {
-        // 4. Case/quote-insensitive search
-        const cleanTarget = subject.replace(/[’'`]/g, "'").toLowerCase().trim();
-        for (const [key, list] of Object.entries(allTps)) {
-          if (Array.isArray(list) && list.length > 0) {
-            if (key.replace(/[’'`]/g, "'").toLowerCase().trim() === cleanTarget) {
-              found = list;
-              break;
-            }
-          }
-        }
-      }
+  const cleanSubject = String(subject).trim();
+  if (!cleanSubject) return [];
+
+  // 1. Exact key match
+  if (Array.isArray(allTps[cleanSubject])) {
+    return cleanTpList(allTps[cleanSubject]);
+  }
+
+  // 2. Case-insensitive key match
+  const lowerTarget = cleanSubject.toLowerCase();
+  for (const [key, list] of Object.entries(allTps)) {
+    if (key.trim().toLowerCase() === lowerTarget && Array.isArray(list)) {
+      return cleanTpList(list);
     }
   }
-  // Strictly filter out any sample / dummy TPs!
-  return cleanTpList(found);
+
+  // 3. Canonical key match (if exact key was not found)
+  const normTarget = normalizeSubjectKey(cleanSubject);
+  if (normTarget && normTarget !== cleanSubject && Array.isArray(allTps[normTarget])) {
+    return cleanTpList(allTps[normTarget]);
+  }
+
+  return [];
+}
+
+/**
+ * Extracts a normalized list of subject strings taught by a teacher.
+ */
+export function extractTeacherSubjects(t: any): string[] {
+  if (!t) return [];
+  const list: string[] = [];
+  if (t.subject && typeof t.subject === "string") {
+    list.push(...t.subject.split(",").map((s: string) => s.trim()));
+  }
+  if (Array.isArray(t.subjects)) {
+    t.subjects.forEach((s: any) => {
+      if (typeof s === "string") list.push(...s.split(",").map((x) => x.trim()));
+    });
+  }
+  return Array.from(new Set(list.filter(Boolean)));
 }
 
 

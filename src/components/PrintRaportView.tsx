@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Student, Grade, WaliKelasNote, Teacher } from "../types";
+import { Student, Grade, WaliKelasNote, Teacher, WaliKelasNotesMap } from "../types";
 import {
   Printer,
   FileDown,
@@ -8,6 +8,10 @@ import {
   Moon,
   X,
   ExternalLink,
+  Archive,
+  Download,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import SmpIslamSmartLogo from "./SmpIslamSmartLogo";
 import logoUrl from "../assets/images/smp_logo_exact_match_revised_1783840969621.jpg";
@@ -15,6 +19,7 @@ import logoJsitUrl from "../assets/images/logo_jsit_indonesia_1783956323407.jpg"
 import logoCahayaAmalUrl from "../assets/images/logo_cahaya_amal_1783956338475.jpg";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import { downloadAllRaportZip, BatchDownloadProgress } from "../lib/zipExporter";
 
 interface PrintRaportViewProps {
   student: Student;
@@ -22,6 +27,10 @@ interface PrintRaportViewProps {
   waliKelasNote: WaliKelasNote;
   waliKelas: Teacher | null;
   onBack: () => void;
+  allStudents?: Student[];
+  allGrades?: Grade[];
+  allClassNotes?: WaliKelasNotesMap;
+  selectedClass?: string;
 }
 
 export default function PrintRaportView({
@@ -30,6 +39,10 @@ export default function PrintRaportView({
   waliKelasNote,
   waliKelas,
   onBack,
+  allStudents,
+  allGrades,
+  allClassNotes,
+  selectedClass,
 }: PrintRaportViewProps) {
   // Lock to dark mode per user requirement
   const darkMode = true;
@@ -78,6 +91,46 @@ export default function PrintRaportView({
   });
 
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [isBatchDownloading, setIsBatchDownloading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchDownloadProgress | null>(null);
+
+  const handleBatchDownloadZip = async () => {
+    if (!allStudents || allStudents.length === 0) {
+      alert("Tidak ada daftar siswa untuk diunduh.");
+      return;
+    }
+    setIsBatchDownloading(true);
+    setBatchProgress({
+      current: 0,
+      total: allStudents.length,
+      currentStudentName: "Mempersiapkan...",
+      status: "preparing",
+    });
+
+    try {
+      await downloadAllRaportZip({
+        students: allStudents,
+        grades: allGrades || grades,
+        allClassNotes: allClassNotes || {},
+        waliKelas,
+        selectedClass: selectedClass || student.kelas || "1",
+        onProgress: (p) => {
+          setBatchProgress(p);
+        },
+      });
+    } catch (err: any) {
+      console.error("Batch download error:", err);
+      setBatchProgress({
+        current: 0,
+        total: allStudents.length,
+        currentStudentName: "",
+        status: "error",
+        errorMessage: err.message || "Gagal mengunduh ZIP rapor.",
+      });
+    } finally {
+      setIsBatchDownloading(false);
+    }
+  };
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [isIframe, setIsIframe] = useState(false);
   const [allSubjects, setAllSubjects] = useState<string[]>([]);
@@ -2174,7 +2227,7 @@ export default function PrintRaportView({
               <span className="text-[10px] font-mono text-gray-400">
                 Cocok untuk cetak fisik & arsip digital
               </span>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={handlePrint}
                   className={`flex items-center gap-1 px-2.5 py-1.5 border rounded-md text-xs font-bold transition cursor-pointer shadow-xs ${darkMode ? "bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
@@ -2185,8 +2238,8 @@ export default function PrintRaportView({
                 <button
                   onClick={handleDownloadPDF}
                   disabled={isDownloadingPDF}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-700 hover:bg-emerald-850 text-white rounded-md text-xs font-bold transition shadow-xs cursor-pointer border border-emerald-600 disabled:opacity-50"
-                  title="Unduh rapor sebagai berkas PDF berkualitas tinggi secara langsung"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-750 hover:bg-emerald-850 text-white rounded-md text-xs font-bold transition shadow-xs cursor-pointer border border-emerald-600 disabled:opacity-50"
+                  title="Unduh rapor siswa ini sebagai berkas PDF berkualitas tinggi"
                 >
                   {isDownloadingPDF ? (
                     <>
@@ -2195,10 +2248,29 @@ export default function PrintRaportView({
                     </>
                   ) : (
                     <>
-                      <FileDown className="w-3.5 h-3.5" /> Unduh PDF
+                      <FileDown className="w-3.5 h-3.5" /> Unduh PDF ({student.name?.split(" ")[0] || "Siswa"})
                     </>
                   )}
                 </button>
+                {allStudents && allStudents.length > 0 && (
+                  <button
+                    onClick={handleBatchDownloadZip}
+                    disabled={isBatchDownloading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-bold transition shadow-xs cursor-pointer border border-teal-600 disabled:opacity-50"
+                    title={`Unduh seluruh rapor siswa kelas ${selectedClass || student.kelas} dalam 1 berkas .ZIP`}
+                  >
+                    {isBatchDownloading ? (
+                      <>
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Membuat ZIP...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="w-3.5 h-3.5" /> Unduh Semua (.ZIP)
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -3140,6 +3212,117 @@ export default function PrintRaportView({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Batch ZIP Download Progress Modal */}
+      {(isBatchDownloading || batchProgress) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in no-print">
+          <div className="bg-slate-900 border border-slate-700 text-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-teal-500/20 text-teal-400 rounded-lg">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-100">
+                    Unduh ZIP Rapor Kelas {selectedClass || student.kelas}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Mengompresi semua berkas rapor siswa ke dalam format .ZIP
+                  </p>
+                </div>
+              </div>
+              {batchProgress?.status === "completed" || batchProgress?.status === "error" ? (
+                <button
+                  onClick={() => {
+                    setBatchProgress(null);
+                    setIsBatchDownloading(false);
+                  }}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Status & Progress Bar */}
+            <div className="space-y-3 py-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-medium text-slate-300">
+                  {batchProgress?.status === "preparing" && "Menyiapkan pengaturan & kop surat..."}
+                  {batchProgress?.status === "generating" && `Memproses: ${batchProgress.currentStudentName}`}
+                  {batchProgress?.status === "zipping" && "Mengompresi ke arsip ZIP..."}
+                  {batchProgress?.status === "completed" && "Semua Rapor Berhasil Dikemas!"}
+                  {batchProgress?.status === "error" && "Gagal Memproses ZIP"}
+                </span>
+                <span className="font-mono text-teal-400 font-bold">
+                  {batchProgress ? `${batchProgress.current}/${batchProgress.total}` : "0/0"}
+                </span>
+              </div>
+
+              {/* Progress bar container */}
+              <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+                <div
+                  className={`h-full transition-all duration-300 rounded-full ${
+                    batchProgress?.status === "error"
+                      ? "bg-red-500"
+                      : batchProgress?.status === "completed"
+                      ? "bg-emerald-500"
+                      : "bg-teal-500 animate-pulse"
+                  }`}
+                  style={{
+                    width: `${
+                      batchProgress?.total
+                        ? Math.min(100, Math.round((batchProgress.current / batchProgress.total) * 100))
+                        : 0
+                    }%`,
+                  }}
+                ></div>
+              </div>
+
+              {batchProgress?.status === "generating" && (
+                <p className="text-[11px] text-slate-400 italic">
+                  Sedang merender dokumen PDF dengan presisi tinggi, mohon jangan menutup jendela ini...
+                </p>
+              )}
+
+              {batchProgress?.status === "completed" && (
+                <div className="p-3 bg-emerald-950/40 border border-emerald-800/60 rounded-xl flex items-center gap-2.5 text-xs text-emerald-300">
+                  <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>
+                    Berkas <strong>Kumpulan_Raport_STS_Kelas_{selectedClass || student.kelas}.zip</strong> ({batchProgress.total} siswa) telah berhasil diunduh dan tersimpan di folder Download perangkat Anda.
+                  </span>
+                </div>
+              )}
+
+              {batchProgress?.status === "error" && (
+                <div className="p-3 bg-red-950/40 border border-red-800/60 rounded-xl flex items-center gap-2.5 text-xs text-red-300">
+                  <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
+                  <span>{batchProgress.errorMessage || "Terjadi kesalahan saat memproses unduhan."}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex justify-end">
+              {batchProgress?.status === "completed" || batchProgress?.status === "error" ? (
+                <button
+                  onClick={() => {
+                    setBatchProgress(null);
+                    setIsBatchDownloading(false);
+                  }}
+                  className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+                >
+                  Tutup
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="w-3.5 h-3.5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Memproses berkas...</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

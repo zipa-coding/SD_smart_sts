@@ -342,12 +342,13 @@ export default function TeacherPanel({
       const safeTemplates = Array.isArray(templates) ? templates : [];
 
       // Look up if this student already has a grade for this activeSubject
-      const normSubj = normalizeSubjectKey(subj);
+      const lowerSubj = subj.trim().toLowerCase();
       const existingGrade = safeGrades.find(
         (g) =>
           g &&
           g.studentId === student?.id &&
-          (g.subject === subj || normalizeSubjectKey(g.subject) === normSubj),
+          g.subject &&
+          g.subject.trim().toLowerCase() === lowerSubj,
       );
 
       if (existingGrade) {
@@ -680,7 +681,7 @@ export default function TeacherPanel({
       kelas: selectedClass,
     };
 
-    // Optimistically update allTpObj immediately
+    // Optimistically update allTpObj immediately for activeSubject ONLY
     setAllTpObj((prev) => {
       const next = { ...prev };
       const key = activeSubject;
@@ -689,10 +690,6 @@ export default function TeacherPanel({
         currentList.push(newCreatedTp);
       }
       next[key] = currentList;
-      const normKey = normalizeSubjectKey(activeSubject);
-      if (normKey && normKey !== key) {
-        next[normKey] = currentList;
-      }
       return next;
     });
 
@@ -1172,8 +1169,8 @@ export default function TeacherPanel({
                   grades.some(
                     (g) =>
                       g.studentId === selectedStudent.id &&
-                      (g.subject === sub ||
-                        normalizeSubjectKey(g.subject) === normalizeSubjectKey(sub)),
+                      g.subject &&
+                      g.subject.trim().toLowerCase() === sub.trim().toLowerCase(),
                   );
                 const keislamanItem = KEISLAMAN_SUB_SUBJECTS.find((k) => k.id === sub);
                 const shortLabel = keislamanItem ? keislamanItem.short : sub;

@@ -167,9 +167,36 @@ async function syncDatabaseWithFirestore() {
       changed = true;
     }
 
+    // 4. Sync Grades
+    try {
+      const gSnap = await getDocs(collection(firestoreDb, "grades"));
+      if (gSnap && !gSnap.empty) {
+        const fsGradesMap = new Map<string, any>();
+        if (Array.isArray(db.grades)) {
+          db.grades.forEach((g: any) => {
+            if (g && g.studentId && g.subject) {
+              const key = `${g.studentId}_${normalizeSubjectKey(g.subject)}`;
+              fsGradesMap.set(key, g);
+            }
+          });
+        }
+        gSnap.forEach((d) => {
+          const data = d.data();
+          if (data && data.studentId && data.subject) {
+            const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
+            fsGradesMap.set(key, { ...(fsGradesMap.get(key) || {}), ...data });
+          }
+        });
+        db.grades = Array.from(fsGradesMap.values());
+        changed = true;
+      }
+    } catch (e) {
+      console.warn("[Firestore Sync] Grades sync error:", e);
+    }
+
     if (changed) {
       await writeDB(db);
-      console.log(`[Firestore Sync] Sync complete. Teachers: ${db.teachers?.length || 0}, Students: ${db.students?.length || 0}, Principal: ${db.settings?.principalName}`);
+      console.log(`[Firestore Sync] Sync complete. Teachers: ${db.teachers?.length || 0}, Students: ${db.students?.length || 0}, Grades: ${db.grades?.length || 0}, Principal: ${db.settings?.principalName}`);
     }
     return {
       success: true,
@@ -912,6 +939,16 @@ app.post("/api/grades", async (req, res) => {
   }
 
   await writeDB(db);
+
+  if (firestoreDb) {
+    try {
+      const docId = `${studentId}_${normalizeSubjectKey(subject).replace(/[^a-zA-Z0-9]/g, "_")}`;
+      await setDoc(doc(firestoreDb, "grades", docId), updatedGrade, { merge: true });
+    } catch (e) {
+      console.warn("Firestore grade save error:", e);
+    }
+  }
+
   res.json(updatedGrade);
 });
 
@@ -982,14 +1019,7 @@ app.get("/api/tps", async (req, res) => {
 
   // If specific subject requested
   if (subject && typeof subject === "string") {
-    let items: any[] = [];
-    const normTarget = normalizeSubjectKey(subject);
-    for (const [subKey, list] of Object.entries(templates)) {
-      if ((subKey === subject || normalizeSubjectKey(subKey) === normTarget) && Array.isArray(list)) {
-        items = list;
-        break;
-      }
-    }
+    let items = getSubjectTps(templates, subject);
     if (kelas && typeof kelas === "string") {
       items = items.filter((item: any) => matchTpClass(item.kelas, kelas));
     }
@@ -1024,19 +1054,11 @@ app.post("/api/tps", async (req, res) => {
   }
 
   const cleanSubject = String(subject).trim();
-  const normTarget = normalizeSubjectKey(cleanSubject);
+  const canonicalKey = normalizeSubjectKey(cleanSubject) || cleanSubject;
 
-  // Find existing key matching subject
-  let targetKey = cleanSubject;
-  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
-    if (k === cleanSubject || normalizeSubjectKey(k) === normTarget) {
-      targetKey = k;
-      break;
-    }
-  }
-
-  if (!Array.isArray(db.tujuan_pembelajaran_templates[targetKey])) {
-    db.tujuan_pembelajaran_templates[targetKey] = [];
+  // Ensure array exists for canonical key
+  if (!Array.isArray(db.tujuan_pembelajaran_templates[canonicalKey])) {
+    db.tujuan_pembelajaran_templates[canonicalKey] = [];
   }
 
   const newTP = {
@@ -1045,19 +1067,11 @@ app.post("/api/tps", async (req, res) => {
     kelas: kelas ? String(kelas).trim() : "1",
   };
 
-  db.tujuan_pembelajaran_templates[targetKey].push(newTP);
+  db.tujuan_pembelajaran_templates[canonicalKey].push(newTP);
 
-  // Mirror across cleanSubject, normTarget, and any other normalized alias keys
-  if (targetKey !== cleanSubject) {
-    db.tujuan_pembelajaran_templates[cleanSubject] = db.tujuan_pembelajaran_templates[targetKey];
-  }
-  if (normTarget && normTarget !== targetKey) {
-    db.tujuan_pembelajaran_templates[normTarget] = db.tujuan_pembelajaran_templates[targetKey];
-  }
-  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
-    if (normalizeSubjectKey(k) === normTarget && k !== targetKey) {
-      db.tujuan_pembelajaran_templates[k] = db.tujuan_pembelajaran_templates[targetKey];
-    }
+  // If cleanSubject is different string from canonicalKey, also initialize cleanSubject independently if missing
+  if (cleanSubject !== canonicalKey && !Array.isArray(db.tujuan_pembelajaran_templates[cleanSubject])) {
+    db.tujuan_pembelajaran_templates[cleanSubject] = [];
   }
 
   await writeDB(db);
@@ -1076,18 +1090,30 @@ app.put("/api/tps/:subject/:tpId", async (req, res) => {
   }
 
   let updated = false;
-  const normTarget = normalizeSubjectKey(decodedSubject);
 
-  for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
-    if (!decodedSubject || key === decodedSubject || normalizeSubjectKey(key) === normTarget) {
-      const list = db.tujuan_pembelajaran_templates[key];
-      if (Array.isArray(list)) {
-        const item = list.find((tp: any) => String(tp.id).trim() === cleanTpId);
-        if (item) {
-          if (text !== undefined) item.text = String(text).trim();
-          if (kelas !== undefined) item.kelas = String(kelas).trim();
-          updated = true;
-        }
+  // 1. Try exact subject match
+  if (decodedSubject && Array.isArray(db.tujuan_pembelajaran_templates[decodedSubject])) {
+    const item = db.tujuan_pembelajaran_templates[decodedSubject].find(
+      (tp: any) => String(tp.id).trim() === cleanTpId
+    );
+    if (item) {
+      if (text !== undefined) item.text = String(text).trim();
+      if (kelas !== undefined) item.kelas = String(kelas).trim();
+      updated = true;
+    }
+  }
+
+  // 2. Try canonical normalized subject match
+  if (!updated && decodedSubject) {
+    const normKey = normalizeSubjectKey(decodedSubject);
+    if (normKey && Array.isArray(db.tujuan_pembelajaran_templates[normKey])) {
+      const item = db.tujuan_pembelajaran_templates[normKey].find(
+        (tp: any) => String(tp.id).trim() === cleanTpId
+      );
+      if (item) {
+        if (text !== undefined) item.text = String(text).trim();
+        if (kelas !== undefined) item.kelas = String(kelas).trim();
+        updated = true;
       }
     }
   }
@@ -1110,37 +1136,30 @@ const deleteTpHandler = async (req: any, res: any) => {
   }
 
   let deleted = false;
-  const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
-  const targetNorm = norm(decodedSubject);
 
-  // 1. Try matching subject key
-  for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
-    if (key === decodedSubject || norm(key) === targetNorm) {
-      const list = db.tujuan_pembelajaran_templates[key];
-      if (Array.isArray(list)) {
-        const prevLen = list.length;
-        db.tujuan_pembelajaran_templates[key] = list.filter(
-          (tp: any) => String(tp.id).trim() !== cleanTpId
-        );
-        if (db.tujuan_pembelajaran_templates[key].length < prevLen) {
-          deleted = true;
-        }
-      }
+  // 1. Delete from exact subject
+  if (decodedSubject && Array.isArray(db.tujuan_pembelajaran_templates[decodedSubject])) {
+    const list = db.tujuan_pembelajaran_templates[decodedSubject];
+    const prevLen = list.length;
+    db.tujuan_pembelajaran_templates[decodedSubject] = list.filter(
+      (tp: any) => String(tp.id).trim() !== cleanTpId
+    );
+    if (db.tujuan_pembelajaran_templates[decodedSubject].length < prevLen) {
+      deleted = true;
     }
   }
 
-  // 2. Global search across all subjects for this tpId
-  if (!deleted) {
-    for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
-      const list = db.tujuan_pembelajaran_templates[key];
-      if (Array.isArray(list)) {
-        const prevLen = list.length;
-        db.tujuan_pembelajaran_templates[key] = list.filter(
-          (tp: any) => String(tp.id).trim() !== cleanTpId
-        );
-        if (db.tujuan_pembelajaran_templates[key].length < prevLen) {
-          deleted = true;
-        }
+  // 2. Delete from canonical normalized subject
+  if (!deleted && decodedSubject) {
+    const normKey = normalizeSubjectKey(decodedSubject);
+    if (normKey && Array.isArray(db.tujuan_pembelajaran_templates[normKey])) {
+      const list = db.tujuan_pembelajaran_templates[normKey];
+      const prevLen = list.length;
+      db.tujuan_pembelajaran_templates[normKey] = list.filter(
+        (tp: any) => String(tp.id).trim() !== cleanTpId
+      );
+      if (db.tujuan_pembelajaran_templates[normKey].length < prevLen) {
+        deleted = true;
       }
     }
   }
@@ -1678,8 +1697,14 @@ app.get("/api/summary", async (req, res) => {
 
   // Calculate progress mapping - only count grades for active registered students
   const subjectProgress = subjects.map((sub) => {
+    const normSub = normalizeSubjectKey(sub);
     const filledGradesForSub = db.grades.filter(
-      (g: any) => g.subject === sub && registeredStudentIds.has(g.studentId)
+      (g: any) =>
+        (g.subject === sub || normalizeSubjectKey(g.subject) === normSub) &&
+        registeredStudentIds.has(g.studentId) &&
+        ((g.score !== undefined && g.score !== null && g.score !== "") ||
+          (g.deskripsi && String(g.deskripsi).trim() !== "") ||
+          (Array.isArray(g.tps) && g.tps.length > 0))
     );
     const completedCount = filledGradesForSub.length;
     const percentage =
@@ -1690,8 +1715,8 @@ app.get("/api/summary", async (req, res) => {
     // Find active teacher for this subject
     const teacher = db.teachers.find((t: any) => {
       const subs = extractTeacherSubjects(t);
-      if (subs.includes(sub)) return true;
-      if (t.subject === sub) return true;
+      if (subs.some((s: string) => s === sub || normalizeSubjectKey(s) === normSub)) return true;
+      if (t.subject === sub || normalizeSubjectKey(t.subject) === normSub) return true;
       return false;
     });
 

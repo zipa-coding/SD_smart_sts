@@ -13,7 +13,7 @@ import {
   where 
 } from "firebase/firestore";
 import dbData from "../data/db.json";
-import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject } from "../types";
+import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -1600,19 +1600,36 @@ export const firebaseApi = {
     const students = await firebaseApi.getStudents() as any[];
     const teachers = await firebaseApi.getTeachers() as any[];
     const grades = await firebaseApi.getGrades() as any[];
-    
-    const subjectsList = [
-      "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS", "Bahasa Inggris", "PJOK", "Prakarya", "Informatika",
-      "Bahasa Arab", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
-    ];
+    const fetchedSubjects = await firebaseApi.getSubjects() as string[];
+
+    const subjectsList = Array.isArray(fetchedSubjects) && fetchedSubjects.length > 0
+      ? fetchedSubjects
+      : [
+        "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPAS", "PJOK", "Seni Budaya", "Prakarya",
+        "Bahasa Arab", "Bahasa Inggris", "TIK", "Life Skill", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an",
+        "Do’a Harian dan Hadits", "Wudhu dan Sholat", "Sirah Nabawiyah"
+      ];
+
     const totalStudents = students.length;
     const registeredStudentIds = new Set(students.map((s: any) => s.id));
     
     const subjectProgress = subjectsList.map(sub => {
-      const filledGradesForSub = grades.filter((g: any) => g.subject === sub && registeredStudentIds.has(g.studentId));
+      const normSub = normalizeSubjectKey(sub);
+      const filledGradesForSub = grades.filter((g: any) =>
+        (g.subject === sub || normalizeSubjectKey(g.subject) === normSub) &&
+        registeredStudentIds.has(g.studentId) &&
+        ((g.score !== undefined && g.score !== null && g.score !== "") ||
+          (g.deskripsi && String(g.deskripsi).trim() !== "") ||
+          (Array.isArray(g.tps) && g.tps.length > 0))
+      );
       const completedCount = filledGradesForSub.length;
       const percentage = totalStudents > 0 ? Math.round((completedCount / totalStudents) * 100) : 0;
-      const t = teachers.find((teach: any) => teach.subject === sub);
+      const t = teachers.find((teach: any) => {
+        const subs = extractTeacherSubjects(teach);
+        if (subs.some((s: string) => s === sub || normalizeSubjectKey(s) === normSub)) return true;
+        if (teach.subject === sub || normalizeSubjectKey(teach.subject) === normSub) return true;
+        return false;
+      });
       return {
         subject: sub,
         completed: completedCount,

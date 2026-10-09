@@ -13,9 +13,12 @@ import {
   RefreshCw,
   UserPlus,
   X,
-  AlertCircle
+  AlertCircle,
+  Archive,
+  Download
 } from "lucide-react";
 import PrintRaportView from "./PrintRaportView";
+import { downloadAllRaportZip, BatchDownloadProgress } from "../lib/zipExporter";
 
 interface WaliKelasPanelProps {
   user: Teacher;
@@ -76,6 +79,48 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
   const [newStudentNisn, setNewStudentNisn] = useState("");
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [addStudentError, setAddStudentError] = useState("");
+
+  // Batch Download ZIP State
+  const [isBatchDownloading, setIsBatchDownloading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<BatchDownloadProgress | null>(null);
+
+  const handleDownloadAllZip = async () => {
+    if (currentClassStudents.length === 0) {
+      alert("Tidak ada siswa di kelas ini untuk diunduh.");
+      return;
+    }
+    setIsBatchDownloading(true);
+    setBatchProgress({
+      current: 0,
+      total: currentClassStudents.length,
+      currentStudentName: "Mempersiapkan...",
+      status: "preparing",
+    });
+
+    try {
+      await downloadAllRaportZip({
+        students: currentClassStudents,
+        grades,
+        allClassNotes,
+        waliKelas: user,
+        selectedClass,
+        onProgress: (p) => {
+          setBatchProgress(p);
+        },
+      });
+    } catch (err: any) {
+      console.error("Batch download error:", err);
+      setBatchProgress({
+        current: 0,
+        total: currentClassStudents.length,
+        currentStudentName: "",
+        status: "error",
+        errorMessage: err.message || "Gagal mengunduh ZIP rapor.",
+      });
+    } finally {
+      setIsBatchDownloading(false);
+    }
+  };
 
   const handleQuickAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -307,6 +352,10 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
         waliKelasNote={studentNote}
         waliKelas={user}
         onBack={() => setRaportPrintTarget(null)}
+        allStudents={currentClassStudents}
+        allGrades={grades}
+        allClassNotes={allClassNotes}
+        selectedClass={selectedClass}
       />
     );
   }
@@ -342,6 +391,39 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
               </select>
             )}
           </div>
+        </div>
+
+        {/* Batch ZIP Download Card */}
+        <div className="p-2.5 bg-teal-50 border border-teal-200 rounded-lg flex flex-col gap-1.5 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Archive className="w-3.5 h-3.5 text-teal-700" />
+              <span className="text-xs font-bold text-teal-900">Unduh Rapor 1 Kelas</span>
+            </div>
+            <span className="text-[10px] font-mono bg-teal-200/70 text-teal-850 px-1.5 py-0.5 rounded font-bold">
+              {currentClassStudents.length} Siswa
+            </span>
+          </div>
+          <p className="text-[10.5px] text-teal-700 leading-tight">
+            Unduh seluruh berkas PDF rapor siswa Kelas {selectedClass} sekaligus dalam 1 arsip ZIP tanpa perlu klik satu per satu.
+          </p>
+          <button
+            onClick={handleDownloadAllZip}
+            disabled={isBatchDownloading || currentClassStudents.length === 0}
+            className="w-full mt-0.5 flex items-center justify-center gap-1.5 py-1.5 px-3 bg-teal-700 hover:bg-teal-800 text-white rounded text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+            title="Unduh seluruh rapor siswa kelas ini dalam format berkas ZIP"
+          >
+            {isBatchDownloading ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Memproses ZIP...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-3.5 h-3.5" /> Unduh Semua Siswa (.ZIP)
+              </>
+            )}
+          </button>
         </div>
 
         <div className="border-t border-slate-100 pt-2.5 flex items-center justify-between">
@@ -425,14 +507,25 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
                 </div>
               </div>
 
-              {/* PDF and Word print trigger */}
-              <button
-                onClick={() => setRaportPrintTarget(selectedStudent)}
-                className="flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs rounded transition shadow-xs cursor-pointer"
-                id="view-raport-trigger"
-              >
-                <Printer className="w-3.5 h-3.5" /> Pratinjau & Cetak Rapor
-              </button>
+              {/* PDF and Word print trigger & Batch ZIP */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setRaportPrintTarget(selectedStudent)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs rounded transition shadow-xs cursor-pointer"
+                  id="view-raport-trigger"
+                  title="Buka pratinjau dan cetak/unduh rapor siswa ini"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Pratinjau & Cetak Rapor
+                </button>
+                <button
+                  onClick={handleDownloadAllZip}
+                  disabled={isBatchDownloading || currentClassStudents.length === 0}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded transition shadow-xs cursor-pointer disabled:opacity-50"
+                  title={`Unduh seluruh berkas rapor siswa Kelas ${selectedClass} dalam 1 berkas .ZIP`}
+                >
+                  <Archive className="w-3.5 h-3.5" /> Unduh 1 Kelas (.ZIP)
+                </button>
+              </div>
             </div>
 
             {/* Error and success messages */}
@@ -851,6 +944,117 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Batch ZIP Download Progress Modal */}
+      {(isBatchDownloading || batchProgress) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-200 relative space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-teal-50 text-teal-700 rounded-lg border border-teal-100">
+                  <Archive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">
+                    Unduh ZIP Rapor Kelas {selectedClass}
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Mengompresi semua berkas PDF siswa ke dalam satu berkas .ZIP
+                  </p>
+                </div>
+              </div>
+              {batchProgress?.status === "completed" || batchProgress?.status === "error" ? (
+                <button
+                  onClick={() => {
+                    setBatchProgress(null);
+                    setIsBatchDownloading(false);
+                  }}
+                  className="p-1 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Status & Progress Bar */}
+            <div className="space-y-3 py-2">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-semibold text-slate-700">
+                  {batchProgress?.status === "preparing" && "Menyiapkan pengaturan & kop rapor..."}
+                  {batchProgress?.status === "generating" && `Membuat Rapor: ${batchProgress.currentStudentName}`}
+                  {batchProgress?.status === "zipping" && "Mengompresi berkas ke dalam ZIP..."}
+                  {batchProgress?.status === "completed" && "Semua Rapor Berhasil Dikemas!"}
+                  {batchProgress?.status === "error" && "Gagal Memproses ZIP"}
+                </span>
+                <span className="font-mono text-teal-700 font-bold">
+                  {batchProgress ? `${batchProgress.current}/${batchProgress.total}` : "0/0"}
+                </span>
+              </div>
+
+              {/* Progress bar container */}
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                <div
+                  className={`h-full transition-all duration-300 rounded-full ${
+                    batchProgress?.status === "error"
+                      ? "bg-red-500"
+                      : batchProgress?.status === "completed"
+                      ? "bg-emerald-500"
+                      : "bg-teal-600 animate-pulse"
+                  }`}
+                  style={{
+                    width: `${
+                      batchProgress?.total
+                        ? Math.min(100, Math.round((batchProgress.current / batchProgress.total) * 100))
+                        : 0
+                    }%`,
+                  }}
+                ></div>
+              </div>
+
+              {batchProgress?.status === "generating" && (
+                <p className="text-[11px] text-slate-450 italic">
+                  Sedang memproses seluruh halaman rapor siswa dengan format presisi, mohon jangan menutup jendela browser...
+                </p>
+              )}
+
+              {batchProgress?.status === "completed" && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs text-emerald-850">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>
+                    Berkas <strong>Kumpulan_Raport_STS_Kelas_{selectedClass}.zip</strong> ({batchProgress.total} siswa) telah berhasil diunduh dan tersimpan di folder Download komputer Anda.
+                  </span>
+                </div>
+              )}
+
+              {batchProgress?.status === "error" && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2.5 text-xs text-red-700">
+                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />
+                  <span>{batchProgress.errorMessage || "Terjadi kesalahan saat memproses unduhan."}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="pt-2 flex justify-end">
+              {batchProgress?.status === "completed" || batchProgress?.status === "error" ? (
+                <button
+                  onClick={() => {
+                    setBatchProgress(null);
+                    setIsBatchDownloading(false);
+                  }}
+                  className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+                >
+                  Tutup
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <div className="w-3.5 h-3.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Memproses berkas...</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

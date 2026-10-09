@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { SchoolSummary } from "../types";
+import { SchoolSummary, normalizeSubjectKey } from "../types";
 import AestheticClock from "./AestheticClock";
 import SplineWaveChart from "./SplineWaveChart";
 import {
@@ -94,9 +94,10 @@ export default function DashboardProgress({
 
     return summary.subjectProgress.map(sub => {
       let category: "nasional" | "islamic" | "muatan" = "nasional";
-      if (islamicSubjects.includes(sub.subject)) {
+      const norm = normalizeSubjectKey(sub.subject);
+      if (islamicSubjects.some(s => normalizeSubjectKey(s) === norm || sub.subject.toLowerCase().includes(s.toLowerCase()))) {
         category = "islamic";
-      } else if (muatanSubjects.includes(sub.subject)) {
+      } else if (muatanSubjects.some(s => normalizeSubjectKey(s) === norm || sub.subject.toLowerCase().includes(s.toLowerCase()))) {
         category = "muatan";
       }
       return {
