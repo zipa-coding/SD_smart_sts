@@ -183,6 +183,9 @@ async function syncDatabaseWithFirestore() {
         gSnap.forEach((d) => {
           const data = d.data();
           if (data && data.studentId && data.subject) {
+            if (Array.isArray(data.tps)) {
+              data.tps = cleanTpList(data.tps);
+            }
             const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
             fsGradesMap.set(key, { ...(fsGradesMap.get(key) || {}), ...data });
           }
@@ -194,19 +197,20 @@ async function syncDatabaseWithFirestore() {
       console.warn("[Firestore Sync] Grades sync error:", e);
     }
 
-    // 5. Sync TP Templates (Tujuan Pembelajaran)
+    // 5. Sync TP Templates (Tujuan Pembelajaran) with Grade Auto-Recovery
     try {
+      if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
       const tpSnap = await getDocs(collection(firestoreDb, "tujuan_pembelajaran_templates"));
       if (tpSnap && !tpSnap.empty) {
-        if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
         tpSnap.forEach((docSnap) => {
           const docId = docSnap.id;
           const data = docSnap.data();
           if (Array.isArray(data.tps)) {
             const cleanList = cleanTpList(data.tps);
-            const existing = Array.isArray(db.tujuan_pembelajaran_templates[docId])
-              ? db.tujuan_pembelajaran_templates[docId]
-              : [];
+            const normDocId = normalizeSubjectKey(docId) || docId;
+            const existing = Array.isArray(db.tujuan_pembelajaran_templates[normDocId])
+              ? db.tujuan_pembelajaran_templates[normDocId]
+              : (Array.isArray(db.tujuan_pembelajaran_templates[docId]) ? db.tujuan_pembelajaran_templates[docId] : []);
             
             // Merge existing local and cloud TPs safely
             const mergedMap = new Map<string, any>();
@@ -216,8 +220,32 @@ async function syncDatabaseWithFirestore() {
             cleanList.forEach((tp: any) => {
               if (tp && tp.id && tp.text) mergedMap.set(String(tp.id).trim(), tp);
             });
-            db.tujuan_pembelajaran_templates[docId] = Array.from(mergedMap.values());
+            const mergedList = Array.from(mergedMap.values());
+            db.tujuan_pembelajaran_templates[normDocId] = mergedList;
+            db.tujuan_pembelajaran_templates[docId] = mergedList;
             changed = true;
+          }
+        });
+      }
+
+      // Auto-recover any TPs embedded in grades
+      if (Array.isArray(db.grades)) {
+        db.grades.forEach((g: any) => {
+          if (g && g.subject && Array.isArray(g.tps) && g.tps.length > 0) {
+            const normSub = normalizeSubjectKey(g.subject) || g.subject;
+            const validTps = cleanTpList(g.tps);
+            if (validTps.length > 0) {
+              const current = Array.isArray(db.tujuan_pembelajaran_templates[normSub])
+                ? db.tujuan_pembelajaran_templates[normSub]
+                : [];
+              const map = new Map<string, any>();
+              current.forEach((t: any) => map.set(String(t.id).trim(), t));
+              validTps.forEach((t: any) => map.set(String(t.id).trim(), t));
+              const combined = Array.from(map.values());
+              db.tujuan_pembelajaran_templates[normSub] = combined;
+              db.tujuan_pembelajaran_templates[g.subject] = combined;
+              changed = true;
+            }
           }
         });
       }
@@ -967,6 +995,31 @@ app.post("/api/grades", async (req, res) => {
     db.grades[index] = updatedGrade;
   } else {
     db.grades.push(updatedGrade);
+  }
+
+  // Auto-persist grade TPs to master templates list
+  if (Array.isArray(updatedGrade.tps) && updatedGrade.tps.length > 0) {
+    if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+    const canonicalKey = normSub || subject;
+    const existing = Array.isArray(db.tujuan_pembelajaran_templates[canonicalKey])
+      ? db.tujuan_pembelajaran_templates[canonicalKey]
+      : [];
+    const map = new Map<string, any>();
+    existing.forEach((t: any) => map.set(String(t.id).trim(), t));
+    updatedGrade.tps.forEach((t: any) => map.set(String(t.id).trim(), t));
+    const combined = Array.from(map.values());
+    db.tujuan_pembelajaran_templates[canonicalKey] = combined;
+    db.tujuan_pembelajaran_templates[subject] = combined;
+
+    if (firestoreDb) {
+      try {
+        const safeDocId = canonicalKey.replace(/\//g, "_");
+        setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+          tps: cleanTpList(combined),
+          updatedAt: new Date().toISOString(),
+        }, { merge: true }).catch(() => {});
+      } catch (e) {}
+    }
   }
 
   await writeDB(db);

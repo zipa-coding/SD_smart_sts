@@ -1169,11 +1169,20 @@ export const firebaseApi = {
             const subjectId = docSnap.id;
             const originalList = Array.isArray(data.tps) ? data.tps : [];
             let tpsList = cleanTpList(originalList);
-            templates[subjectId] = tpsList;
-            const normKey = normalizeSubjectKey(subjectId);
-            if (normKey && normKey !== subjectId) {
-              templates[normKey] = tpsList;
-            }
+            const normKey = normalizeSubjectKey(subjectId) || subjectId;
+            const existing = Array.isArray(templates[normKey])
+              ? templates[normKey]
+              : (Array.isArray(templates[subjectId]) ? templates[subjectId] : []);
+
+            // Non-destructive merge between local and cloud TPs
+            const mergedMap = new Map<string, any>();
+            existing.forEach((tp: any) => { if (tp && tp.id) mergedMap.set(String(tp.id).trim(), tp); });
+            tpsList.forEach((tp: any) => { if (tp && tp.id) mergedMap.set(String(tp.id).trim(), tp); });
+            const mergedList = Array.from(mergedMap.values());
+
+            templates[subjectId] = mergedList;
+            templates[normKey] = mergedList;
+
             // Auto-clean Firestore doc if it contained dummy templates
             if (originalList.length !== tpsList.length) {
               setDoc(
@@ -1188,6 +1197,29 @@ export const firebaseApi = {
         // Fallback gracefully to local storage
       }
     }
+
+    // Safety net: Recover any TPs embedded in grades
+    try {
+      const grades = await firebaseApi.getGrades() as any[];
+      if (Array.isArray(grades)) {
+        grades.forEach((g: any) => {
+          if (g && g.subject && Array.isArray(g.tps) && g.tps.length > 0) {
+            const sub = g.subject;
+            const normSub = normalizeSubjectKey(sub) || sub;
+            const validTps = cleanTpList(g.tps);
+            if (validTps.length > 0) {
+              const current = Array.isArray(templates[normSub]) ? templates[normSub] : [];
+              const map = new Map<string, any>();
+              current.forEach((t) => map.set(String(t.id).trim(), t));
+              validTps.forEach((t) => map.set(String(t.id).trim(), t));
+              const combined = Array.from(map.values());
+              templates[normSub] = combined;
+              templates[sub] = combined;
+            }
+          }
+        });
+      }
+    } catch (e) {}
 
     if (kelas) {
       const filtered: Record<string, any[]> = {};
