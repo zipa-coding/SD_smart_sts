@@ -194,6 +194,37 @@ async function syncDatabaseWithFirestore() {
       console.warn("[Firestore Sync] Grades sync error:", e);
     }
 
+    // 5. Sync TP Templates (Tujuan Pembelajaran)
+    try {
+      const tpSnap = await getDocs(collection(firestoreDb, "tujuan_pembelajaran_templates"));
+      if (tpSnap && !tpSnap.empty) {
+        if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+        tpSnap.forEach((docSnap) => {
+          const docId = docSnap.id;
+          const data = docSnap.data();
+          if (Array.isArray(data.tps)) {
+            const cleanList = cleanTpList(data.tps);
+            const existing = Array.isArray(db.tujuan_pembelajaran_templates[docId])
+              ? db.tujuan_pembelajaran_templates[docId]
+              : [];
+            
+            // Merge existing local and cloud TPs safely
+            const mergedMap = new Map<string, any>();
+            existing.forEach((tp: any) => {
+              if (tp && tp.id && tp.text) mergedMap.set(String(tp.id).trim(), tp);
+            });
+            cleanList.forEach((tp: any) => {
+              if (tp && tp.id && tp.text) mergedMap.set(String(tp.id).trim(), tp);
+            });
+            db.tujuan_pembelajaran_templates[docId] = Array.from(mergedMap.values());
+            changed = true;
+          }
+        });
+      }
+    } catch (e) {
+      console.warn("[Firestore Sync] TP templates sync error:", e);
+    }
+
     if (changed) {
       await writeDB(db);
       console.log(`[Firestore Sync] Sync complete. Teachers: ${db.teachers?.length || 0}, Students: ${db.students?.length || 0}, Grades: ${db.grades?.length || 0}, Principal: ${db.settings?.principalName}`);
@@ -1075,6 +1106,20 @@ app.post("/api/tps", async (req, res) => {
   }
 
   await writeDB(db);
+
+  if (firestoreDb) {
+    try {
+      const safeDocId = canonicalKey.replace(/\//g, "_");
+      const listToSave = cleanTpList(db.tujuan_pembelajaran_templates[canonicalKey] || []);
+      await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+        tps: listToSave,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn("[Firestore TP] Error persisting TP to Firestore:", e);
+    }
+  }
+
   res.status(201).json(newTP);
 });
 
@@ -1120,6 +1165,21 @@ app.put("/api/tps/:subject/:tpId", async (req, res) => {
 
   if (updated) {
     await writeDB(db);
+
+    if (firestoreDb && decodedSubject) {
+      try {
+        const normKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
+        const safeDocId = normKey.replace(/\//g, "_");
+        const listToSave = cleanTpList(db.tujuan_pembelajaran_templates[normKey] || []);
+        await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+          tps: listToSave,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (e) {
+        console.warn("[Firestore TP] Error updating TP in Firestore:", e);
+      }
+    }
+
     return res.json({ success: true, message: "TP berhasil diperbarui." });
   }
   res.status(404).json({ error: "TP tidak ditemukan." });
@@ -1165,6 +1225,21 @@ const deleteTpHandler = async (req: any, res: any) => {
   }
 
   await writeDB(db);
+
+  if (deleted && firestoreDb && decodedSubject) {
+    try {
+      const normKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
+      const safeDocId = normKey.replace(/\//g, "_");
+      const listToSave = cleanTpList(db.tujuan_pembelajaran_templates[normKey] || []);
+      await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+        tps: listToSave,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn("[Firestore TP] Error deleting TP in Firestore:", e);
+    }
+  }
+
   res.json({ message: "TP berhasil dihapus.", deleted: true });
 };
 
