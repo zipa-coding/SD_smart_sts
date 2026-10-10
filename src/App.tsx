@@ -50,13 +50,6 @@ export default function App() {
     localStorage.setItem("smp_islam_smart_theme", "dark");
     document.body.classList.add("dark");
     document.documentElement.classList.add("dark");
-    
-    // Clear legacy offline cache so all devices immediately sync to clean live server database
-    try {
-      localStorage.removeItem("smart_sts_db");
-      localStorage.removeItem("smart_sts_deleted_students");
-      localStorage.removeItem("smart_sts_deleted_teachers");
-    } catch (e) {}
   }, []);
 
   // Real-time Multi-Device synchronization hook
@@ -214,17 +207,29 @@ export default function App() {
 
   const handleLoginSuccess = (user: Teacher) => {
     setCurrentUser(user);
+    setVisitedTabs({ progress: true, teacher_panel: true });
     sessionStorage.setItem("smp_islam_smart_user", JSON.stringify(user));
     sessionStorage.setItem("smp_islam_smart_last_active", Date.now().toString());
+    try {
+      localStorage.removeItem("smart_sts_active_subject");
+      localStorage.removeItem("smart_sts_selected_class");
+    } catch (e) {}
     
     // The first page shown after login is always the main Dashboard
     setActiveTab("progress");
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setVisitedTabs({});
     sessionStorage.removeItem("smp_islam_smart_user");
     sessionStorage.removeItem("smp_islam_smart_last_active");
+    try {
+      localStorage.removeItem("smart_sts_active_subject");
+      localStorage.removeItem("smart_sts_selected_class");
+    } catch (e) {}
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const triggerProgressRefresh = () => {
@@ -570,6 +575,7 @@ export default function App() {
                     </div>
                     {/* Act as IPA Teacher by default for admin in workspace */}
                     <TeacherPanel
+                      key="admin_tester"
                       user={{ id: "admin_tester", name: "Pak Admin (Penguji)", username: "admin", subject: "Informatika", isWaliKelas: false, kelas: "" }}
                       onRefreshTrigger={triggerProgressRefresh}
                       refreshTrigger={refreshTrigger}
@@ -577,6 +583,7 @@ export default function App() {
                   </div>
                 ) : (
                   <TeacherPanel
+                    key={currentUser ? currentUser.id : "guest"}
                     user={currentUser}
                     onRefreshTrigger={triggerProgressRefresh}
                     refreshTrigger={refreshTrigger}
@@ -589,6 +596,7 @@ export default function App() {
               <div className={activeTab === "walikelas_panel" ? "block animate-fade-in" : "hidden"}>
                 {/* Wali Kelas dashboard integration */}
                 <WaliKelasPanel
+                  key={currentUser ? `${currentUser.id}_wk` : "guest_wk"}
                   user={currentUser}
                   onRefreshTrigger={triggerProgressRefresh}
                   refreshTrigger={refreshTrigger}

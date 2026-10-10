@@ -380,6 +380,7 @@ export function cleanTpList(list: any[]): any[] {
 /**
  * Safely looks up TP templates for a subject across all variations (casing, quotes, aliases),
  * strictly excluding any dummy / sample templates, while guaranteeing strict isolation between subjects.
+ * Merges TPs across aliases (e.g. Sirah & Siroh, Life Skill & Life skill, TIK & Informatika).
  */
 export function getSubjectTps(allTps: Record<string, any[]> | undefined | null, subject: string): any[] {
   if (!allTps || typeof allTps !== "object" || !subject) return [];
@@ -387,26 +388,35 @@ export function getSubjectTps(allTps: Record<string, any[]> | undefined | null, 
   const cleanSubject = String(subject).trim();
   if (!cleanSubject) return [];
 
-  // 1. Exact key match
-  if (Array.isArray(allTps[cleanSubject])) {
-    return cleanTpList(allTps[cleanSubject]);
-  }
+  const normTarget = normalizeSubjectKey(cleanSubject) || cleanSubject;
+  const lowerClean = cleanSubject.toLowerCase();
+  const lowerNorm = normTarget.toLowerCase();
 
-  // 2. Case-insensitive key match
-  const lowerTarget = cleanSubject.toLowerCase();
+  const map = new Map<string, any>();
+
+  // Check all keys in allTps that match cleanSubject, lowerClean, normTarget, or normalizeSubjectKey(key) === normTarget
   for (const [key, list] of Object.entries(allTps)) {
-    if (key.trim().toLowerCase() === lowerTarget && Array.isArray(list)) {
-      return cleanTpList(list);
+    if (!Array.isArray(list)) continue;
+    const lowerKey = key.trim().toLowerCase();
+    const normKey = normalizeSubjectKey(key) || key;
+
+    if (
+      key === cleanSubject ||
+      lowerKey === lowerClean ||
+      key === normTarget ||
+      lowerKey === lowerNorm ||
+      normKey === normTarget ||
+      normalizeSubjectKey(key) === normTarget
+    ) {
+      cleanTpList(list).forEach((tp) => {
+        if (tp && tp.id && tp.text) {
+          map.set(String(tp.id).trim(), tp);
+        }
+      });
     }
   }
 
-  // 3. Canonical key match (if exact key was not found)
-  const normTarget = normalizeSubjectKey(cleanSubject);
-  if (normTarget && normTarget !== cleanSubject && Array.isArray(allTps[normTarget])) {
-    return cleanTpList(allTps[normTarget]);
-  }
-
-  return [];
+  return Array.from(map.values());
 }
 
 /**

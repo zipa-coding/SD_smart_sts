@@ -1120,6 +1120,13 @@ app.get("/api/tps", async (req, res) => {
       templates[sub] = cleanTpList(list);
     }
   }
+
+  // Ensure all canonical alias keys share the merged list
+  for (const key of Object.keys(templates)) {
+    const merged = getSubjectTps(templates, key);
+    templates[key] = merged;
+  }
+
   const { kelas, subject } = req.query;
 
   // If specific subject requested
@@ -1161,34 +1168,46 @@ app.post("/api/tps", async (req, res) => {
   const cleanSubject = String(subject).trim();
   const canonicalKey = normalizeSubjectKey(cleanSubject) || cleanSubject;
 
-  // Ensure array exists for canonical key
-  if (!Array.isArray(db.tujuan_pembelajaran_templates[canonicalKey])) {
-    db.tujuan_pembelajaran_templates[canonicalKey] = [];
-  }
-
   const newTP = {
     id: "tp_" + Date.now(),
     text: String(tpText).trim(),
-    kelas: kelas ? String(kelas).trim() : "1",
+    kelas: kelas ? String(kelas).trim() : "all",
   };
 
-  db.tujuan_pembelajaran_templates[canonicalKey].push(newTP);
-
-  // If cleanSubject is different string from canonicalKey, also initialize cleanSubject independently if missing
-  if (cleanSubject !== canonicalKey && !Array.isArray(db.tujuan_pembelajaran_templates[cleanSubject])) {
-    db.tujuan_pembelajaran_templates[cleanSubject] = [];
+  // Find all alias keys in db.tujuan_pembelajaran_templates for this subject
+  const aliasKeys = new Set<string>();
+  aliasKeys.add(canonicalKey);
+  aliasKeys.add(cleanSubject);
+  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (normalizeSubjectKey(k) === canonicalKey || k.toLowerCase() === cleanSubject.toLowerCase()) {
+      aliasKeys.add(k);
+    }
   }
+
+  // Get current merged list and append new TP
+  const existingList = getSubjectTps(db.tujuan_pembelajaran_templates, canonicalKey);
+  if (!existingList.some((t: any) => String(t.id).trim() === newTP.id)) {
+    existingList.push(newTP);
+  }
+
+  // Update ALL alias keys with the complete list
+  aliasKeys.forEach((key) => {
+    db.tujuan_pembelajaran_templates[key] = [...existingList];
+  });
 
   await writeDB(db);
 
   if (firestoreDb) {
     try {
-      const safeDocId = canonicalKey.replace(/\//g, "_");
-      const listToSave = cleanTpList(db.tujuan_pembelajaran_templates[canonicalKey] || []);
-      await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
-        tps: listToSave,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      for (const key of aliasKeys) {
+        const safeDocId = key.replace(/\//g, "_");
+        const listToSave = cleanTpList(existingList);
+        await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+          tps: listToSave,
+          subject: canonicalKey,
+          updatedAt: new Date().toISOString(),
+        }, { merge: true });
+      }
     } catch (e) {
       console.warn("[Firestore TP] Error persisting TP to Firestore:", e);
     }
@@ -1208,47 +1227,40 @@ app.put("/api/tps/:subject/:tpId", async (req, res) => {
     return res.status(404).json({ error: "TP tidak ditemukan." });
   }
 
-  let updated = false;
-
-  // 1. Try exact subject match
-  if (decodedSubject && Array.isArray(db.tujuan_pembelajaran_templates[decodedSubject])) {
-    const item = db.tujuan_pembelajaran_templates[decodedSubject].find(
-      (tp: any) => String(tp.id).trim() === cleanTpId
-    );
-    if (item) {
-      if (text !== undefined) item.text = String(text).trim();
-      if (kelas !== undefined) item.kelas = String(kelas).trim();
-      updated = true;
+  const canonicalKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
+  const aliasKeys = new Set<string>();
+  aliasKeys.add(canonicalKey);
+  aliasKeys.add(decodedSubject);
+  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (normalizeSubjectKey(k) === canonicalKey || k.toLowerCase() === decodedSubject.toLowerCase()) {
+      aliasKeys.add(k);
     }
   }
 
-  // 2. Try canonical normalized subject match
-  if (!updated && decodedSubject) {
-    const normKey = normalizeSubjectKey(decodedSubject);
-    if (normKey && Array.isArray(db.tujuan_pembelajaran_templates[normKey])) {
-      const item = db.tujuan_pembelajaran_templates[normKey].find(
-        (tp: any) => String(tp.id).trim() === cleanTpId
-      );
-      if (item) {
-        if (text !== undefined) item.text = String(text).trim();
-        if (kelas !== undefined) item.kelas = String(kelas).trim();
-        updated = true;
-      }
-    }
-  }
+  const mergedList = getSubjectTps(db.tujuan_pembelajaran_templates, canonicalKey);
+  const item = mergedList.find((tp: any) => String(tp.id).trim() === cleanTpId);
 
-  if (updated) {
+  if (item) {
+    if (text !== undefined) item.text = String(text).trim();
+    if (kelas !== undefined) item.kelas = String(kelas).trim();
+
+    // Propagate updated list to all alias keys
+    aliasKeys.forEach((k) => {
+      db.tujuan_pembelajaran_templates[k] = [...mergedList];
+    });
+
     await writeDB(db);
 
-    if (firestoreDb && decodedSubject) {
+    if (firestoreDb) {
       try {
-        const normKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
-        const safeDocId = normKey.replace(/\//g, "_");
-        const listToSave = cleanTpList(db.tujuan_pembelajaran_templates[normKey] || []);
-        await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
-          tps: listToSave,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true });
+        for (const k of aliasKeys) {
+          const safeDocId = k.replace(/\//g, "_");
+          await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+            tps: cleanTpList(mergedList),
+            subject: canonicalKey,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
       } catch (e) {
         console.warn("[Firestore TP] Error updating TP in Firestore:", e);
       }
@@ -1256,6 +1268,7 @@ app.put("/api/tps/:subject/:tpId", async (req, res) => {
 
     return res.json({ success: true, message: "TP berhasil diperbarui." });
   }
+
   res.status(404).json({ error: "TP tidak ditemukan." });
 });
 
@@ -1269,52 +1282,45 @@ const deleteTpHandler = async (req: any, res: any) => {
     db.tujuan_pembelajaran_templates = {};
   }
 
-  let deleted = false;
-
-  // 1. Delete from exact subject
-  if (decodedSubject && Array.isArray(db.tujuan_pembelajaran_templates[decodedSubject])) {
-    const list = db.tujuan_pembelajaran_templates[decodedSubject];
-    const prevLen = list.length;
-    db.tujuan_pembelajaran_templates[decodedSubject] = list.filter(
-      (tp: any) => String(tp.id).trim() !== cleanTpId
-    );
-    if (db.tujuan_pembelajaran_templates[decodedSubject].length < prevLen) {
-      deleted = true;
+  const canonicalKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
+  const aliasKeys = new Set<string>();
+  aliasKeys.add(canonicalKey);
+  aliasKeys.add(decodedSubject);
+  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (normalizeSubjectKey(k) === canonicalKey || k.toLowerCase() === decodedSubject.toLowerCase()) {
+      aliasKeys.add(k);
     }
   }
 
-  // 2. Delete from canonical normalized subject
-  if (!deleted && decodedSubject) {
-    const normKey = normalizeSubjectKey(decodedSubject);
-    if (normKey && Array.isArray(db.tujuan_pembelajaran_templates[normKey])) {
-      const list = db.tujuan_pembelajaran_templates[normKey];
-      const prevLen = list.length;
-      db.tujuan_pembelajaran_templates[normKey] = list.filter(
-        (tp: any) => String(tp.id).trim() !== cleanTpId
-      );
-      if (db.tujuan_pembelajaran_templates[normKey].length < prevLen) {
-        deleted = true;
+  const mergedList = getSubjectTps(db.tujuan_pembelajaran_templates, canonicalKey);
+  const prevLen = mergedList.length;
+  const filteredList = mergedList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
+  const deleted = filteredList.length < prevLen;
+
+  if (deleted) {
+    aliasKeys.forEach((k) => {
+      db.tujuan_pembelajaran_templates[k] = [...filteredList];
+    });
+
+    await writeDB(db);
+
+    if (firestoreDb) {
+      try {
+        for (const k of aliasKeys) {
+          const safeDocId = k.replace(/\//g, "_");
+          await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
+            tps: cleanTpList(filteredList),
+            subject: canonicalKey,
+            updatedAt: new Date().toISOString(),
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.warn("[Firestore TP] Error deleting TP in Firestore:", e);
       }
     }
   }
 
-  await writeDB(db);
-
-  if (deleted && firestoreDb && decodedSubject) {
-    try {
-      const normKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
-      const safeDocId = normKey.replace(/\//g, "_");
-      const listToSave = cleanTpList(db.tujuan_pembelajaran_templates[normKey] || []);
-      await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
-        tps: listToSave,
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
-    } catch (e) {
-      console.warn("[Firestore TP] Error deleting TP in Firestore:", e);
-    }
-  }
-
-  res.json({ message: "TP berhasil dihapus.", deleted: true });
+  res.json({ message: "TP berhasil dihapus.", deleted });
 };
 
 app.delete("/api/tps/:subject/:tpId", deleteTpHandler);

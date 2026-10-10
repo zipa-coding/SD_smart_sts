@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 
 interface TeacherPanelProps {
+  key?: React.Key;
   user: Teacher;
   onRefreshTrigger: () => void;
   refreshTrigger?: number;
@@ -220,6 +221,7 @@ export default function TeacherPanel({
 
   // Manage TP template state for teacher
   const [newTpText, setNewTpText] = useState("");
+  const [tpTargetClass, setTpTargetClass] = useState<string>("current"); // "current" | "all"
   const [tpSubmitLoading, setTpSubmitLoading] = useState(false);
   const [editingTpId, setEditingTpId] = useState<string | null>(null);
   const [editingTpText, setEditingTpText] = useState("");
@@ -302,7 +304,7 @@ export default function TeacherPanel({
 
   useEffect(() => {
     fetchData();
-  }, [selectedClass, activeSubject, selectedEkskulName, refreshTrigger]);
+  }, [user.id, selectedClass, activeSubject, selectedEkskulName, refreshTrigger]);
 
   // Helper function to generate narrative description based on Kurikulum Merdeka standards
   const generateNarrativeDescription = (
@@ -700,23 +702,52 @@ export default function TeacherPanel({
 
     const textToSave = newTpText.trim();
     const tempId = "tp_" + Date.now();
+    const targetKelas =
+      tpTargetClass === "current"
+        ? selectedClass
+        : tpTargetClass === "all"
+        ? "all"
+        : tpTargetClass;
     const newCreatedTp = {
       id: tempId,
       text: textToSave,
-      kelas: selectedClass,
+      kelas: targetKelas,
     };
 
-    // Optimistically update allTpObj immediately for activeSubject ONLY
+    // Optimistically update allTpObj immediately across both activeSubject and canonicalKey
+    const canonicalKey = normalizeSubjectKey(activeSubject) || activeSubject;
     setAllTpObj((prev) => {
       const next = { ...prev };
-      const key = activeSubject;
-      const currentList = Array.isArray(next[key]) ? [...next[key]] : [];
-      if (!currentList.some((x: any) => x.id === tempId)) {
-        currentList.push(newCreatedTp);
-      }
-      next[key] = currentList;
+      const keysToUpdate = [activeSubject, canonicalKey];
+      keysToUpdate.forEach((k) => {
+        const currentList = Array.isArray(next[k]) ? [...next[k]] : [];
+        if (!currentList.some((x: any) => x.id === tempId)) {
+          currentList.push(newCreatedTp);
+        }
+        next[k] = currentList;
+      });
       return next;
     });
+
+    // Immediately cache in localStorage as safety net
+    try {
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem("smart_sts_db");
+        if (raw) {
+          const dbObj = JSON.parse(raw);
+          if (!dbObj.tujuan_pembelajaran_templates) dbObj.tujuan_pembelajaran_templates = {};
+          [activeSubject, canonicalKey].forEach((k) => {
+            if (!Array.isArray(dbObj.tujuan_pembelajaran_templates[k])) {
+              dbObj.tujuan_pembelajaran_templates[k] = [];
+            }
+            if (!dbObj.tujuan_pembelajaran_templates[k].some((x: any) => x.id === tempId)) {
+              dbObj.tujuan_pembelajaran_templates[k].push(newCreatedTp);
+            }
+          });
+          localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        }
+      }
+    } catch (e) {}
 
     try {
       const response = await fetch("/api/tps", {
@@ -725,7 +756,7 @@ export default function TeacherPanel({
         body: JSON.stringify({
           subject: activeSubject,
           tpText: textToSave,
-          kelas: selectedClass,
+          kelas: targetKelas,
         }),
       });
 
@@ -733,7 +764,8 @@ export default function TeacherPanel({
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan TP.");
 
       setNewTpText("");
-      setSuccess(`Tujuan Pembelajaran ${activeSubject} Kelas ${selectedClass} berhasil disimpan!`);
+      const classLabel = targetKelas === "all" ? "Semua Rombel (Kelas 1-6)" : `Kelas ${selectedClass}`;
+      setSuccess(`Tujuan Pembelajaran ${activeSubject} (${classLabel}) berhasil disimpan!`);
       onRefreshTrigger();
 
       // Reload TP templates to get canonical state
@@ -752,9 +784,11 @@ export default function TeacherPanel({
       // Rollback optimistic add if failed
       setAllTpObj((prev) => {
         const next = { ...prev };
-        if (Array.isArray(next[activeSubject])) {
-          next[activeSubject] = next[activeSubject].filter((x: any) => x.id !== tempId);
-        }
+        [activeSubject, canonicalKey].forEach((k) => {
+          if (Array.isArray(next[k])) {
+            next[k] = next[k].filter((x: any) => x.id !== tempId);
+          }
+        });
         return next;
       });
     } finally {
@@ -1834,34 +1868,86 @@ export default function TeacherPanel({
             {/* Form to add custom learning objective directly by the teacher */}
             <form
               onSubmit={handleAddLocalTp}
-              className="p-3 bg-emerald-50 rounded-lg border border-emerald-150 flex gap-2 items-end"
+              className="p-3 bg-emerald-50 rounded-lg border border-emerald-150 space-y-2"
             >
-              <div className="flex-1">
+              <div>
                 <label className="block text-[9px] font-bold text-emerald-900 uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                  <span>Tambah TP Baru ({activeSubject}):</span>
-                  <span className="text-emerald-700 font-extrabold">(Tingkat Kelas {selectedClass})</span>
+                  <span>Tambah TP Baru ({activeSubject})</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={newTpText}
-                  onChange={(e) => setNewTpText(e.target.value)}
-                  placeholder={`Contoh: Menguasai kompetensi dasar materi ${activeSubject} kelas ${selectedClass}...`}
-                  className="w-full p-1.5 bg-white border border-emerald-250 rounded text-xs focus:outline-none focus:border-emerald-700"
-                />
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    required
+                    value={newTpText}
+                    onChange={(e) => setNewTpText(e.target.value)}
+                    placeholder={`Contoh: Menguasai kompetensi dasar materi ${activeSubject}...`}
+                    className="flex-1 p-1.5 bg-white border border-emerald-250 rounded text-xs focus:outline-none focus:border-emerald-700"
+                  />
+                  <button
+                    type="submit"
+                    disabled={tpSubmitLoading || !newTpText.trim()}
+                    className="bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 text-white p-1.5 rounded cursor-pointer transition flex items-center justify-center h-[32px] w-[36px] shrink-0"
+                    title="Tambahkan TP"
+                  >
+                    {tpSubmitLoading ? (
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
-              <button
-                type="submit"
-                disabled={tpSubmitLoading || !newTpText.trim()}
-                className="bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 text-white p-1.5 rounded cursor-pointer transition flex items-center justify-center h-[32px] w-[36px]"
-                title="Tambahkan TP"
-              >
-                {tpSubmitLoading ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <Plus className="w-4 h-4" />
-                )}
-              </button>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] pt-0.5">
+                <span className="text-slate-600 font-semibold">Terapkan untuk Rombel:</span>
+                <label className="flex items-center gap-1 cursor-pointer font-bold text-emerald-900 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                  <input
+                    type="radio"
+                    name="tpTargetClass"
+                    value="current"
+                    checked={tpTargetClass === "current"}
+                    onChange={() => setTpTargetClass("current")}
+                    className="accent-emerald-700"
+                  />
+                  <span>Kelas Aktif ({selectedClass})</span>
+                </label>
+                {["1", "2", "3", "4", "5", "6"].map((c) => (
+                  <label
+                    key={c}
+                    className={`flex items-center gap-1 cursor-pointer font-bold px-2 py-0.5 rounded border transition ${
+                      tpTargetClass === c
+                        ? "bg-emerald-800 text-white border-emerald-800"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="tpTargetClass"
+                      value={c}
+                      checked={tpTargetClass === c}
+                      onChange={() => setTpTargetClass(c)}
+                      className="accent-emerald-700 hidden"
+                    />
+                    <span>Kelas {c}</span>
+                  </label>
+                ))}
+                <label
+                  className={`flex items-center gap-1 cursor-pointer font-bold px-2 py-0.5 rounded border transition ${
+                    tpTargetClass === "all"
+                      ? "bg-emerald-800 text-white border-emerald-800"
+                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="tpTargetClass"
+                    value="all"
+                    checked={tpTargetClass === "all"}
+                    onChange={() => setTpTargetClass("all")}
+                    className="accent-emerald-700 hidden"
+                  />
+                  <span>Semua Rombel (1-6)</span>
+                </label>
+              </div>
             </form>
 
             {/* List of current objectives for this subject with delete buttons */}

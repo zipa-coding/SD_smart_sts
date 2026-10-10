@@ -21,6 +21,7 @@ import PrintRaportView from "./PrintRaportView";
 import { downloadAllRaportZip, BatchDownloadProgress } from "../lib/zipExporter";
 
 interface WaliKelasPanelProps {
+  key?: React.Key;
   user: Teacher;
   onRefreshTrigger: () => void;
   refreshTrigger?: number;
