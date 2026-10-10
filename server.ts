@@ -240,7 +240,17 @@ async function syncDatabaseWithFirestore() {
                 : [];
               const map = new Map<string, any>();
               current.forEach((t: any) => map.set(String(t.id).trim(), t));
-              validTps.forEach((t: any) => map.set(String(t.id).trim(), t));
+              const student = (db.students || []).find((s: any) => String(s.id) === String(g.studentId));
+              const studentClass = student ? String(student.kelas || student.classId || "") : "";
+              validTps.forEach((t: any) => {
+                const prev = map.get(String(t.id).trim());
+                map.set(String(t.id).trim(), {
+                  ...prev,
+                  id: t.id,
+                  text: t.text,
+                  kelas: t.kelas || (prev && prev.kelas) || studentClass || "all"
+                });
+              });
               const combined = Array.from(map.values());
               db.tujuan_pembelajaran_templates[normSub] = combined;
               db.tujuan_pembelajaran_templates[g.subject] = combined;
@@ -1006,7 +1016,18 @@ app.post("/api/grades", async (req, res) => {
       : [];
     const map = new Map<string, any>();
     existing.forEach((t: any) => map.set(String(t.id).trim(), t));
-    updatedGrade.tps.forEach((t: any) => map.set(String(t.id).trim(), t));
+    const student = (db.students || []).find((s: any) => String(s.id) === String(studentId));
+    const studentClass = student ? String(student.kelas || student.classId || "") : "";
+    updatedGrade.tps.forEach((t: any) => {
+      const prev = map.get(String(t.id).trim());
+      const assignedClass = t.kelas || (prev && prev.kelas) || studentClass || "all";
+      map.set(String(t.id).trim(), {
+        ...prev,
+        id: t.id,
+        text: t.text,
+        kelas: assignedClass,
+      });
+    });
     const combined = Array.from(map.values());
     db.tujuan_pembelajaran_templates[canonicalKey] = combined;
     db.tujuan_pembelajaran_templates[subject] = combined;

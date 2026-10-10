@@ -1211,7 +1211,18 @@ export const firebaseApi = {
               const current = Array.isArray(templates[normSub]) ? templates[normSub] : [];
               const map = new Map<string, any>();
               current.forEach((t) => map.set(String(t.id).trim(), t));
-              validTps.forEach((t) => map.set(String(t.id).trim(), t));
+              const fallbackStudents = getLocalFallbackData().students || [];
+              const student = fallbackStudents.find((s: any) => String(s.id) === String(g.studentId));
+              const studentClass = student ? String(student.kelas || student.classId || "") : "";
+              validTps.forEach((t) => {
+                const prev = map.get(String(t.id).trim());
+                map.set(String(t.id).trim(), {
+                  ...prev,
+                  id: t.id,
+                  text: t.text,
+                  kelas: t.kelas || (prev && prev.kelas) || studentClass || "all",
+                });
+              });
               const combined = Array.from(map.values());
               templates[normSub] = combined;
               templates[sub] = combined;

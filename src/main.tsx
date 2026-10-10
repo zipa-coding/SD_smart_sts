@@ -345,6 +345,35 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           } catch (e) {}
 
           const g = await firebaseApi.postGrade(body);
+          try {
+            const db = getDB();
+            if (Array.isArray(db.grades)) {
+              const idx = db.grades.findIndex((x: any) => x.id === g.id || (x.studentId === g.studentId && x.subject === g.subject));
+              if (idx !== -1) db.grades[idx] = g;
+              else db.grades.push(g);
+            }
+            if (Array.isArray(g.tps) && g.tps.length > 0) {
+              if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+              const sKey = g.subject;
+              const nKey = normalizeSubjectKey(sKey) || sKey;
+              const cur = Array.isArray(db.tujuan_pembelajaran_templates[nKey]) ? db.tujuan_pembelajaran_templates[nKey] : [];
+              const map = new Map<string, any>();
+              cur.forEach((t: any) => map.set(String(t.id).trim(), t));
+              g.tps.forEach((t: any) => {
+                const prev = map.get(String(t.id).trim());
+                map.set(String(t.id).trim(), {
+                  ...prev,
+                  id: t.id,
+                  text: t.text,
+                  kelas: t.kelas || (prev && prev.kelas) || "all"
+                });
+              });
+              const combined = Array.from(map.values());
+              db.tujuan_pembelajaran_templates[nKey] = combined;
+              db.tujuan_pembelajaran_templates[sKey] = combined;
+            }
+            saveDB(db);
+          } catch (e) {}
           return new Response(JSON.stringify(g), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 

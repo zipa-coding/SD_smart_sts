@@ -101,12 +101,18 @@ export default function TeacherPanel({
 
   // Current active subject being graded
   const [activeSubject, setActiveSubject] = useState<string>(() => {
-    const list = getTeacherAssignedSubjects(user);
-    if (list.length > 0) return list[0];
-    if (user.subject === "Keislaman" || user.subject === "Admin") {
-      return "Tahsin ABaTaTsa";
+    try {
+      const savedSub = localStorage.getItem("smart_sts_active_subject");
+      const list = getTeacherAssignedSubjects(user);
+      if (savedSub && list.includes(savedSub)) return savedSub;
+      if (list.length > 0) return list[0];
+      if (user.subject === "Keislaman" || user.subject === "Admin") {
+        return "Tahsin ABaTaTsa";
+      }
+      return user.subject || "PAI";
+    } catch (e) {
+      return user.subject || "PAI";
     }
-    return user.subject || "PAI";
   });
 
   // Ensure activeSubject stays valid when assignedSubjects change
@@ -115,6 +121,12 @@ export default function TeacherPanel({
       setActiveSubject(assignedSubjects[0]);
     }
   }, [assignedSubjects, activeSubject]);
+
+  useEffect(() => {
+    try {
+      if (activeSubject) localStorage.setItem("smart_sts_active_subject", activeSubject);
+    } catch (e) {}
+  }, [activeSubject]);
 
   // Extract all assigned ekskuls for this teacher (supports multiple ekskuls)
   const assignedEkskuls = useMemo(() => {
@@ -165,13 +177,25 @@ export default function TeacherPanel({
     return "grades";
   });
 
-  // Class selection state (1, 2, 3, 4, 5, 6) - defaults to teacher's class if wali kelas
+  // Class selection state (1, 2, 3, 4, 5, 6) - defaults to saved class, or teacher's class if wali kelas
   const [selectedClass, setSelectedClass] = useState<string>(() => {
+    try {
+      const savedClass = localStorage.getItem("smart_sts_selected_class");
+      if (savedClass && ["1", "2", "3", "4", "5", "6"].includes(savedClass)) {
+        return savedClass;
+      }
+    } catch (e) {}
     if (user.isWaliKelas && user.kelas && ["1", "2", "3", "4", "5", "6"].includes(String(user.kelas).trim())) {
       return String(user.kelas).trim();
     }
     return "1";
   });
+
+  useEffect(() => {
+    try {
+      if (selectedClass) localStorage.setItem("smart_sts_selected_class", selectedClass);
+    } catch (e) {}
+  }, [selectedClass]);
   // Student selection state
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
@@ -580,6 +604,7 @@ export default function TeacherPanel({
     const formattedTps: TPItem[] = safeTemplates.map((tp) => ({
       id: tp.id,
       text: tp.text,
+      kelas: tp.kelas || selectedClass,
       achieved: tpAchievements[tp.id] ?? true,
     }));
 

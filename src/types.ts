@@ -304,8 +304,8 @@ export function matchTpClass(tKelas?: any, targetKelas?: string): boolean {
   // If no target class specified or wildcard target, match all
   if (!target || target === "all" || target === "semua" || target === "*") return true;
 
-  // If template explicitly designated for all classes
-  if (tk === "all" || tk === "semua" || tk === "*" || tk === "semua kelas") return true;
+  // If template explicitly designated for all classes or has no class restriction, match all
+  if (!tk || tk === "all" || tk === "semua" || tk === "*" || tk === "semua kelas") return true;
 
   // Extract numeric class identifiers (e.g. "Kelas 1" -> "1", "1" -> "1")
   const numTk = tk.replace(/\D/g, "");
@@ -314,11 +314,6 @@ export function matchTpClass(tKelas?: any, targetKelas?: string): boolean {
   // If both have numbers, they must match exactly
   if (numTk && numTarget) {
     return numTk === numTarget;
-  }
-
-  // If template has no class defined at all, match strictly if target is "1" or exact string match
-  if (!tk) {
-    return target === "1" || numTarget === "1";
   }
 
   return tk === target;
