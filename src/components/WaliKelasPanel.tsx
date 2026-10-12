@@ -30,8 +30,8 @@ interface WaliKelasPanelProps {
 export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger }: WaliKelasPanelProps) {
   // Default Mata Pelajaran lists
   const defaultSubjects = [
-    "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPA", "IPS", "Bahasa Inggris", "PJOK", "Prakarya", "Informatika",
-    "Bahasa Arab", "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat"
+    "PAI", "PPKN", "Bahasa Indonesia", "Matematika", "IPAS", "PJOK", "Seni Budaya", "Prakarya", "Bahasa Arab", "Bahasa Inggris", "TIK", "Life Skill",
+    "Tahsin ABaTaTsa", "Tahfizh Al-Qur’an", "Do’a Harian dan Hadits", "Wudhu dan Sholat", "Sirah Nabawiyah"
   ];
   const [subjectsList, setSubjectsList] = useState<string[]>(defaultSubjects);
 
@@ -309,19 +309,60 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     }
   };
 
-  // Robust grade finder that handles exact names, normalized keys, and punctuation variations
+  // Robust grade finder that handles exact names, normalized keys, aliases, and punctuation variations
   const findGradeForSub = (subName: string, gList: Grade[] = studentGrades): Grade | undefined => {
     if (!Array.isArray(gList) || !subName) return undefined;
     const direct = gList.find((g) => g && g.subject === subName);
     if (direct) return direct;
     const normTarget = normalizeSubjectKey(subName);
     const cleanTarget = subName.replace(/[’'`]/g, "'").toLowerCase().trim();
-    return gList.find((g) => {
+    
+    // Normalized or cleaned match
+    const normMatch = gList.find((g) => {
       if (!g || !g.subject) return false;
       if (normalizeSubjectKey(g.subject) === normTarget) return true;
       if (g.subject.replace(/[’'`]/g, "'").toLowerCase().trim() === cleanTarget) return true;
       return false;
     });
+    if (normMatch) return normMatch;
+
+    // Multi-alias matching
+    const aliases: Record<string, string[]> = {
+      PAI: ["pai", "pendidikan agama islam", "agama islam", "agama"],
+      PPKN: ["ppkn", "pkn", "pendidikan pancasila", "pendidikan pancasila dan kewarganegaraan"],
+      "Bahasa Indonesia": ["bahasa indonesia", "b. indonesia", "b indonesia", "bindo"],
+      Matematika: ["matematika", "mtk", "math"],
+      IPAS: ["ipas", "ilmu pengetahuan alam dan sosial", "ipa dan ips", "ipa", "ips", "sains"],
+      IPA: ["ipa", "ilmu pengetahuan alam", "sains"],
+      IPS: ["ips", "ilmu pengetahuan sosial", "sosial"],
+      "Bahasa Inggris": ["bahasa inggris", "b. inggris", "b inggris", "english", "bing"],
+      PJOK: ["pjok", "penjas", "penjaskes", "pendidikan jasmani olahraga dan kesehatan", "olahraga"],
+      Prakarya: ["prakarya", "prakarya dan kewirausahaan", "sbk"],
+      "Seni Budaya": ["seni budaya", "seni", "kesenian", "sbk", "sbdp"],
+      TIK: ["tik", "informatika", "teknologi informasi dan komunikasi", "teknologi informasi", "komputer"],
+      Informatika: ["tik", "informatika", "teknologi informasi dan komunikasi", "teknologi informasi", "komputer"],
+      "Life Skill": ["life skill", "life skills", "keterampilan hidup", "life skill (keterampilan hidup)"],
+      "Life skill": ["life skill", "life skills", "keterampilan hidup", "life skill (keterampilan hidup)"],
+      "Bahasa Arab": ["bahasa arab", "b. arab", "b arab", "arab"],
+      "Sirah Nabawiyah": ["sirah", "siroh", "sirah nabawiyah", "sirah nabawiyah (sejarah islam)"],
+      Sirah: ["sirah", "siroh", "sirah nabawiyah", "sirah nabawiyah (sejarah islam)"],
+      Siroh: ["sirah", "siroh", "sirah nabawiyah", "sirah nabawiyah (sejarah islam)"],
+      "Tahsin ABaTaTsa": ["tahsin", "tahsin abatatsa", "tahsin al-quran"],
+      "Tahfizh Al-Qur’an": ["tahfizh", "tahfidz", "tahfiz", "tahfizh al-qur'an", "tahfizh al-qur’an"],
+      "Do’a Harian dan Hadits": ["doa", "do'a", "doa harian", "hadits", "do'a harian dan hadits", "do’a harian dan hadits"],
+      "Wudhu dan Sholat": ["wudhu", "sholat", "shalat", "wudhu dan sholat", "wudhu dan shalat"],
+    };
+
+    const targetAliases = aliases[subName] || aliases[normTarget] || [];
+    if (targetAliases.length > 0) {
+      return gList.find((g) => {
+        if (!g || !g.subject) return false;
+        const gClean = g.subject.replace(/[’'`]/g, "'").toLowerCase().trim();
+        return targetAliases.some((alias) => gClean === alias || gClean.includes(alias));
+      });
+    }
+
+    return undefined;
   };
 
   // Helper getters

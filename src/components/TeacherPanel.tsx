@@ -369,12 +369,14 @@ export default function TeacherPanel({
 
       // Look up if this student already has a grade for this activeSubject
       const lowerSubj = subj.trim().toLowerCase();
+      const normSubj = normalizeSubjectKey(subj);
       const existingGrade = safeGrades.find(
         (g) =>
           g &&
           g.studentId === student?.id &&
           g.subject &&
-          g.subject.trim().toLowerCase() === lowerSubj,
+          (g.subject.trim().toLowerCase() === lowerSubj ||
+            normalizeSubjectKey(g.subject) === normSubj),
       );
 
       if (existingGrade) {
@@ -514,7 +516,7 @@ export default function TeacherPanel({
     const num = Number(val);
     if (!isNaN(num) && val.trim() !== "") {
       let defaultGrade = "C";
-      if (num > 91) defaultGrade = "A";
+      if (num >= 89) defaultGrade = "A";
       else if (num >= 80) defaultGrade = "B";
       else defaultGrade = "C";
 
@@ -1333,10 +1335,10 @@ export default function TeacherPanel({
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                       <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
-                        &gt; 91 = A (Sangat Baik)
+                        &ge; 89 = A (Sangat Baik)
                       </span>
                       <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded bg-cyan-100 text-cyan-800 border border-cyan-300">
-                        80 - 91 = B (Baik)
+                        80 - 88 = B (Baik)
                       </span>
                       <span className="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
                         &le; 79 = C (Cukup)
@@ -1351,7 +1353,7 @@ export default function TeacherPanel({
                       <span
                         className={`text-[10px] font-extrabold font-mono block ${
                           score !== ""
-                            ? Number(score) > 91
+                            ? Number(score) >= 89
                               ? "text-emerald-600"
                               : Number(score) >= 80
                               ? "text-cyan-600"
@@ -1360,7 +1362,7 @@ export default function TeacherPanel({
                         }`}
                       >
                         {score !== "" ? (
-                          Number(score) > 91
+                          Number(score) >= 89
                             ? "Predikat A"
                             : Number(score) >= 80
                             ? "Predikat B"
@@ -1832,6 +1834,28 @@ export default function TeacherPanel({
               </div>
             </div>
 
+            {/* Class Switcher in TP Management */}
+            <div className="p-2.5 bg-emerald-50/50 border border-emerald-150 rounded-xl flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider mr-1">
+                Pilih Rombel / Kelas:
+              </span>
+              {["1", "2", "3", "4", "5", "6"].map((cls) => (
+                <button
+                  key={cls}
+                  type="button"
+                  onClick={() => setSelectedClass(cls)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                    selectedClass === cls
+                      ? "bg-emerald-800 text-white shadow-xs ring-2 ring-emerald-600/30"
+                      : "bg-white text-slate-700 border border-emerald-200 hover:bg-emerald-50"
+                  }`}
+                >
+                  <span>Kelas {cls}</span>
+                  {selectedClass === cls && <span className="text-[10px]">✔</span>}
+                </button>
+              ))}
+            </div>
+
             {/* Multi-Mapel Switcher in TP Management */}
             {assignedSubjects.length > 1 && (
               <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-1.5 flex-wrap">
@@ -1897,56 +1921,49 @@ export default function TeacherPanel({
                   </button>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] pt-0.5">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-[10px] pt-0.5">
                 <span className="text-slate-600 font-semibold">Terapkan untuk Rombel:</span>
-                <label className="flex items-center gap-1 cursor-pointer font-bold text-emerald-900 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                  <input
-                    type="radio"
-                    name="tpTargetClass"
-                    value="current"
-                    checked={tpTargetClass === "current"}
-                    onChange={() => setTpTargetClass("current")}
-                    className="accent-emerald-700"
-                  />
+                <button
+                  type="button"
+                  onClick={() => setTpTargetClass("current")}
+                  className={`flex items-center gap-1 cursor-pointer font-bold px-2.5 py-1 rounded-lg border transition ${
+                    tpTargetClass === "current" || tpTargetClass === selectedClass
+                      ? "bg-emerald-800 text-white border-emerald-800 shadow-2xs"
+                      : "bg-white text-slate-700 border-slate-250 hover:bg-slate-50"
+                  }`}
+                >
                   <span>Kelas Aktif ({selectedClass})</span>
-                </label>
+                  {(tpTargetClass === "current" || tpTargetClass === selectedClass) && <span>✔</span>}
+                </button>
                 {["1", "2", "3", "4", "5", "6"].map((c) => (
-                  <label
+                  <button
                     key={c}
-                    className={`flex items-center gap-1 cursor-pointer font-bold px-2 py-0.5 rounded border transition ${
-                      tpTargetClass === c
-                        ? "bg-emerald-800 text-white border-emerald-800"
+                    type="button"
+                    onClick={() => {
+                      setTpTargetClass(c);
+                      setSelectedClass(c);
+                    }}
+                    className={`flex items-center gap-1 cursor-pointer font-bold px-2 py-1 rounded-lg border transition ${
+                      tpTargetClass === c || (tpTargetClass === "current" && selectedClass === c)
+                        ? "bg-emerald-800 text-white border-emerald-800 shadow-2xs"
                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="tpTargetClass"
-                      value={c}
-                      checked={tpTargetClass === c}
-                      onChange={() => setTpTargetClass(c)}
-                      className="accent-emerald-700 hidden"
-                    />
                     <span>Kelas {c}</span>
-                  </label>
+                  </button>
                 ))}
-                <label
-                  className={`flex items-center gap-1 cursor-pointer font-bold px-2 py-0.5 rounded border transition ${
+                <button
+                  type="button"
+                  onClick={() => setTpTargetClass("all")}
+                  className={`flex items-center gap-1 cursor-pointer font-bold px-2.5 py-1 rounded-lg border transition ${
                     tpTargetClass === "all"
-                      ? "bg-emerald-800 text-white border-emerald-800"
+                      ? "bg-emerald-800 text-white border-emerald-800 shadow-2xs"
                       : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
                   }`}
                 >
-                  <input
-                    type="radio"
-                    name="tpTargetClass"
-                    value="all"
-                    checked={tpTargetClass === "all"}
-                    onChange={() => setTpTargetClass("all")}
-                    className="accent-emerald-700 hidden"
-                  />
                   <span>Semua Rombel (1-6)</span>
-                </label>
+                  {tpTargetClass === "all" && <span>✔</span>}
+                </button>
               </div>
             </form>
 

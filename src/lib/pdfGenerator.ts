@@ -280,7 +280,7 @@ export const generateDescription = (g: Grade | undefined, studentName: string) =
   }
 
   if (!g.tps || !Array.isArray(g.tps) || g.tps.length === 0) {
-    const cap = g.capaian || (g.score && g.score >= 90 ? "A" : g.score && g.score >= 80 ? "B" : "C") || "B";
+    const cap = g.capaian || (g.score && g.score >= 89 ? "A" : g.score && g.score >= 80 ? "B" : "C") || "B";
     if (cap === "A" || cap === "Sangat Baik") {
       return `Alhamdulillah, ananda ${name} dalam pembelajaran ${sub} menunjukkan penguasaan yang optimal dan sangat baik pada seluruh capaian kompetensi pembelajaran. Pertahankan prestasimu, teruslah bertumbuh dengan rendah hati, dan tetap bersemangat.`;
     } else if (cap === "B" || cap === "Baik") {

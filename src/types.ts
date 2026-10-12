@@ -268,11 +268,16 @@ export function normalizeSubjectKey(name?: string): string {
   if (lower.includes("life skill") || lower.includes("lifeskill") || lower.includes("keterampilan hidup")) {
     return "Life Skill";
   }
-  if (lower === "tik" || lower.startsWith("tik ") || lower.endsWith(" tik") || lower.includes(" tik ")) {
+  if (
+    lower === "tik" ||
+    lower.startsWith("tik ") ||
+    lower.endsWith(" tik") ||
+    lower.includes(" tik ") ||
+    lower.includes("informatika") ||
+    lower.includes("teknologi informasi") ||
+    lower.includes("komputer")
+  ) {
     return "TIK";
-  }
-  if (lower.includes("informatika") || lower.includes("teknologi informasi") || lower.includes("komputer")) {
-    return "Informatika";
   }
   if (lower.includes("arab")) return "Bahasa Arab";
   if (lower.includes("inggris") || lower === "english" || lower === "bing") return "Bahasa Inggris";
@@ -364,11 +369,7 @@ export function isSampleTp(tp: any): boolean {
   if (/^[1-9]$/.test(id)) return true;
   if (lowerId === "dummy" || lowerId === "sample" || lowerId.startsWith("dummy_") || lowerId.startsWith("sample_")) return true;
 
-  // Filter out any legacy seeded template ID patterns:
-  if (/^tp_[a-z_]+_\d{1,2}_\d{1,2}$/i.test(id)) return true;
-  if (/^[a-z_]+_\d{1,2}_\d{1,2}$/i.test(id)) return true;
-
-  // Real teacher generated TPs are accepted
+  // Real teacher and curriculum TPs are accepted
   return false;
 }
 

@@ -990,7 +990,7 @@ export default function DashboardProgress({
                           <td className="py-3.5 px-4 text-right">
                             <span
                               className={`text-sm font-black font-mono ${
-                                student.averageScore > 91
+                                student.averageScore >= 89
                                   ? "text-emerald-400"
                                   : student.averageScore >= 80
                                   ? "text-cyan-400"
@@ -1076,7 +1076,7 @@ export default function DashboardProgress({
                                           className={`font-mono font-bold text-xs px-1.5 py-0.5 rounded ${
                                             !hasScore
                                               ? "text-slate-600 bg-slate-900"
-                                              : score > 91
+                                              : score >= 89
                                               ? "text-emerald-400 bg-emerald-950/60 border border-emerald-500/30"
                                               : score >= 80
                                               ? "text-cyan-400 bg-cyan-950/60 border border-cyan-500/30"
@@ -1110,10 +1110,10 @@ export default function DashboardProgress({
             </div>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Nilai &gt; 91 (A - Sangat Baik)
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Nilai &ge; 89 (A - Sangat Baik)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-cyan-400"></span> Nilai 80 - 91 (B - Baik)
+                <span className="w-2 h-2 rounded-full bg-cyan-400"></span> Nilai 80 - 88 (B - Baik)
               </span>
               <span className="flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-amber-400"></span> Nilai &le; 79 (C - Cukup)

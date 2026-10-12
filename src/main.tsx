@@ -1656,7 +1656,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
         let predikat = "C (Cukup)";
         if (filledSubjectsCount === 0) predikat = "Belum Ada Nilai";
-        else if (averageScore > 91) predikat = "A (Sangat Baik)";
+        else if (averageScore >= 89) predikat = "A (Sangat Baik)";
         else if (averageScore >= 80) predikat = "B (Baik)";
         else predikat = "C (Cukup)";
 
