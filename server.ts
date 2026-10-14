@@ -11,9 +11,14 @@ import {
   doc, 
   setDoc, 
   getDoc, 
-  deleteDoc 
+  deleteDoc,
+  setLogLevel
 } from "firebase/firestore";
-import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject } from "./src/types";
+import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject } from "./src/types";
+
+try {
+  setLogLevel("error");
+} catch (e) {}
 
 const app = express();
 const PORT = 3000;
@@ -200,13 +205,29 @@ async function syncDatabaseWithFirestore() {
     // 5. Sync TP Templates (Tujuan Pembelajaran) with Grade Auto-Recovery
     try {
       if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+      if (!Array.isArray(db.deleted_tps)) db.deleted_tps = [];
+      const deletedTpSet = new Set<string>(db.deleted_tps.map((id: any) => String(id).trim()));
+
+      // Purge any ekskul templates from TP templates
+      for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+        if (isEkskulSubject(k)) {
+          delete db.tujuan_pembelajaran_templates[k];
+          changed = true;
+        }
+      }
+
       const tpSnap = await getDocs(collection(firestoreDb, "tujuan_pembelajaran_templates"));
       if (tpSnap && !tpSnap.empty) {
         tpSnap.forEach((docSnap) => {
           const docId = docSnap.id;
+          if (isEkskulSubject(docId)) {
+            // Delete ekskul TP document from Firestore if it exists
+            deleteDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", docId)).catch(() => {});
+            return;
+          }
           const data = docSnap.data();
           if (Array.isArray(data.tps)) {
-            const cleanList = cleanTpList(data.tps);
+            const cleanList = cleanTpList(data.tps).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
             const normDocId = normalizeSubjectKey(docId) || docId;
             const existing = Array.isArray(db.tujuan_pembelajaran_templates[normDocId])
               ? db.tujuan_pembelajaran_templates[normDocId]
@@ -215,10 +236,10 @@ async function syncDatabaseWithFirestore() {
             // Merge existing local and cloud TPs safely
             const mergedMap = new Map<string, any>();
             existing.forEach((tp: any) => {
-              if (tp && tp.id && tp.text) mergedMap.set(String(tp.id).trim(), tp);
+              if (tp && tp.id && tp.text && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp);
             });
             cleanList.forEach((tp: any) => {
-              if (tp && tp.id && tp.text) mergedMap.set(String(tp.id).trim(), tp);
+              if (tp && tp.id && tp.text && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp);
             });
             const mergedList = Array.from(mergedMap.values());
             db.tujuan_pembelajaran_templates[normDocId] = mergedList;
@@ -228,12 +249,12 @@ async function syncDatabaseWithFirestore() {
         });
       }
 
-      // Auto-recover any TPs embedded in grades
+      // Auto-recover any TPs embedded in grades (skipping deleted TPs and ekskul)
       if (Array.isArray(db.grades)) {
         db.grades.forEach((g: any) => {
-          if (g && g.subject && Array.isArray(g.tps) && g.tps.length > 0) {
+          if (g && g.subject && !isEkskulSubject(g.subject) && Array.isArray(g.tps) && g.tps.length > 0) {
             const normSub = normalizeSubjectKey(g.subject) || g.subject;
-            const validTps = cleanTpList(g.tps);
+            const validTps = cleanTpList(g.tps).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
             if (validTps.length > 0) {
               const current = Array.isArray(db.tujuan_pembelajaran_templates[normSub])
                 ? db.tujuan_pembelajaran_templates[normSub]
@@ -522,13 +543,11 @@ app.post("/api/teachers", async (req, res) => {
   let finalSubjects: string[] = [];
   if (Array.isArray(subjects) && subjects.length > 0) {
     finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
-  } else if (subject) {
+  } else if (subject && subject !== "-" && subject !== "Pembina Ekskul") {
     finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
   }
-  if (finalSubjects.length === 0) {
-    return res.status(400).json({ error: "Pilih setidaknya satu mata pelajaran yang diampu." });
-  }
-  const finalSubjectStr = finalSubjects.join(", ");
+  const isEkskulTeacherFlag = Boolean(isEkskulTeacher || req.body.ekskulName || (Array.isArray(req.body.ekskulNames) && req.body.ekskulNames.length > 0));
+  const finalSubjectStr = finalSubjects.length > 0 ? finalSubjects.join(", ") : (isEkskulTeacherFlag ? "Pembina Ekskul" : "");
 
   const db = await readDB();
   if (!Array.isArray(db.teachers)) db.teachers = [];
@@ -633,15 +652,13 @@ app.put("/api/teachers/:id", async (req, res) => {
   }
 
   let finalSubjects: string[] = [];
-  if (Array.isArray(subjects) && subjects.length > 0) {
+  if (Array.isArray(subjects)) {
     finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
-  } else if (subject) {
+  } else if (subject && subject !== "-" && subject !== "Pembina Ekskul") {
     finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
   }
-  if (finalSubjects.length === 0) {
-    finalSubjects = [db.teachers[index].subject || "PAI"];
-  }
-  const finalSubjectStr = finalSubjects.join(", ");
+  const isEkskulTeacherFlag = Boolean(isEkskulTeacher || req.body.ekskulName || (Array.isArray(req.body.ekskulNames) && req.body.ekskulNames.length > 0));
+  const finalSubjectStr = finalSubjects.length > 0 ? finalSubjects.join(", ") : (isEkskulTeacherFlag ? "Pembina Ekskul" : "");
 
   let finalEkskuls: string[] = [];
   if (Array.isArray(req.body.ekskulNames) && req.body.ekskulNames.length > 0) {
@@ -1090,6 +1107,25 @@ app.post("/api/walikelas/notes", async (req, res) => {
     db.walikelas_notes = {};
   }
 
+  const existingNote = db.walikelas_notes[studentId] || {};
+  const existingEkskuls = Array.isArray(existingNote.ekskul) ? existingNote.ekskul : [];
+  const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
+
+  // Robustly preserve and merge ekskul grades so notes save never accidentally overwrites coach's work
+  const mergedEkskulMap = new Map();
+  existingEkskuls.forEach((e: any) => {
+    const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+    if (key) mergedEkskulMap.set(key, e);
+  });
+  incomingEkskuls.forEach((e: any) => {
+    const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+    if (key) {
+      const prev = mergedEkskulMap.get(key) || {};
+      mergedEkskulMap.set(key, { ...prev, ...e });
+    }
+  });
+  const finalEkskul = Array.from(mergedEkskulMap.values());
+
   db.walikelas_notes[studentId] = {
     sakit: Number(sakit || 0),
     izin: Number(izin || 0),
@@ -1103,7 +1139,7 @@ app.post("/api/walikelas/notes", async (req, res) => {
     sosialProses: sosialProses || "B",
     sosialCapaian: sosialCapaian || "B",
     sosialDeskripsi: sosialDeskripsi || "",
-    ekskul: ekskul || [],
+    ekskul: finalEkskul,
   };
 
   await writeDB(db);
@@ -1114,10 +1150,14 @@ app.post("/api/walikelas/notes", async (req, res) => {
 app.get("/api/tps", async (req, res) => {
   const db = await readDB();
   const rawTemplates = db.tujuan_pembelajaran_templates || {};
+  if (!Array.isArray(db.deleted_tps)) db.deleted_tps = [];
+  const deletedTpSet = new Set<string>(db.deleted_tps.map((id: any) => String(id).trim()));
+
   const templates: Record<string, any[]> = {};
   for (const [sub, list] of Object.entries(rawTemplates)) {
+    if (isEkskulSubject(sub)) continue;
     if (Array.isArray(list)) {
-      templates[sub] = cleanTpList(list);
+      templates[sub] = cleanTpList(list).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
     }
   }
 
@@ -1149,6 +1189,7 @@ app.get("/api/tps", async (req, res) => {
     return res.json(filtered);
   }
 
+  templates._deleted = db.deleted_tps || [];
   res.json(templates);
 });
 
@@ -1236,14 +1277,22 @@ app.put("/api/tps/:subject/:tpId", async (req, res) => {
       aliasKeys.add(k);
     }
   }
-
   const mergedList = getSubjectTps(db.tujuan_pembelajaran_templates, canonicalKey);
-  const item = mergedList.find((tp: any) => String(tp.id).trim() === cleanTpId);
+  let item = mergedList.find((tp: any) => String(tp.id).trim() === cleanTpId);
 
-  if (item) {
+  if (!item && text !== undefined) {
+    item = {
+      id: cleanTpId,
+      text: String(text).trim(),
+      kelas: kelas ? String(kelas).trim() : "all",
+    };
+    mergedList.push(item);
+  } else if (item) {
     if (text !== undefined) item.text = String(text).trim();
     if (kelas !== undefined) item.kelas = String(kelas).trim();
+  }
 
+  if (item) {
     // Propagate updated list to all alias keys
     aliasKeys.forEach((k) => {
       db.tujuan_pembelajaran_templates[k] = [...mergedList];
@@ -1273,7 +1322,11 @@ app.put("/api/tps/:subject/:tpId", async (req, res) => {
 });
 
 const deleteTpHandler = async (req: any, res: any) => {
-  const { subject, tpId } = req.params;
+  let { subject, tpId } = req.params;
+  if (!tpId && subject) {
+    tpId = subject;
+    subject = "";
+  }
   const decodedSubject = decodeURIComponent(subject || "").trim();
   const cleanTpId = decodeURIComponent(tpId || "").trim();
   const db = await readDB();
@@ -1281,46 +1334,62 @@ const deleteTpHandler = async (req: any, res: any) => {
   if (!db.tujuan_pembelajaran_templates) {
     db.tujuan_pembelajaran_templates = {};
   }
-
-  const canonicalKey = normalizeSubjectKey(decodedSubject) || decodedSubject;
-  const aliasKeys = new Set<string>();
-  aliasKeys.add(canonicalKey);
-  aliasKeys.add(decodedSubject);
-  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
-    if (normalizeSubjectKey(k) === canonicalKey || k.toLowerCase() === decodedSubject.toLowerCase()) {
-      aliasKeys.add(k);
-    }
+  if (!Array.isArray(db.deleted_tps)) {
+    db.deleted_tps = [];
   }
 
-  const mergedList = getSubjectTps(db.tujuan_pembelajaran_templates, canonicalKey);
-  const prevLen = mergedList.length;
-  const filteredList = mergedList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
-  const deleted = filteredList.length < prevLen;
+  // 1. Blacklist this TP ID so it can never be auto-recovered
+  if (cleanTpId && !db.deleted_tps.includes(cleanTpId)) {
+    db.deleted_tps.push(cleanTpId);
+  }
 
-  if (deleted) {
-    aliasKeys.forEach((k) => {
-      db.tujuan_pembelajaran_templates[k] = [...filteredList];
-    });
-
-    await writeDB(db);
-
-    if (firestoreDb) {
-      try {
-        for (const k of aliasKeys) {
-          const safeDocId = k.replace(/\//g, "_");
-          await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", safeDocId), {
-            tps: cleanTpList(filteredList),
-            subject: canonicalKey,
-            updatedAt: new Date().toISOString(),
-          }, { merge: true });
-        }
-      } catch (e) {
-        console.warn("[Firestore TP] Error deleting TP in Firestore:", e);
+  // 2. Remove from all keys in tujuan_pembelajaran_templates
+  let deletedCount = 0;
+  for (const k of Object.keys(db.tujuan_pembelajaran_templates)) {
+    if (Array.isArray(db.tujuan_pembelajaran_templates[k])) {
+      const origLen = db.tujuan_pembelajaran_templates[k].length;
+      db.tujuan_pembelajaran_templates[k] = db.tujuan_pembelajaran_templates[k].filter(
+        (tp: any) => String(tp.id).trim() !== cleanTpId
+      );
+      if (db.tujuan_pembelajaran_templates[k].length < origLen) {
+        deletedCount++;
       }
     }
   }
 
-  res.json({ message: "TP berhasil dihapus.", deleted });
+  // 3. Purge deleted TP from all student grade records so grades can't resurrect it
+  if (Array.isArray(db.grades)) {
+    db.grades.forEach((g: any) => {
+      if (Array.isArray(g.tps)) {
+        g.tps = g.tps.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
+      }
+    });
+  }
+
+  await writeDB(db);
+
+  // 4. Clean up Firestore
+  if (firestoreDb && cleanTpId) {
+    try {
+      const snap = await getDocs(collection(firestoreDb, "tujuan_pembelajaran_templates"));
+      if (snap && !snap.empty) {
+        for (const docItem of snap.docs) {
+          const tpsList = docItem.data().tps;
+          if (Array.isArray(tpsList) && tpsList.some((tp: any) => String(tp.id).trim() === cleanTpId)) {
+            const filtered = tpsList.filter((tp: any) => String(tp.id).trim() !== cleanTpId);
+            await setDoc(doc(firestoreDb, "tujuan_pembelajaran_templates", docItem.id), {
+              tps: filtered,
+              updatedAt: new Date().toISOString(),
+            }, { merge: true });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[Firestore TP] Error deleting TP in Firestore:", e);
+    }
+  }
+
+  res.json({ message: "TP berhasil dihapus.", deleted: deletedCount > 0 });
 };
 
 app.delete("/api/tps/:subject/:tpId", deleteTpHandler);
@@ -1435,7 +1504,7 @@ app.get("/api/ekskul", async (req, res) => {
   const db = await readDB();
   const defaultEkskul = [
     { id: "e1", name: "Pramuka Siaga & Penggalang", type: "Wajib" },
-    { id: "e2", name: "Mentoring & Bina Pribadi Islami", type: "Wajib" },
+    { id: "e2", name: "Mentoring", type: "Wajib" },
     { id: "e3", name: "Futsal Kids", type: "Pilihan" },
     { id: "e4", name: "Bulu Tangkis", type: "Pilihan" },
     { id: "e5", name: "Panahan Tradisional", type: "Pilihan" },
@@ -1739,6 +1808,7 @@ app.post("/api/ekskul/grades", async (req, res) => {
     capaian: finalCapaian,
     predicate: finalCapaian,
     description: description || deskripsi || "",
+    tpAchievements: req.body.tpAchievements || {},
   };
 
   if (existingIdx >= 0) {

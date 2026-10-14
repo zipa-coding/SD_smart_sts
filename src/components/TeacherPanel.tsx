@@ -9,6 +9,8 @@ import {
   matchTpClass,
   getSubjectTps,
   isKeislamanSubject,
+  isEkskulSubject,
+  getEkskulTps,
 } from "../types";
 import {
   BookOpen,
@@ -172,8 +174,19 @@ export default function TeacherPanel({
 
   // View state tab: grades (pengisian nilai), tps (kelola TP), or ekskul (pengisian nilai ekskul)
   const [activeViewTab, setActiveViewTab] = useState<"grades" | "tps" | "ekskul">(() => {
-    if (user.isEkskulTeacher && (user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Ekskul")) {
-      return "ekskul";
+    if (
+      user.isEkskulTeacher ||
+      (Array.isArray(user.ekskulNames) && user.ekskulNames.length > 0) ||
+      user.subject === "Pembina Ekskul" ||
+      user.subject === "Pelatih Ekskul" ||
+      user.subject === "Ekskul" ||
+      !user.subject ||
+      user.subject === "-" ||
+      assignedSubjects.length === 0
+    ) {
+      if (assignedSubjects.length === 0 || user.isEkskulTeacher) {
+        return "ekskul";
+      }
     }
     return "grades";
   });
@@ -218,6 +231,14 @@ export default function TeacherPanel({
   const [ekskulCapaian, setEkskulCapaian] = useState<string>("B");
   const [ekskulDescription, setEkskulDescription] = useState<string>("");
   const [ekskulSaveLoading, setEkskulSaveLoading] = useState<boolean>(false);
+  const [ekskulTpAchievements, setEkskulTpAchievements] = useState<{ [tpId: string]: boolean }>({});
+  const [isEkskulCustomDescActive, setIsEkskulCustomDescActive] = useState<boolean>(false);
+  const [showAddEkskulTpHolder, setShowAddEkskulTpHolder] = useState<boolean>(false);
+  const [newEkskulTpText, setNewEkskulTpText] = useState<string>("");
+  const [ekskulTpSubmitLoading, setEkskulTpSubmitLoading] = useState<boolean>(false);
+  const [editingEkskulTpId, setEditingEkskulTpId] = useState<string | null>(null);
+  const [editingEkskulTpText, setEditingEkskulTpText] = useState<string>("");
+  const [editingEkskulTpLoading, setEditingEkskulTpLoading] = useState<boolean>(false);
 
   // Manage TP template state for teacher
   const [newTpText, setNewTpText] = useState("");
@@ -239,6 +260,11 @@ export default function TeacherPanel({
       (t: any) => t && t.id && matchTpClass(t.kelas, selectedClass)
     );
   }, [allTpObj, activeSubject, selectedClass]);
+
+  // Filter or retrieve TP templates specifically for active currentEkskul
+  const ekskulTpTemplates = useMemo(() => {
+    return getEkskulTps(allTpObj, currentEkskul);
+  }, [allTpObj, currentEkskul]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -352,6 +378,57 @@ export default function TeacherPanel({
     return text;
   };
 
+  // Helper function to generate narrative description for extracurriculars based on TP checklist
+  const generateEkskulNarrativeDescription = (
+    student: Student | null,
+    ekskulName: string,
+    templates: { id: string; text: string }[],
+    achievements: { [tpId: string]: boolean },
+    capaianGrade: string = "B"
+  ) => {
+    if (!student) return "";
+    const name = student.name ? student.name.trim() : "Siswa";
+    const cleanEkskul = (ekskulName || "Ekstrakurikuler").trim();
+
+    const safeTemplates = Array.isArray(templates)
+      ? templates.filter((tp) => tp && tp.id && tp.text)
+      : [];
+
+    if (safeTemplates.length === 0) {
+      return `Alhamdulillah, ananda ${name} aktif dan bersemangat mengikuti kegiatan ekstrakurikuler ${cleanEkskul} dengan capaian ${capaianGrade === "A" ? "Sangat Baik" : capaianGrade === "B" ? "Baik" : "Cukup"}.`;
+    }
+
+    const achieved = safeTemplates
+      .filter((tp) => achievements[tp.id] !== false)
+      .map((tp) => tp.text.trim())
+      .filter(Boolean);
+    const needImprovement = safeTemplates
+      .filter((tp) => achievements[tp.id] === false)
+      .map((tp) => tp.text.trim())
+      .filter(Boolean);
+
+    const joinItems = (items: string[]) => {
+      const cleaned = items.map((i) => i.trim().replace(/\.+$/, ""));
+      if (cleaned.length === 0) return "";
+      if (cleaned.length === 1) return cleaned[0];
+      if (cleaned.length === 2) return `${cleaned[0]} dan ${cleaned[1]}`;
+      return `${cleaned.slice(0, -1).join(", ")}, dan ${cleaned[cleaned.length - 1]}`;
+    };
+
+    let text = "";
+    if (achieved.length > 0 && needImprovement.length === 0) {
+      text = `Alhamdulillah, ananda ${name} dalam kegiatan ekstrakurikuler ${cleanEkskul} menunjukkan penguasaan yang sangat optimal dalam ${joinItems(achieved)}. Pertahankan semangat berlatih, teruslah bertumbuh dengan rendah hati, dan kembangkan potensi terbaikmu.`;
+    } else if (achieved.length > 0 && needImprovement.length > 0) {
+      text = `Alhamdulillah, ananda ${name} dalam kegiatan ekstrakurikuler ${cleanEkskul} menunjukkan penguasaan yang baik dalam ${joinItems(achieved)}. Namun masih memerlukan bimbingan dan pendampingan lebih lanjut dalam ${joinItems(needImprovement)}. Tetaplah bersemangat, jangan pernah lelah untuk mencoba dan terus berlatih.`;
+    } else if (needImprovement.length > 0) {
+      text = `Ananda ${name} dalam kegiatan ekstrakurikuler ${cleanEkskul} masih memerlukan bimbingan dan pendampingan lebih intensif dalam ${joinItems(needImprovement)}. Jangan berkecil hati, dengan ketekunan, kedisiplinan, dan latihan rutin, ananda pasti mampu meraih capaian yang lebih baik.`;
+    } else {
+      text = `Alhamdulillah, ananda ${name} aktif dan bersemangat mengikuti kegiatan ekstrakurikuler ${cleanEkskul} dengan baik.`;
+    }
+
+    return text;
+  };
+
   const handleStudentSelect = (
     student: Student,
     allGrades: Grade[] = grades,
@@ -452,12 +529,12 @@ export default function TeacherPanel({
         }
       }
 
-      // Load ekskul grade for this student
-      const currentEkskul = selectedEkskulName || user.ekskulName || "Pramuka";
+      // Load ekskul grade and TP achievements for this student
+      const curEkskul = selectedEkskulName || (assignedEkskuls.length > 0 ? assignedEkskuls[0] : (user.ekskulName || "Pramuka"));
       const studentNote = notesMap[student.id];
       const studentEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
       const foundEks = studentEkskuls.find(
-        (e: any) => e && (e.name === currentEkskul || e.ekskulName === currentEkskul)
+        (e: any) => e && (e.name === curEkskul || e.ekskulName === curEkskul)
       );
 
       const normalizeGrade = (val: any, fallback = "B") => {
@@ -474,17 +551,55 @@ export default function TeacherPanel({
         return fallback;
       };
 
+      const curEksTps = getEkskulTps(allTpObj, curEkskul);
+      const defaultEksMap: { [tpId: string]: boolean } = {};
+      curEksTps.forEach((t) => {
+        if (t && t.id) defaultEksMap[t.id] = true;
+      });
+
       if (foundEks) {
         const cap = normalizeGrade(foundEks.capaian || foundEks.predicate);
         setEkskulUsaha(normalizeGrade(foundEks.usaha, cap));
         setEkskulProses(normalizeGrade(foundEks.proses, cap));
         setEkskulCapaian(cap);
-        setEkskulDescription(foundEks.description || foundEks.deskripsi || "");
+
+        if (foundEks.tpAchievements && typeof foundEks.tpAchievements === "object" && Object.keys(foundEks.tpAchievements).length > 0) {
+          setEkskulTpAchievements({ ...defaultEksMap, ...foundEks.tpAchievements });
+        } else {
+          setEkskulTpAchievements(defaultEksMap);
+        }
+
+        if (foundEks.description && foundEks.description.trim() !== "") {
+          setEkskulDescription(foundEks.description.trim());
+          setIsEkskulCustomDescActive(true);
+        } else if (foundEks.deskripsi && foundEks.deskripsi.trim() !== "") {
+          setEkskulDescription(foundEks.deskripsi.trim());
+          setIsEkskulCustomDescActive(true);
+        } else {
+          const auto = generateEkskulNarrativeDescription(
+            student,
+            curEkskul,
+            curEksTps,
+            foundEks.tpAchievements || defaultEksMap,
+            cap
+          );
+          setEkskulDescription(auto);
+          setIsEkskulCustomDescActive(false);
+        }
       } else {
         setEkskulUsaha("B");
         setEkskulProses("B");
         setEkskulCapaian("B");
-        setEkskulDescription(`Aktif dan bersemangat mengikuti latihan serta kegiatan ${currentEkskul} dengan baik.`);
+        setEkskulTpAchievements(defaultEksMap);
+        const auto = generateEkskulNarrativeDescription(
+          student,
+          curEkskul,
+          curEksTps,
+          defaultEksMap,
+          "B"
+        );
+        setEkskulDescription(auto);
+        setIsEkskulCustomDescActive(false);
       }
     } catch (e: any) {
       console.error("Error in handleStudentSelect:", e);
@@ -650,6 +765,336 @@ export default function TeacherPanel({
     }
   };
 
+  // Switch active ekskul and synchronize student's ekskul grade & TPs
+  const handleSwitchEkskul = (eks: string) => {
+    setSelectedEkskulName(eks);
+    setShowAddEkskulTpHolder(false);
+    setError("");
+    setSuccess("");
+
+    if (selectedStudent) {
+      const sNote = allNotes[selectedStudent.id];
+      const sEks = Array.isArray(sNote?.ekskul) ? sNote.ekskul : [];
+      const found = sEks.find((item: any) => item && (item.name === eks || item.ekskulName === eks));
+      const curTps = getEkskulTps(allTpObj, eks);
+      const defMap: { [tpId: string]: boolean } = {};
+      curTps.forEach((t) => {
+        if (t && t.id) defMap[t.id] = true;
+      });
+
+      const normalizeGrade = (val: any, fallback = "B") => {
+        if (!val) return fallback;
+        const s = String(val).trim().toUpperCase();
+        if (s === "A" || s === "SANGAT BAIK") return "A";
+        if (s === "B" || s === "BAIK") return "B";
+        if (s === "C" || s === "CUKUP") return "C";
+        if (s === "D" || s === "KURANG") return "D";
+        if (s.startsWith("A")) return "A";
+        if (s.startsWith("B")) return "B";
+        if (s.startsWith("C")) return "C";
+        if (s.startsWith("D")) return "D";
+        return fallback;
+      };
+
+      if (found) {
+        const cap = normalizeGrade(found.capaian || found.predicate);
+        setEkskulUsaha(normalizeGrade(found.usaha, cap));
+        setEkskulProses(normalizeGrade(found.proses, cap));
+        setEkskulCapaian(cap);
+
+        if (found.tpAchievements && typeof found.tpAchievements === "object" && Object.keys(found.tpAchievements).length > 0) {
+          setEkskulTpAchievements({ ...defMap, ...found.tpAchievements });
+        } else {
+          setEkskulTpAchievements(defMap);
+        }
+
+        if (found.description && found.description.trim() !== "") {
+          setEkskulDescription(found.description.trim());
+          setIsEkskulCustomDescActive(true);
+        } else if (found.deskripsi && found.deskripsi.trim() !== "") {
+          setEkskulDescription(found.deskripsi.trim());
+          setIsEkskulCustomDescActive(true);
+        } else {
+          const auto = generateEkskulNarrativeDescription(
+            selectedStudent,
+            eks,
+            curTps,
+            found.tpAchievements || defMap,
+            cap
+          );
+          setEkskulDescription(auto);
+          setIsEkskulCustomDescActive(false);
+        }
+      } else {
+        setEkskulUsaha("B");
+        setEkskulProses("B");
+        setEkskulCapaian("B");
+        setEkskulTpAchievements(defMap);
+        const auto = generateEkskulNarrativeDescription(
+          selectedStudent,
+          eks,
+          curTps,
+          defMap,
+          "B"
+        );
+        setEkskulDescription(auto);
+        setIsEkskulCustomDescActive(false);
+      }
+    }
+  };
+
+  // Toggle achievement status of an Ekskul TP and auto-update narrative description
+  const toggleEkskulTp = (id: string) => {
+    const nextAchieved = !ekskulTpAchievements[id];
+    const nextMap = {
+      ...ekskulTpAchievements,
+      [id]: nextAchieved,
+    };
+    setEkskulTpAchievements(nextMap);
+
+    if (!isEkskulCustomDescActive && selectedStudent && ekskulTpTemplates.length > 0) {
+      const updatedDesc = generateEkskulNarrativeDescription(
+        selectedStudent,
+        currentEkskul,
+        ekskulTpTemplates,
+        nextMap,
+        ekskulCapaian
+      );
+      setEkskulDescription(updatedDesc);
+    }
+  };
+
+  // Bulk set all Ekskul TPs status (Semua Optimal atau Semua Perlu Bimbingan)
+  const setAllEkskulTpStatus = (status: boolean) => {
+    const nextMap: { [tpId: string]: boolean } = {};
+    ekskulTpTemplates.forEach((tp) => {
+      if (tp && tp.id) nextMap[tp.id] = status;
+    });
+    setEkskulTpAchievements(nextMap);
+
+    if (selectedStudent && ekskulTpTemplates.length > 0) {
+      const updatedDesc = generateEkskulNarrativeDescription(
+        selectedStudent,
+        currentEkskul,
+        ekskulTpTemplates,
+        nextMap,
+        ekskulCapaian
+      );
+      setEkskulDescription(updatedDesc);
+      setIsEkskulCustomDescActive(false);
+    }
+  };
+
+  // Re-sync description from current Ekskul TP checklist
+  const handleRegenerateEkskulFromTp = () => {
+    if (!selectedStudent) return;
+    if (ekskulTpTemplates.length === 0) {
+      setError(`Belum ada TP untuk kegiatan ekskul ${currentEkskul}.`);
+      return;
+    }
+    const updatedDesc = generateEkskulNarrativeDescription(
+      selectedStudent,
+      currentEkskul,
+      ekskulTpTemplates,
+      ekskulTpAchievements,
+      ekskulCapaian
+    );
+    setEkskulDescription(updatedDesc);
+    setIsEkskulCustomDescActive(false);
+    setSuccess(`Deskripsi capaian ekskul ${currentEkskul} berhasil disinkronkan dari ceklist TP.`);
+    setTimeout(() => setSuccess(""), 3000);
+  };
+
+  // Add a new TP specifically for the active extracurricular
+  const handleAddEkskulTp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEkskulTpText.trim()) return;
+    setError("");
+    setSuccess("");
+    setEkskulTpSubmitLoading(true);
+
+    const textToSave = newEkskulTpText.trim();
+    const tempId = "tp_eks_" + Date.now();
+
+    // Optimistically update
+    setAllTpObj((prev) => {
+      const next = { ...prev };
+      const list = Array.isArray(next[currentEkskul]) ? [...next[currentEkskul]] : [];
+      list.push({ id: tempId, text: textToSave, kelas: "all" });
+      next[currentEkskul] = list;
+      return next;
+    });
+
+    try {
+      const response = await fetch("/api/tps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: currentEkskul,
+          tpText: textToSave,
+          kelas: "all",
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Gagal menyimpan TP Ekskul.");
+
+      setNewEkskulTpText("");
+      setShowAddEkskulTpHolder(false);
+      setSuccess(`Tujuan Pembelajaran untuk ekskul ${currentEkskul} berhasil ditambahkan!`);
+      setTimeout(() => setSuccess(""), 3000);
+      onRefreshTrigger();
+
+      // Reload TPs
+      const resTp = await fetch("/api/tps");
+      const tpData = await resTp.json();
+      if (tpData && typeof tpData === "object") {
+        setAllTpObj(tpData);
+      }
+
+      setEkskulTpAchievements((prev) => ({
+        ...prev,
+        [data.id || tempId]: true,
+      }));
+    } catch (err: any) {
+      setError(err.message || "Gagal menyimpan TP Ekskul.");
+    } finally {
+      setEkskulTpSubmitLoading(false);
+    }
+  };
+
+  // Start editing an Ekskul TP item
+  const handleStartEditEkskulTp = (tp: { id: string; text: string }) => {
+    setEditingEkskulTpId(tp.id);
+    setEditingEkskulTpText(tp.text);
+  };
+
+  // Save edited Ekskul TP
+  const handleSaveEditEkskulTp = async (tpId: string) => {
+    if (!editingEkskulTpText.trim()) return;
+    setError("");
+    setSuccess("");
+    setEditingEkskulTpLoading(true);
+
+    const nextText = editingEkskulTpText.trim();
+
+    // Optimistically update
+    setAllTpObj((prev) => {
+      const updated = { ...prev };
+      const currentList = Array.isArray(updated[currentEkskul]) ? [...updated[currentEkskul]] : [];
+      const idx = currentList.findIndex((item: any) => String(item.id).trim() === String(tpId).trim());
+      if (idx >= 0) {
+        currentList[idx] = { ...currentList[idx], text: nextText };
+      } else {
+        currentList.push({ id: tpId, text: nextText, kelas: "all" });
+      }
+      updated[currentEkskul] = currentList;
+      return updated;
+    });
+
+    try {
+      const response = await fetch(
+        `/api/tps/${encodeURIComponent(currentEkskul)}/${encodeURIComponent(tpId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: nextText, kelas: "all" }),
+        }
+      );
+
+      if (!response.ok) {
+        await fetch("/api/tps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subject: currentEkskul, tpText: nextText, kelas: "all" }),
+        }).catch(() => null);
+      }
+
+      setSuccess("Tujuan Pembelajaran Ekskul berhasil diperbarui!");
+      setTimeout(() => setSuccess(""), 3000);
+      setEditingEkskulTpId(null);
+      setEditingEkskulTpText("");
+      onRefreshTrigger();
+
+      // Reload TPs
+      const resTp = await fetch("/api/tps");
+      const tpData = await resTp.json();
+      if (tpData && typeof tpData === "object") {
+        setAllTpObj(tpData);
+      }
+
+      // Re-generate description if auto-description is active
+      if (!isEkskulCustomDescActive && selectedStudent) {
+        const updatedTemplates = ekskulTpTemplates.map((t) =>
+          t.id === tpId ? { ...t, text: nextText } : t
+        );
+        const auto = generateEkskulNarrativeDescription(
+          selectedStudent,
+          currentEkskul,
+          updatedTemplates,
+          ekskulTpAchievements,
+          ekskulCapaian
+        );
+        setEkskulDescription(auto);
+      }
+    } catch (err: any) {
+      setError(err.message || "Gagal memperbarui TP Ekskul.");
+    } finally {
+      setEditingEkskulTpLoading(false);
+    }
+  };
+
+  // Delete an Ekskul TP (default or custom)
+  const handleDeleteEkskulTp = async (tpId: string) => {
+    if (!window.confirm("Apakah Anda yakin ingin menghapus indikator TP Ekskul ini?")) return;
+    setError("");
+    setSuccess("");
+
+    // Optimistic remove
+    setAllTpObj((prev) => {
+      const updated = { ...prev };
+      if (Array.isArray(updated[currentEkskul])) {
+        updated[currentEkskul] = updated[currentEkskul].filter(
+          (item: any) => String(item.id).trim() !== String(tpId).trim()
+        );
+      }
+      if (!Array.isArray(updated._deleted)) updated._deleted = [];
+      if (!updated._deleted.includes(tpId)) updated._deleted.push(tpId);
+      return updated;
+    });
+
+    try {
+      const response = await fetch(
+        `/api/tps/${encodeURIComponent(currentEkskul)}/${encodeURIComponent(tpId)}`,
+        { method: "DELETE" }
+      );
+      setSuccess("Indikator TP Ekskul berhasil dihapus.");
+      setTimeout(() => setSuccess(""), 3000);
+      onRefreshTrigger();
+
+      const resTp = await fetch("/api/tps");
+      const tpData = await resTp.json();
+      if (tpData && typeof tpData === "object") {
+        setAllTpObj(tpData);
+      }
+
+      // Re-generate description if auto-description is active
+      if (!isEkskulCustomDescActive && selectedStudent) {
+        const remainingTemplates = ekskulTpTemplates.filter((t) => t.id !== tpId);
+        const auto = generateEkskulNarrativeDescription(
+          selectedStudent,
+          currentEkskul,
+          remainingTemplates,
+          ekskulTpAchievements,
+          ekskulCapaian
+        );
+        setEkskulDescription(auto);
+      }
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus TP.");
+    }
+  };
+
   // Save Ekskul Grade directly by Ekskul Teacher
   const handleSaveEkskul = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -674,6 +1119,7 @@ export default function TeacherPanel({
           capaian: ekskulCapaian,
           predicate: ekskulCapaian,
           description: ekskulDescription.trim(),
+          tpAchievements: ekskulTpAchievements,
         }),
       });
 
@@ -1007,39 +1453,43 @@ export default function TeacherPanel({
                 <button
                   key={s.id}
                   onClick={() => handleStudentSelect(s, grades, tpTemplates, activeSubject, allNotes)}
-                  className={`w-full p-2 rounded text-left text-xs transition flex items-center justify-between gap-2 border cursor-pointer ${isSelected ? "bg-emerald-50/70 border-emerald-400 font-bold text-emerald-900" : "bg-white border-slate-150 text-slate-700 hover:bg-slate-50"}`}
+                  className={`w-full p-2.5 rounded-lg text-left text-xs transition flex items-center justify-between gap-2 border-2 cursor-pointer ${
+                    isSelected
+                      ? "bg-emerald-100 border-emerald-600 font-black text-emerald-950 shadow-xs"
+                      : "bg-white border-slate-300 text-slate-950 font-bold hover:bg-slate-100"
+                  }`}
                 >
                   <span className="truncate">{s.name || "N/A"}</span>
                   {activeViewTab === "ekskul" ? (
                     isFilled ? (
-                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                      <span className="bg-emerald-800 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 shadow-2xs">
                         Selesai ✓
                       </span>
                     ) : (
-                      <span className="bg-slate-100 text-slate-400 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0">
+                      <span className="bg-slate-200 text-slate-900 border border-slate-300 text-[9px] font-black px-1.5 py-0.5 rounded shrink-0">
                         Kosong
                       </span>
                     )
                   ) : assignedSubjects.length > 1 ? (
                     multiFilledCount === assignedSubjects.length ? (
-                      <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                      <span className="bg-emerald-800 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 shadow-2xs">
                         Lengkap ({assignedSubjects.length}) ✓
                       </span>
                     ) : multiFilledCount > 0 ? (
-                      <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                      <span className="bg-amber-800 text-white border border-amber-600 text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 shadow-2xs">
                         {multiFilledCount}/{assignedSubjects.length} Mapel
                       </span>
                     ) : (
-                      <span className="bg-slate-100 text-slate-400 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0">
+                      <span className="bg-slate-200 text-slate-900 border border-slate-300 text-[9px] font-black px-1.5 py-0.5 rounded shrink-0">
                         0/{assignedSubjects.length}
                       </span>
                     )
                   ) : isFilled ? (
-                    <span className="bg-emerald-100 text-emerald-800 text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0">
+                    <span className="bg-emerald-800 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 shadow-2xs">
                       Selesai ✓
                     </span>
                   ) : (
-                    <span className="bg-slate-100 text-slate-400 text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0">
+                    <span className="bg-slate-200 text-slate-900 border border-slate-300 text-[9px] font-black px-1.5 py-0.5 rounded shrink-0">
                       Kosong
                     </span>
                   )}
@@ -1051,44 +1501,61 @@ export default function TeacherPanel({
       </div>
 
       {/* Main interactive panel */}
-      <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200 shadow-sm p-4">
+      <div className="lg:col-span-2 bg-white rounded-lg border-2 border-slate-300 shadow-sm p-4">
         {/* Navigation Tab Headers */}
         <div
-          className="flex border-b border-slate-200 gap-1 mb-4 flex-wrap"
+          className="flex border-b-2 border-slate-300 gap-1 mb-4 flex-wrap"
           id="teacher-view-tabs"
         >
-          <button
-            onClick={() => setActiveViewTab("grades")}
-            className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "grades" ? "border-emerald-800 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-          >
-            <ClipboardPlus className="w-3.5 h-3.5" /> Pengisian Nilai Raport
-          </button>
-          <button
-            onClick={() => setActiveViewTab("tps")}
-            className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "tps" ? "border-emerald-800 text-emerald-850 bg-emerald-50/40" : "border-transparent text-slate-500 hover:text-slate-800"}`}
-          >
-            <BookOpen className="w-3.5 h-3.5" /> Kelola TP ({activeSubject})
-          </button>
+          {/* Grades tab (Only for teachers with subjects or Admin) */}
+          {(assignedSubjects.length > 0 || user.subject === "Admin") && (
+            <button
+              onClick={() => setActiveViewTab("grades")}
+              className={`py-2 px-3.5 uppercase tracking-wider text-[11px] font-black border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                activeViewTab === "grades"
+                  ? "border-emerald-800 text-emerald-950 bg-emerald-100 font-black"
+                  : "border-transparent text-slate-900 hover:text-emerald-900 hover:bg-slate-100 font-extrabold"
+              }`}
+            >
+              <ClipboardPlus className="w-4 h-4 text-emerald-800" /> Pengisian Nilai Raport
+            </button>
+          )}
+          {(assignedSubjects.length > 0 || user.subject === "Admin") && !isEkskulSubject(activeSubject) && (
+            <button
+              onClick={() => setActiveViewTab("tps")}
+              className={`py-2 px-3.5 uppercase tracking-wider text-[11px] font-black border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                activeViewTab === "tps"
+                  ? "border-emerald-800 text-emerald-950 bg-emerald-100 font-black"
+                  : "border-transparent text-slate-900 hover:text-emerald-900 hover:bg-slate-100 font-extrabold"
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-emerald-800" /> Kelola TP ({activeSubject})
+            </button>
+          )}
 
-          {/* Ekskul Tab (Shown for Ekskul Teachers or Admin) */}
-          {(Boolean(user.isEkskulTeacher) || assignedEkskuls.length > 0 || user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Admin") && (
+          {/* Ekskul Tab (Shown for Ekskul Teachers, Admin, or Teachers without academic subjects) */}
+          {(Boolean(user.isEkskulTeacher) || assignedEkskuls.length > 0 || user.subject === "Pembina Ekskul" || user.subject === "Pelatih Ekskul" || user.subject === "Admin" || assignedSubjects.length === 0) && (
             <button
               onClick={() => setActiveViewTab("ekskul")}
-              className={`py-1.5 px-3 uppercase tracking-wider text-[10px] font-extrabold border-b-2 transition flex items-center gap-1.5 cursor-pointer ${activeViewTab === "ekskul" ? "border-amber-600 text-amber-900 bg-amber-50/60 font-black" : "border-transparent text-amber-700 hover:text-amber-900"}`}
+              className={`py-2 px-3.5 uppercase tracking-wider text-[11px] font-black border-b-2 transition flex items-center gap-1.5 cursor-pointer ${
+                activeViewTab === "ekskul"
+                  ? "border-amber-700 text-amber-950 bg-amber-100 font-black shadow-2xs"
+                  : "border-transparent text-amber-900 hover:bg-amber-50 font-extrabold"
+              }`}
             >
-              <Award className="w-3.5 h-3.5 text-amber-600" />
+              <Award className="w-4 h-4 text-amber-800" />
               <span>Nilai Ekskul: {currentEkskul} {assignedEkskuls.length > 1 && `(${assignedEkskuls.length})`}</span>
             </button>
           )}
         </div>
 
         {/* TOP STATUS BAR & KEISLAMAN UNIFIED BAR */}
-        <div className="pb-2.5 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100">
+        <div className="pb-2.5 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b-2 border-slate-200">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2 py-0.5 bg-emerald-800 text-white rounded text-[10px] uppercase tracking-wider font-extrabold">
-              {activeViewTab === "ekskul" ? `Pembina Ekskul: ${currentEkskul}` : `Mapel: ${activeSubject}`}
+            <span className="px-2.5 py-1 bg-emerald-900 text-white rounded-md text-[10px] uppercase tracking-wider font-black shadow-2xs">
+              {activeViewTab === "ekskul" ? `Pembina Ekskul: ${currentEkskul}` : (activeSubject ? `Mapel: ${activeSubject}` : "Pembina Ekskul")}
             </span>
-            <span className="text-[11px] text-slate-500 italic">
+            <span className="text-xs font-black text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-300">
               Pengampu: {user.name}
             </span>
           </div>
@@ -1098,11 +1565,11 @@ export default function TeacherPanel({
             {activeViewTab === "ekskul" && user.subject === "Admin" && ekskulList.length > 0 && (
               <select
                 value={selectedEkskulName}
-                onChange={(e) => setSelectedEkskulName(e.target.value)}
-                className="text-xs bg-amber-50 border border-amber-300 text-amber-950 font-bold rounded px-2 py-1 focus:outline-none"
+                onChange={(e) => handleSwitchEkskul(e.target.value)}
+                className="text-xs bg-amber-100 border-2 border-amber-500 text-slate-950 font-black rounded-lg px-2.5 py-1 focus:outline-none"
               >
                 {ekskulList.map((eks) => (
-                  <option key={eks.id} value={eks.name}>
+                  <option key={eks.id} value={eks.name} className="bg-white text-slate-950 font-bold">
                     ⚽ {eks.name}
                   </option>
                 ))}
@@ -1111,9 +1578,9 @@ export default function TeacherPanel({
 
             <button
               onClick={fetchData}
-              className="p-1 px-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[10px] font-bold rounded transition text-slate-600 cursor-pointer flex items-center gap-1"
+              className="p-1 px-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-[10px] font-black rounded-lg transition text-slate-900 cursor-pointer flex items-center gap-1 shadow-2xs"
             >
-              <RefreshCw className="w-3 h-3" /> Sinkronkan DB
+              <RefreshCw className="w-3 h-3 text-slate-800" /> Sinkronkan DB
             </button>
           </div>
         </div>
@@ -1162,7 +1629,7 @@ export default function TeacherPanel({
                   <button
                     key={eks}
                     type="button"
-                    onClick={() => setSelectedEkskulName(eks)}
+                    onClick={() => handleSwitchEkskul(eks)}
                     className={`p-2.5 rounded-lg text-left transition cursor-pointer flex flex-col justify-between gap-1 border ${
                       isCurrentActive
                         ? "bg-amber-500/30 border-amber-400 text-white shadow-md ring-2 ring-amber-400/50"
@@ -1652,25 +2119,7 @@ export default function TeacherPanel({
                       <button
                         key={eks}
                         type="button"
-                        onClick={() => {
-                          setSelectedEkskulName(eks);
-                          if (selectedStudent) {
-                            const sNote = allNotes[selectedStudent.id];
-                            const sEks = Array.isArray(sNote?.ekskul) ? sNote.ekskul : [];
-                            const found = sEks.find((item: any) => item && (item.name === eks || item.ekskulName === eks));
-                            if (found) {
-                              setEkskulUsaha(found.usaha || "B");
-                              setEkskulProses(found.proses || "B");
-                              setEkskulCapaian(found.capaian || found.predicate || "B");
-                              setEkskulDescription(found.description || found.deskripsi || "");
-                            } else {
-                              setEkskulUsaha("B");
-                              setEkskulProses("B");
-                              setEkskulCapaian("B");
-                              setEkskulDescription(`Aktif dan bersemangat mengikuti latihan serta kegiatan ${eks} dengan baik.`);
-                            }
-                          }
-                        }}
+                        onClick={() => handleSwitchEkskul(eks)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                           isCurrent
                             ? "bg-amber-500 text-slate-950 border-amber-300 shadow-md font-black"
@@ -1689,116 +2138,360 @@ export default function TeacherPanel({
 
             {selectedStudent ? (
             <form onSubmit={handleSaveEkskul} className="space-y-4 animate-fade-in">
-              {/* Header card with contrast */}
-              <div className="p-3.5 bg-amber-50 dark:bg-[#1a1405] border border-amber-300 dark:border-amber-600/70 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-slate-900 dark:text-slate-100 shadow-xs">
+              {/* Header card with high contrast */}
+              <div className="p-4 bg-amber-100 dark:bg-[#201802] border-2 border-amber-500 dark:border-amber-500/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-slate-950 dark:text-amber-100 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-amber-700 dark:bg-amber-600 text-white flex items-center justify-center font-bold text-base shrink-0 shadow-xs">
+                  <div className="w-10 h-10 rounded-xl bg-amber-800 dark:bg-amber-600 text-white flex items-center justify-center font-black text-lg shrink-0 shadow-xs">
                     ⚽
                   </div>
                   <div>
-                    <h3 className="font-black text-xs sm:text-sm text-slate-900 dark:text-amber-100 uppercase tracking-wide">
+                    <h3 className="font-black text-sm sm:text-base text-slate-950 dark:text-amber-100 uppercase tracking-wide">
                       {selectedStudent.name || "N/A"}
                     </h3>
-                    <p className="text-[11px] text-amber-900 dark:text-amber-300 font-mono font-bold">
+                    <p className="text-xs text-amber-950 dark:text-amber-200 font-mono font-bold">
                       NISN: {selectedStudent.nisn || "-"} • Kelas {selectedStudent.kelas || "-"}
                     </p>
                   </div>
                 </div>
 
-                <span className="px-3 py-1.5 bg-amber-700 dark:bg-amber-600 text-white font-black text-xs rounded-lg shadow-xs tracking-wide self-start sm:self-auto">
-                  Ekstrakurikuler: {currentEkskul}
+                <span className="px-3.5 py-1.5 bg-amber-800 dark:bg-amber-600 text-white font-black text-xs rounded-xl shadow-xs tracking-wide self-start sm:self-auto uppercase">
+                  Ekskul: {currentEkskul}
                 </span>
               </div>
 
-              <div className="bg-slate-50 dark:bg-[#0d1526] border border-slate-200 dark:border-[#223354] p-4 sm:p-5 rounded-xl space-y-4 shadow-xs">
+              <div className="bg-white dark:bg-[#090f1d] border-2 border-amber-400 dark:border-amber-600/80 p-4 sm:p-5 rounded-2xl space-y-4 shadow-sm">
                 <div>
-                  <h4 className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <h4 className="text-xs sm:text-sm font-black text-slate-950 dark:text-amber-200 uppercase tracking-wider flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                     <span>Evaluasi & Capaian Ekstrakurikuler ({currentEkskul})</span>
                   </h4>
-                  <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-1">
+                  <p className="text-xs text-slate-700 dark:text-slate-200 mt-1 font-medium">
                     Pengisian nilai ekskul {currentEkskul} dibuat setara dengan format mapel standar yang mencakup aspek <strong>Usaha</strong>, <strong>Proses</strong>, dan <strong>Capaian</strong> untuk ananda {selectedStudent.name}.
                   </p>
                 </div>
 
-                {/* 3-column evaluation: Usaha, Proses, Capaian (Sama persis seperti pengisian mapel biasa) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t border-slate-200 dark:border-[#223354]">
-                  <div className="bg-white dark:bg-[#070d1a] p-3 rounded-lg border border-slate-250 dark:border-[#1e2f4f]">
-                    <label className="block text-[10px] font-black text-slate-800 dark:text-amber-300 uppercase tracking-wider mb-1.5">
+                {/* 3-column evaluation: Usaha, Proses, Capaian (High contrast selects) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3 border-t-2 border-amber-200 dark:border-amber-800/60">
+                  <div className="bg-amber-50/90 dark:bg-[#121c2e] p-3 rounded-xl border-2 border-amber-300 dark:border-amber-600/60">
+                    <label className="block text-[11px] font-black text-slate-950 dark:text-amber-300 uppercase tracking-wider mb-1.5">
                       Grade Usaha
                     </label>
                     <select
                       value={ekskulUsaha}
                       onChange={(e) => setEkskulUsaha(e.target.value)}
-                      className="w-full p-2 bg-slate-50 dark:bg-[#0b1324] border border-slate-300 dark:border-[#2b3e66] rounded-md text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 focus:ring-1 focus:ring-amber-500"
+                      className="w-full p-2.5 bg-white dark:bg-[#070d1a] border-2 border-slate-300 dark:border-amber-500 rounded-lg text-xs font-black text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
-                      <option value="A" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">A (Sangat Baik)</option>
-                      <option value="B" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">B (Baik)</option>
-                      <option value="C" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">C (Cukup)</option>
-                      <option value="D" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">D (Kurang)</option>
+                      <option value="A" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">A (Sangat Baik)</option>
+                      <option value="B" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">B (Baik)</option>
+                      <option value="C" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">C (Cukup)</option>
+                      <option value="D" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">D (Kurang)</option>
                     </select>
                   </div>
 
-                  <div className="bg-white dark:bg-[#070d1a] p-3 rounded-lg border border-slate-250 dark:border-[#1e2f4f]">
-                    <label className="block text-[10px] font-black text-slate-800 dark:text-amber-300 uppercase tracking-wider mb-1.5">
+                  <div className="bg-amber-50/90 dark:bg-[#121c2e] p-3 rounded-xl border-2 border-amber-300 dark:border-amber-600/60">
+                    <label className="block text-[11px] font-black text-slate-950 dark:text-amber-300 uppercase tracking-wider mb-1.5">
                       Grade Proses
                     </label>
                     <select
                       value={ekskulProses}
                       onChange={(e) => setEkskulProses(e.target.value)}
-                      className="w-full p-2 bg-slate-50 dark:bg-[#0b1324] border border-slate-300 dark:border-[#2b3e66] rounded-md text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 focus:ring-1 focus:ring-amber-500"
+                      className="w-full p-2.5 bg-white dark:bg-[#070d1a] border-2 border-slate-300 dark:border-amber-500 rounded-lg text-xs font-black text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
-                      <option value="A" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">A (Sangat Baik)</option>
-                      <option value="B" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">B (Baik)</option>
-                      <option value="C" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">C (Cukup)</option>
-                      <option value="D" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">D (Kurang)</option>
+                      <option value="A" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">A (Sangat Baik)</option>
+                      <option value="B" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">B (Baik)</option>
+                      <option value="C" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">C (Cukup)</option>
+                      <option value="D" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">D (Kurang)</option>
                     </select>
                   </div>
 
-                  <div className="bg-white dark:bg-[#070d1a] p-3 rounded-lg border border-slate-250 dark:border-[#1e2f4f]">
-                    <label className="block text-[10px] font-black text-slate-800 dark:text-amber-300 uppercase tracking-wider mb-1.5">
+                  <div className="bg-amber-50/90 dark:bg-[#121c2e] p-3 rounded-xl border-2 border-amber-300 dark:border-amber-600/60">
+                    <label className="block text-[11px] font-black text-slate-950 dark:text-amber-300 uppercase tracking-wider mb-1.5">
                       Grade Capaian
                     </label>
                     <select
                       value={ekskulCapaian}
-                      onChange={(e) => setEkskulCapaian(e.target.value)}
-                      className="w-full p-2 bg-slate-50 dark:bg-[#0b1324] border border-slate-300 dark:border-[#2b3e66] rounded-md text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 dark:focus:border-amber-400 focus:ring-1 focus:ring-amber-500"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEkskulCapaian(val);
+                        if (!isEkskulCustomDescActive && selectedStudent && ekskulTpTemplates.length > 0) {
+                          const auto = generateEkskulNarrativeDescription(
+                            selectedStudent,
+                            currentEkskul,
+                            ekskulTpTemplates,
+                            ekskulTpAchievements,
+                            val
+                          );
+                          setEkskulDescription(auto);
+                        }
+                      }}
+                      className="w-full p-2.5 bg-white dark:bg-[#070d1a] border-2 border-slate-300 dark:border-amber-500 rounded-lg text-xs font-black text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     >
-                      <option value="A" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">A (Sangat Baik)</option>
-                      <option value="B" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">B (Baik)</option>
-                      <option value="C" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">C (Cukup)</option>
-                      <option value="D" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">D (Kurang)</option>
+                      <option value="A" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">A (Sangat Baik)</option>
+                      <option value="B" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">B (Baik)</option>
+                      <option value="C" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">C (Cukup)</option>
+                      <option value="D" className="bg-white dark:bg-slate-900 text-slate-950 dark:text-white font-bold">D (Kurang)</option>
                     </select>
                   </div>
                 </div>
 
+                {/* TP Objectives Checklist (Tujuan Pembelajaran Ekstrakurikuler) */}
+                <div className="border-t-2 border-amber-300 dark:border-amber-800/80 pt-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div>
+                      <h4 className="font-black text-xs sm:text-sm text-slate-950 dark:text-amber-200 uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                        <Award className="w-4.5 h-4.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                        <span>Tujuan Pembelajaran (TP) & Capaian: {currentEkskul}</span>
+                        <span className="px-2.5 py-0.5 bg-amber-800 text-white border border-amber-600 rounded-md text-[10px] font-black font-mono">
+                          {ekskulTpTemplates.length} Indikator TP
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-700 dark:text-slate-200 mt-1 leading-relaxed font-medium">
+                        Centang TP yang sudah dikuasai/optimal oleh <strong>{selectedStudent.name}</strong>. Anda dapat mengedit teks TP atau menghapusnya kapan saja!
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap self-start sm:self-auto shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setAllEkskulTpStatus(true)}
+                        className="px-3 py-1.5 text-xs font-black bg-emerald-800 hover:bg-emerald-900 text-white rounded-lg transition cursor-pointer shadow-xs"
+                      >
+                        Semua Optimal ✓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAllEkskulTpStatus(false)}
+                        className="px-3 py-1.5 text-xs font-black bg-amber-800 hover:bg-amber-900 text-white rounded-lg transition cursor-pointer shadow-xs"
+                      >
+                        Semua Perlu Bimbingan ⚠️
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddEkskulTpHolder((prev) => !prev)}
+                        className="px-3 py-1.5 text-xs font-black bg-slate-800 hover:bg-slate-900 text-white rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Plus className="w-4 h-4 text-amber-400" />
+                        <span>{showAddEkskulTpHolder ? "Tutup Form TP" : "Tambah TP Ekskul"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Inline Add TP Form */}
+                  {showAddEkskulTpHolder && (
+                    <div className="mb-4 p-3.5 bg-amber-100 dark:bg-[#1a2338] border-2 border-amber-500 rounded-xl space-y-2 animate-fade-in shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-950 dark:text-amber-200 uppercase tracking-wide">
+                          Tambah Indikator TP Baru untuk Ekskul {currentEkskul}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddEkskulTpHolder(false)}
+                          className="text-slate-500 hover:text-slate-800 dark:hover:text-white text-xs font-bold"
+                        >
+                          ✕ Batal
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={newEkskulTpText}
+                          onChange={(e) => setNewEkskulTpText(e.target.value)}
+                          placeholder={`Contoh: Mampu melakukan passing terarah dan teknik dasar ${currentEkskul}...`}
+                          className="flex-1 p-2.5 bg-white dark:bg-[#070d1a] border-2 border-amber-400 dark:border-[#2b3e66] rounded-lg text-xs font-bold text-slate-950 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddEkskulTp}
+                          disabled={ekskulTpSubmitLoading || !newEkskulTpText.trim()}
+                          className="px-4 py-2 bg-amber-800 hover:bg-amber-900 text-white font-black text-xs rounded-lg transition disabled:opacity-50 cursor-pointer shrink-0 shadow-sm"
+                        >
+                          {ekskulTpSubmitLoading ? "Menyimpan..." : "Simpan TP"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List of Ekskul TPs with high contrast and full Edit & Delete functionality */}
+                  <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                    {ekskulTpTemplates.length === 0 ? (
+                      <div className="p-4 bg-amber-50 dark:bg-[#121a2c] rounded-xl border-2 border-dashed border-amber-400 dark:border-amber-800/80 text-center text-xs text-slate-700 dark:text-slate-300 font-bold">
+                        Belum ada indikator TP untuk {currentEkskul}. Klik tombol <strong>Tambah TP Ekskul</strong> di atas.
+                      </div>
+                    ) : (
+                      ekskulTpTemplates.map((tp) => {
+                        const isChecked = ekskulTpAchievements && ekskulTpAchievements[tp.id] !== false;
+                        const isEditing = editingEkskulTpId === tp.id;
+
+                        if (isEditing) {
+                          return (
+                            <div
+                              key={tp.id}
+                              className="p-3 bg-white dark:bg-[#0c1424] border-2 border-amber-500 rounded-xl space-y-2 shadow-md animate-fade-in"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-black text-amber-900 dark:text-amber-300 uppercase tracking-wide">
+                                  Edit Teks Indikator TP ({currentEkskul})
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingEkskulTpId(null)}
+                                  className="text-slate-400 hover:text-slate-700 text-xs font-bold"
+                                >
+                                  ✕ Batal
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                value={editingEkskulTpText}
+                                onChange={(e) => setEditingEkskulTpText(e.target.value)}
+                                className="w-full p-2.5 bg-slate-50 dark:bg-[#030712] border-2 border-amber-400 dark:border-amber-600 text-slate-950 dark:text-white font-bold text-xs rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+                              />
+                              <div className="flex justify-end gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingEkskulTpId(null)}
+                                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-slate-200 font-bold text-xs rounded-lg transition cursor-pointer"
+                                >
+                                  Batal
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditEkskulTp(tp.id)}
+                                  disabled={editingEkskulTpLoading || !editingEkskulTpText.trim()}
+                                  className="px-4 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white font-black text-xs rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <Save className="w-3.5 h-3.5" />
+                                  <span>{editingEkskulTpLoading ? "Menyimpan..." : "Simpan Perubahan TP"}</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={tp.id}
+                            onClick={() => toggleEkskulTp(tp.id)}
+                            className={`p-3.5 rounded-xl border-2 text-xs transition cursor-pointer select-none flex items-start gap-3 shadow-xs ${
+                              isChecked
+                                ? "bg-emerald-100 dark:bg-emerald-950 border-emerald-600 dark:border-emerald-500 hover:bg-emerald-200/80"
+                                : "bg-amber-100 dark:bg-amber-950 border-amber-600 dark:border-amber-500 hover:bg-amber-200/80"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => toggleEkskulTp(tp.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-5 h-5 rounded border-2 border-amber-700 text-amber-800 focus:ring-amber-600 cursor-pointer mt-0.5 shrink-0"
+                            />
+                            <div className="flex-1">
+                              <p className="text-slate-950 dark:text-white leading-relaxed font-black text-xs sm:text-sm">
+                                {tp.text}
+                              </p>
+                              <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                                <span
+                                  className={`text-[11px] font-black tracking-wide uppercase px-3 py-1 rounded-md shadow-2xs ${
+                                    isChecked
+                                      ? "bg-emerald-900 text-white border border-emerald-700"
+                                      : "bg-amber-900 text-white border border-amber-700"
+                                  }`}
+                                >
+                                  {isChecked ? "Sudah Optimal ✓" : "Perlu Bimbingan ⚠️"}
+                                </span>
+
+                                <div className="flex items-center gap-2 ml-auto">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleStartEditEkskulTp(tp);
+                                    }}
+                                    className="px-3 py-1.5 bg-amber-900 hover:bg-amber-950 text-white rounded-lg font-black text-xs flex items-center gap-1 cursor-pointer transition shadow-xs border border-amber-700"
+                                    title="Edit teks TP ini"
+                                  >
+                                    <Edit className="w-3.5 h-3.5 text-amber-300" />
+                                    <span>Edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteEkskulTp(tp.id);
+                                    }}
+                                    className="px-3 py-1.5 bg-rose-900 hover:bg-rose-950 text-white rounded-lg font-black text-xs flex items-center gap-1 cursor-pointer transition shadow-xs border border-rose-700"
+                                    title="Hapus TP ini"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-300" />
+                                    <span>Hapus</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
                 {/* Narrative description */}
-                <div className="pt-3 border-t border-slate-200 dark:border-[#223354]">
-                  <label className="block text-[10px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider mb-1.5">
-                    Narasi Deskripsi Capaian Raport ({currentEkskul}):
-                  </label>
+                <div className="pt-4 border-t-2 border-amber-300 dark:border-amber-800/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
+                    <div>
+                      <label className="block text-xs font-black text-slate-950 dark:text-amber-100 uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                        <span>Narasi Deskripsi Capaian Raport ({currentEkskul}):</span>
+                        {ekskulTpTemplates.length > 0 && (
+                          <span className="px-2 py-0.5 bg-emerald-800 text-white rounded-md text-[10px] font-black lowercase">
+                            sinkron dengan checklist TP
+                          </span>
+                        )}
+                      </label>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 font-medium">
+                        {ekskulTpTemplates.length > 0
+                          ? `Deskripsi otomatis disesuaikan dengan checklist TP untuk ananda ${selectedStudent.name}, dan tetap dapat Anda edit langsung secara bebas.`
+                          : `Ketik narasi deskripsi capaian kegiatan ekskul ${currentEkskul} untuk ananda ${selectedStudent.name}.`}
+                      </p>
+                    </div>
+
+                    {ekskulTpTemplates.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRegenerateEkskulFromTp}
+                        className="px-3 py-1.5 text-xs font-black bg-amber-800 hover:bg-amber-900 text-white rounded-lg flex items-center gap-1.5 transition self-start sm:self-auto cursor-pointer shadow-xs"
+                        title="Sinkronkan ulang deskripsi dari centangan TP"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Sinkronkan dari TP</span>
+                      </button>
+                    )}
+                  </div>
 
                   <textarea
                     value={ekskulDescription}
-                    onChange={(e) => setEkskulDescription(e.target.value)}
+                    onChange={(e) => {
+                      setEkskulDescription(e.target.value);
+                      setIsEkskulCustomDescActive(true);
+                    }}
                     rows={4}
                     placeholder={`Ketik narasi deskripsi capaian kegiatan ekskul ${currentEkskul} untuk ananda ${selectedStudent.name}...`}
-                    className="w-full p-3 border border-slate-300 dark:border-[#2b3e66] rounded-xl text-xs bg-white dark:bg-[#070d1a] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 dark:focus:ring-amber-400 focus:border-transparent leading-relaxed font-sans"
+                    className="w-full p-3.5 border-2 border-slate-400 dark:border-amber-500 rounded-xl text-xs sm:text-sm bg-white dark:bg-[#070d1a] text-slate-950 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 leading-relaxed font-bold shadow-xs"
                   />
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 dark:border-[#223354] pt-3 text-right">
+              <div className="border-t-2 border-amber-300 dark:border-[#223354] pt-4 text-right">
                 <button
                   type="submit"
                   disabled={ekskulSaveLoading}
-                  className="px-5 py-2.5 bg-amber-700 hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-500 active:bg-amber-900 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 ml-auto shadow-md transition disabled:opacity-50 cursor-pointer"
+                  className="px-6 py-3 bg-amber-800 hover:bg-amber-900 active:bg-amber-950 text-white rounded-xl text-xs sm:text-sm font-black flex items-center gap-2 ml-auto shadow-md border-2 border-amber-600 transition disabled:opacity-50 cursor-pointer"
                 >
                   {ekskulSaveLoading ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   ) : (
                     <>
-                      <Save className="w-4 h-4" /> Simpan Nilai Ekskul ({currentEkskul})
+                      <Save className="w-4.5 h-4.5 text-amber-300" /> Simpan Nilai & Deskripsi Ekskul ({currentEkskul})
                     </>
                   )}
                 </button>

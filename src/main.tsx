@@ -4,7 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import dbData from './data/db.json';
 import { isFirebaseConfigured, firebaseApi, isDummyTeacher } from './lib/firebase';
-import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject } from './types';
+import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject } from './types';
 import { registerSW } from 'virtual:pwa-register';
 
 // Automatically register and update PWA service worker in production
@@ -352,14 +352,16 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
               if (idx !== -1) db.grades[idx] = g;
               else db.grades.push(g);
             }
-            if (Array.isArray(g.tps) && g.tps.length > 0) {
+            if (!isEkskulSubject(g.subject) && Array.isArray(g.tps) && g.tps.length > 0) {
               if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+              const deletedSet = new Set(Array.isArray(db.deleted_tps) ? db.deleted_tps : []);
               const sKey = g.subject;
               const nKey = normalizeSubjectKey(sKey) || sKey;
               const cur = Array.isArray(db.tujuan_pembelajaran_templates[nKey]) ? db.tujuan_pembelajaran_templates[nKey] : [];
               const map = new Map<string, any>();
               cur.forEach((t: any) => map.set(String(t.id).trim(), t));
               g.tps.forEach((t: any) => {
+                if (deletedSet.has(String(t.id).trim())) return;
                 const prev = map.get(String(t.id).trim());
                 map.set(String(t.id).trim(), {
                   ...prev,
@@ -499,17 +501,27 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
           try {
             const db = getDB();
+            if (!Array.isArray(db.deleted_tps)) db.deleted_tps = [];
+            if (tpId && !db.deleted_tps.includes(tpId)) db.deleted_tps.push(tpId);
+
             if (db.tujuan_pembelajaran_templates) {
               for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
-                if (!subject || key === subject || normalizeSubjectKey(key) === normalizeSubjectKey(subject)) {
-                  if (Array.isArray(db.tujuan_pembelajaran_templates[key])) {
-                    db.tujuan_pembelajaran_templates[key] = db.tujuan_pembelajaran_templates[key].filter(
-                      (x: any) => String(x.id).trim() !== tpId
-                    );
-                  }
+                if (Array.isArray(db.tujuan_pembelajaran_templates[key])) {
+                  db.tujuan_pembelajaran_templates[key] = db.tujuan_pembelajaran_templates[key].filter(
+                    (x: any) => String(x.id).trim() !== tpId
+                  );
                 }
               }
             }
+
+            if (Array.isArray(db.grades)) {
+              db.grades.forEach((g: any) => {
+                if (Array.isArray(g.tps)) {
+                  g.tps = g.tps.filter((x: any) => String(x.id).trim() !== tpId);
+                }
+              });
+            }
+
             saveDB(db);
           } catch (e) {}
 
@@ -745,11 +757,11 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       let finalSubjects: string[] = [];
       if (Array.isArray(subjects) && subjects.length > 0) {
         finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
-      } else if (subject) {
+      } else if (subject && subject !== "-" && subject !== "Pembina Ekskul") {
         finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
       }
-      if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
-      const finalSubjectStr = finalSubjects.join(", ");
+      const isEkskulTeacherFlag = Boolean(isEkskulTeacher || ekskulName || (Array.isArray(body?.ekskulNames) && body.ekskulNames.length > 0));
+      const finalSubjectStr = finalSubjects.length > 0 ? finalSubjects.join(", ") : (isEkskulTeacherFlag ? "Pembina Ekskul" : "");
 
       let finalEkskuls: string[] = [];
       if (Array.isArray(body?.ekskulNames) && body.ekskulNames.length > 0) {
@@ -806,13 +818,13 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       }
 
       let finalSubjects: string[] = [];
-      if (Array.isArray(subjects) && subjects.length > 0) {
+      if (Array.isArray(subjects)) {
         finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
-      } else if (subject) {
+      } else if (subject && subject !== "-" && subject !== "Pembina Ekskul") {
         finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
       }
-      if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
-      const finalSubjectStr = finalSubjects.join(", ");
+      const isEkskulTeacherFlag = Boolean(isEkskulTeacher || ekskulName || (Array.isArray(ekskulNames) && ekskulNames.length > 0));
+      const finalSubjectStr = finalSubjects.length > 0 ? finalSubjects.join(", ") : (isEkskulTeacherFlag ? "Pembina Ekskul" : "");
 
       let finalEkskuls: string[] = [];
       if (Array.isArray(ekskulNames) && ekskulNames.length > 0) {
@@ -1037,6 +1049,25 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const { studentId, sakit, izin, alpa, catatan, spiritualUsaha, spiritualProses, spiritualCapaian, spiritualDeskripsi, sosialUsaha, sosialProses, sosialCapaian, sosialDeskripsi, ekskul } = body || {};
       const db = getDB();
       if (!db.walikelas_notes) db.walikelas_notes = {};
+
+      const existingNote = db.walikelas_notes[studentId] || {};
+      const existingEkskuls = Array.isArray(existingNote.ekskul) ? existingNote.ekskul : [];
+      const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
+
+      const mergedEkskulMap = new Map();
+      existingEkskuls.forEach((e: any) => {
+        const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+        if (key) mergedEkskulMap.set(key, e);
+      });
+      incomingEkskuls.forEach((e: any) => {
+        const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+        if (key) {
+          const prev = mergedEkskulMap.get(key) || {};
+          mergedEkskulMap.set(key, { ...prev, ...e });
+        }
+      });
+      const finalEkskul = Array.from(mergedEkskulMap.values());
+
       db.walikelas_notes[studentId] = {
         sakit: Number(sakit || 0),
         izin: Number(izin || 0),
@@ -1050,7 +1081,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         sosialProses: sosialProses || "B",
         sosialCapaian: sosialCapaian || "B",
         sosialDeskripsi: sosialDeskripsi || "",
-        ekskul: ekskul || []
+        ekskul: finalEkskul
       };
       saveDB(db);
       return new Response(JSON.stringify({ studentId, ...db.walikelas_notes[studentId] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -1060,10 +1091,14 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     if (path === '/api/tps' && method === 'GET') {
       const db = getDB();
       const rawTemplates = db.tujuan_pembelajaran_templates || {};
+      if (!Array.isArray(db.deleted_tps)) db.deleted_tps = [];
+      const deletedTpSet = new Set<string>(db.deleted_tps.map((id: any) => String(id).trim()));
+
       const templates: Record<string, any[]> = {};
       for (const [k, v] of Object.entries(rawTemplates)) {
+        if (isEkskulSubject(k)) continue;
         if (Array.isArray(v)) {
-          templates[k] = cleanTpList(v);
+          templates[k] = cleanTpList(v).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
         }
       }
       const urlObj = new URL(urlStr, 'http://localhost');
@@ -1071,6 +1106,9 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const subject = urlObj.searchParams.get('subject');
 
       if (subject) {
+        if (isEkskulSubject(subject)) {
+          return new Response(JSON.stringify([]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
         let items: any[] = [];
         const normTarget = normalizeSubjectKey(subject);
         for (const [k, v] of Object.entries(templates)) {
@@ -1182,22 +1220,9 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const subject = decodeURIComponent(parts.join('/') || '').trim();
       const db = getDB();
       if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
+      if (!Array.isArray(db.deleted_tps)) db.deleted_tps = [];
+      if (tpId && !db.deleted_tps.includes(tpId)) db.deleted_tps.push(tpId);
 
-      const norm = (s: string) => s.replace(/[’'`]/g, "'").toLowerCase().trim();
-      const targetNorm = norm(subject);
-
-      for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
-        if (!subject || key === subject || norm(key) === targetNorm) {
-          const list = db.tujuan_pembelajaran_templates[key];
-          if (Array.isArray(list)) {
-            db.tujuan_pembelajaran_templates[key] = list.filter(
-              (tp: any) => String(tp.id).trim() !== tpId
-            );
-          }
-        }
-      }
-
-      // Also global search across all subjects for this tpId
       for (const key of Object.keys(db.tujuan_pembelajaran_templates)) {
         const list = db.tujuan_pembelajaran_templates[key];
         if (Array.isArray(list)) {
@@ -1205,6 +1230,14 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
             (tp: any) => String(tp.id).trim() !== tpId
           );
         }
+      }
+
+      if (Array.isArray(db.grades)) {
+        db.grades.forEach((g: any) => {
+          if (Array.isArray(g.tps)) {
+            g.tps = g.tps.filter((tp: any) => String(tp.id).trim() !== tpId);
+          }
+        });
       }
 
       saveDB(db);
@@ -1284,7 +1317,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const db = getDB();
       const defaultEkskul = [
         { "id": "e1", "name": "Pramuka Siaga & Penggalang", "type": "Wajib" },
-        { "id": "e2", "name": "Mentoring & Bina Pribadi Islami", "type": "Wajib" },
+        { "id": "e2", "name": "Mentoring", "type": "Wajib" },
         { "id": "e3", "name": "Futsal", "type": "Pilihan" },
         { "id": "e4", "name": "Bulu Tangkis", "type": "Pilihan" },
         { "id": "e5", "name": "Panahan Tradisional", "type": "Pilihan" },
@@ -1516,6 +1549,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         capaian: finalCapaian,
         predicate: finalCapaian,
         description: description || deskripsi || "",
+        tpAchievements: body?.tpAchievements || {},
       };
 
       if (existingIdx >= 0) {

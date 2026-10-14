@@ -229,11 +229,23 @@ export function getTeacherAssignedSubjects(
   }
 
   const cleanedAcademic = expanded.filter(
-    (s) => s !== "Pembina Ekskul" && s !== "Pelatih Ekskul" && s !== "Admin"
+    (s) => s !== "Pembina Ekskul" && s !== "Pelatih Ekskul" && s !== "Admin" && s !== "-"
   );
   if (cleanedAcademic.length > 0) return cleanedAcademic;
 
-  return expanded.length > 0 ? expanded : [teacher.subject || "PAI"];
+  // If teacher has no academic subjects (e.g. Pembina Ekskul only), return empty array
+  if (
+    teacher.isEkskulTeacher ||
+    (Array.isArray(teacher.ekskulNames) && teacher.ekskulNames.length > 0) ||
+    !teacher.subject ||
+    teacher.subject === "-" ||
+    teacher.subject === "Pembina Ekskul" ||
+    teacher.subject === "Pelatih Ekskul"
+  ) {
+    return [];
+  }
+
+  return expanded.length > 0 ? expanded : (teacher.subject && teacher.subject !== "-" ? [teacher.subject] : []);
 }
 
 /**
@@ -371,6 +383,161 @@ export function isSampleTp(tp: any): boolean {
 
   // Real teacher and curriculum TPs are accepted
   return false;
+}
+
+/**
+ * Checks if a subject string represents generic coach titles that are not actual academic subjects.
+ */
+export function isEkskulSubject(subject: string): boolean {
+  if (!subject) return false;
+  const s = String(subject).toLowerCase().trim();
+  return (
+    s === "pelatih ekskul" ||
+    s === "pembina ekskul"
+  );
+}
+
+export const DEFAULT_EKSKUL_TPS: Record<string, string[]> = {
+  "Pramuka": [
+    "Menunjukkan kedisiplinan dan kerapian dalam baris-berbaris (PBB)",
+    "Mampu mempraktikkan keterampilan dasar kepramukaan (tali-temali, sandi, dan kompas)",
+    "Menunjukkan sikap gotong royong, kemandirian, dan kepedulian sosial yang tinggi"
+  ],
+  "Futsal": [
+    "Menguasai teknik dasar mengoper (passing) dan mengontrol (control) bola dengan baik",
+    "Menguasai teknik menggiring bola (dribbling) terarah dan menembak (shooting) ke gawang",
+    "Menunjukkan sportivitas, kedisiplinan latihan, dan kerja sama tim yang solid"
+  ],
+  "Bulu Tangkis": [
+    "Menguasai teknik pegangan raket, footwork langkah kaki, dan servis dasar dengan benar",
+    "Mampu melakukan pukulan lob, netting, dan smash terarah",
+    "Menunjukkan sportivitas, fokus tinggi, dan daya juang selama permainan"
+  ],
+  "Voli": [
+    "Menguasai teknik dasar passing bawah dan passing atas secara terarah",
+    "Mampu melakukan servis dan penempatan bola dasar dengan tepat",
+    "Menunjukkan kekompakan, sportivitas, dan kegigihan dalam tim"
+  ],
+  "Panahan": [
+    "Memahami prosedur keselamatan dan sikap tubuh (stance) memanah yang benar",
+    "Menguasai teknik menarik busur (drawing), membidik, dan melepaskan anak panah (release)",
+    "Menunjukkan konsentrasi, ketenangan emosi, dan konsistensi selama latihan"
+  ],
+  "Mentoring": [
+    "Aktif dan istiqomah dalam menghadiri halaqah serta kegiatan pembinaan karakter",
+    "Menunjukkan pemahaman materi keislaman, adab, dan akhlak terpuji sehari-hari",
+    "Memiliki kepedulian sosial dan ukhuwah islamiyah yang erat antarsesama teman"
+  ],
+  "Klub Sains": [
+    "Menunjukkan rasa ingin tahu yang tinggi terhadap fenomena sains dan eksperimen ilmiah",
+    "Mampu melakukan percobaan ilmiah sederhana dan mencatat hasil pengamatan",
+    "Mampu bernalar kritis, memecahkan masalah, dan bekerja sama dalam tim riset cilik"
+  ],
+  "Karate": [
+    "Menguasai gerakan dasar kuda-kuda (dachi), pukulan (tsuki), dan tangkisan (uke)",
+    "Mampu mempraktikkan rangkaian jurus kata dasar dengan tenaga dan konsentrasi",
+    "Menjunjung tinggi sumpah karate, disiplin diri, rasa hormat, dan pengendalian emosi"
+  ],
+  "Pencak Silat": [
+    "Menguasai teknik dasar kuda-kuda, pola langkah, dan pukulan-tangkisan beladiri",
+    "Mampu mempraktikkan jurus seni tunggal dan teknik pertahanan diri secara terkoordinasi",
+    "Menunjukkan sikap ksatria, budi pekerti luhur, dan disiplin tinggi"
+  ],
+  "Renang": [
+    "Menguasai teknik pernapasan, meluncur, dan gerakan kayuhan renang dengan baik",
+    "Mampu mempraktikkan gaya dada (breaststroke) atau gaya bebas secara teratur",
+    "Menunjukkan keberanian di dalam air serta menjaga keselamatan diri saat berenang"
+  ],
+  "Seni Musik": [
+    "Mampu memainkan alat musik ritmis maupun melodis dengan tempo dan ketukan yang tepat",
+    "Menunjukkan kepekaan nada, musikalitas, dan kekompakan dalam ansambel musik",
+    "Menunjukkan rasa percaya diri dan ekspresi seni yang positif"
+  ],
+  "Tari": [
+    "Menguasai wiraga (gerakan dasar tari), wirama (ketukan irama musik), dan wirasa (ekspresi)",
+    "Mampu menghafal susunan pola lantai dan gerak tari dengan luwes dan kompak",
+    "Menunjukkan apresiasi terhadap seni budaya dan percaya diri saat tampil"
+  ],
+  "Robotik": [
+    "Memahami konsep dasar perakitan komponen mekanik dan elektronika robotik",
+    "Mampu menyusun logika algoritma pemrograman dasar untuk menggerakkan modul",
+    "Menunjukkan kreativitas dalam berinovasi dan tekun dalam menyelesaikan uji coba (troubleshooting)"
+  ],
+  "English Club": [
+    "Percaya diri dalam berkomunikasi dan mengekspresikan gagasan dalam bahasa Inggris sederhana",
+    "Menguasai kosakata fungsional tematik dan pelafalan (pronunciation) dengan jelas",
+    "Antusias berpartisipasi dalam permainan bahasa, storytelling, dan dialog interaktif"
+  ],
+  "Study Club": [
+    "Aktif berpartisipasi dan memiliki rasa ingin tahu yang tinggi dalam belajar",
+    "Mampu menyelesaikan tugas dan tantangan pemecahan masalah dengan baik",
+    "Mampu berkolaborasi dalam tim dan berbagi pemahaman dengan teman"
+  ]
+};
+
+export function getEkskulTps(allTps: Record<string, any[]> | undefined | null, ekskulName: string): any[] {
+  if (!ekskulName) return [];
+  const clean = ekskulName.trim();
+  const lowerClean = clean.toLowerCase();
+
+  // Deleted items set
+  const deletedArr = Array.isArray(allTps?._deleted)
+    ? allTps._deleted
+    : (Array.isArray(allTps?.deleted_tps) ? allTps.deleted_tps : []);
+  const deletedSet = new Set(deletedArr.map((id: any) => String(id || '').trim()));
+
+  // Retrieve any custom TPs saved for this ekskul
+  const fromAllTps = getSubjectTps(allTps, clean);
+  const fromPrefix = getSubjectTps(allTps, `Ekskul ${clean}`);
+  const customTps: any[] = [];
+  [...fromAllTps, ...fromPrefix].forEach((p) => {
+    const id = String(p.id || '').trim();
+    if (id && !deletedSet.has(id) && !customTps.some((c) => String(c.id).trim() === id)) {
+      customTps.push(p);
+    }
+  });
+
+  // Find matching default texts
+  const matchedKey = Object.keys(DEFAULT_EKSKUL_TPS).find((k) => {
+    const lk = k.toLowerCase();
+    return lk === lowerClean || lowerClean.includes(lk) || lk.includes(lowerClean);
+  });
+
+  const defaultTexts = matchedKey
+    ? DEFAULT_EKSKUL_TPS[matchedKey]
+    : [
+        `Menguasai teknik dan keterampilan dasar dalam kegiatan ${clean}`,
+        `Menunjukkan kedisiplinan, keaktifan, dan antusiasme dalam setiap sesi latihan`,
+        `Menunjukkan sikap sportivitas, etika yang baik, dan kerja sama tim`
+      ];
+
+  const defaultTps = defaultTexts
+    .map((text, idx) => ({
+      id: `tp_eks_${clean.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${idx + 1}`,
+      text,
+      kelas: "all",
+      isDefault: true
+    }))
+    .filter((tp) => !deletedSet.has(tp.id));
+
+  if (customTps.length === 0) {
+    return defaultTps;
+  }
+
+  // Merge custom TPs with default TPs (custom first, then defaults that don't duplicate text)
+  const merged = [...customTps];
+  defaultTps.forEach((def) => {
+    const isDup = merged.some(
+      (m) =>
+        String(m.id).trim() === String(def.id).trim() ||
+        String(m.text || "").trim().toLowerCase() === def.text.trim().toLowerCase()
+    );
+    if (!isDup) {
+      merged.push(def);
+    }
+  });
+
+  return merged;
 }
 
 export function cleanTpList(list: any[]): any[] {

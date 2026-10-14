@@ -172,7 +172,13 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
                           <span className="text-[10px] text-slate-400">
                             • {Array.isArray(t.subjects) && t.subjects.length > 1
                                 ? `${t.subjects.length} Mapel (${t.subjects.slice(0, 3).join(", ")}${t.subjects.length > 3 ? "..." : ""})`
-                                : `Mapel ${t.subject || "PAI"}`} {t.isWaliKelas ? `(Wali Kelas ${t.kelas})` : ""}
+                                : Array.isArray(t.subjects) && t.subjects.length === 1
+                                ? `Mapel ${t.subjects[0]}`
+                                : t.subject && t.subject !== "-" && t.subject !== "Pembina Ekskul"
+                                ? `Mapel ${t.subject}`
+                                : t.isEkskulTeacher || (Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0)
+                                ? `Pembina Ekskul ${Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0 ? t.ekskulNames.join(", ") : (t.ekskulName || "")}`
+                                : t.isWaliKelas ? "Wali Kelas" : "Guru"} {t.isWaliKelas ? `(Wali Kelas ${t.kelas})` : ""}
                           </span>
                         </div>
                       </button>

@@ -10,10 +10,16 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
-  where 
+  where,
+  writeBatch,
+  setLogLevel
 } from "firebase/firestore";
 import dbData from "../data/db.json";
-import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects } from "../types";
+
+try {
+  setLogLevel("error");
+} catch (e) {}
+import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects, isEkskulSubject } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -231,6 +237,9 @@ export function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   ]);
 }
 
+let isSeedingFirestore = false;
+let hasCheckedFirestore = false;
+
 if (isFirebaseConfigured) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -243,10 +252,8 @@ if (isFirebaseConfigured) {
     }
     console.log("Firebase initialized successfully with cloud Firestore.");
     
-    // Automatically populate Firestore in real-time immediately on boot if empty
+    // Automatically populate Firestore in real-time if completely empty
     seedFirestoreIfEmpty();
-    // Schedule a quick retry in case security rules or network are initializing
-    setTimeout(() => seedFirestoreIfEmpty(), 4000);
   } catch (error) {
     console.warn("Firebase initialization skipped or failed:", error);
   }
@@ -254,70 +261,102 @@ if (isFirebaseConfigured) {
 
 // Function to seed Firestore automatically in real-time if empty
 export async function seedFirestoreIfEmpty() {
+  if (isSeedingFirestore || hasCheckedFirestore) return;
   try {
     if (!db) return;
     
     // Check if teachers collection already exists
     const teachersRef = collection(db, "teachers");
-    const snapshot = await withTimeout(getDocs(teachersRef), 3500).catch(() => null);
+    const snapshot = await withTimeout(getDocs(teachersRef), 8000).catch(() => null);
     
+    // If the check was inconclusive (null from timeout/slow network), DO NOT seed!
+    if (!snapshot) {
+      console.log("Firestore availability check inconclusive or still connecting, skipping auto-seed.");
+      return;
+    }
+
     // If teachers collection exists and has documents, keep existing live data
-    if (snapshot && !snapshot.empty) {
+    if (!snapshot.empty) {
+      hasCheckedFirestore = true;
       console.log(`Firestore already has ${snapshot.size} teacher(s). Keeping live database records.`);
       return;
     }
 
     // Check alternative 'guru' collection
-    const snapGuru = await withTimeout(getDocs(collection(db, "guru")), 2000).catch(() => null);
+    const snapGuru = await withTimeout(getDocs(collection(db, "guru")), 4000).catch(() => null);
     if (snapGuru && !snapGuru.empty) {
+      hasCheckedFirestore = true;
       console.log("Existing 'guru' collection detected, keeping live records.");
       return;
     }
 
-    console.log("⚡ Auto-seeding Cloud Firestore in real-time with initial website data...");
+    isSeedingFirestore = true;
+    hasCheckedFirestore = true;
+    console.log("⚡ Auto-seeding Cloud Firestore with initial records using batched writes...");
     
-    // Get source data from localStorage if available, otherwise dbDataAny
     const sourceData = getLocalFallbackData();
+    let batch = writeBatch(db);
+    let countInBatch = 0;
+    let totalCommitted = 0;
 
-    const writePromises: Promise<any>[] = [];
+    const commitBatchIfFull = async () => {
+      if (countInBatch >= 150) {
+        await batch.commit();
+        totalCommitted += countInBatch;
+        batch = writeBatch(db);
+        countInBatch = 0;
+      }
+    };
 
     // 1. Teachers
     for (const t of (sourceData.teachers || [])) {
       if (isDummyTeacher(t)) continue;
-      writePromises.push(setDoc(doc(db, "teachers", t.id), t));
+      batch.set(doc(db, "teachers", t.id), t);
+      countInBatch++;
+      await commitBatchIfFull();
     }
 
     // 2. Students
     for (const s of (sourceData.students || [])) {
-      writePromises.push(setDoc(doc(db, "students", s.id), s));
+      batch.set(doc(db, "students", s.id), s);
+      countInBatch++;
+      await commitBatchIfFull();
     }
 
     // 3. Grades
     for (const g of (sourceData.grades || [])) {
       const id = `${g.studentId}_${g.subject.replace(/[^a-zA-Z0-9]/g, "_")}`;
-      writePromises.push(setDoc(doc(db, "grades", id), g));
+      batch.set(doc(db, "grades", id), g);
+      countInBatch++;
+      await commitBatchIfFull();
     }
 
     // 4. Wali Kelas Notes
     if (sourceData.walikelas_notes) {
       for (const [studentId, note] of Object.entries(sourceData.walikelas_notes)) {
-        writePromises.push(setDoc(doc(db, "walikelas_notes", studentId), note as any));
+        batch.set(doc(db, "walikelas_notes", studentId), note as any);
+        countInBatch++;
+        await commitBatchIfFull();
       }
     }
 
-    // 5. TP Templates (Only sync genuine teacher/admin created TPs)
+    // 5. TP Templates
     if (sourceData.tujuan_pembelajaran_templates) {
       for (const [subject, tps] of Object.entries(sourceData.tujuan_pembelajaran_templates)) {
         const cleanList = cleanTpList(tps as any[]);
         if (cleanList.length > 0) {
-          writePromises.push(setDoc(doc(db, "tujuan_pembelajaran_templates", subject), { tps: cleanList }));
+          batch.set(doc(db, "tujuan_pembelajaran_templates", subject), { tps: cleanList });
+          countInBatch++;
+          await commitBatchIfFull();
         }
       }
     }
 
     // 6. Settings
     if (sourceData.settings) {
-      writePromises.push(setDoc(doc(db, "settings", "app"), sourceData.settings));
+      batch.set(doc(db, "settings", "app"), sourceData.settings);
+      countInBatch++;
+      await commitBatchIfFull();
     }
 
     // 7. Ekskul
@@ -330,17 +369,21 @@ export async function seedFirestoreIfEmpty() {
       { id: "e6", name: "Study Club", type: "Pilihan" }
     ];
     for (const e of defaultEkskul) {
-      writePromises.push(setDoc(doc(db, "ekskul", e.id), e));
+      batch.set(doc(db, "ekskul", e.id), e);
+      countInBatch++;
+      await commitBatchIfFull();
     }
 
-    // Execute in parallel batches
-    const results = await Promise.allSettled(writePromises);
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    if (successful > 0) {
-      console.log(`✅ Cloud Firestore is now populated in real-time with ${successful} website records.`);
+    if (countInBatch > 0) {
+      await batch.commit();
+      totalCommitted += countInBatch;
     }
+
+    console.log(`✅ Cloud Firestore is now populated in real-time with ${totalCommitted} website records.`);
   } catch (error) {
-    console.warn("Auto-seed Firestore error (will retry when online/rules published):", error);
+    console.warn("Auto-seed Firestore error:", error);
+  } finally {
+    isSeedingFirestore = false;
   }
 }
 
@@ -622,9 +665,12 @@ export const firebaseApi = {
             const list: any[] = [];
             for (const docSnap of snap.docs) {
               const d = docSnap.data();
-              const subs = Array.isArray(d.subjects) && d.subjects.length > 0
-                ? d.subjects
-                : (d.subject ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+              const isEks = !!(d.isEkskulTeacher || d.is_ekskul_teacher || d.ekskulName || (Array.isArray(d.ekskulNames) && d.ekskulNames.length > 0));
+              const subs = Array.isArray(d.subjects)
+                ? d.subjects.filter(Boolean)
+                : (d.subject && d.subject !== "-" && d.subject !== "Pembina Ekskul" && d.subject !== "Pelatih Ekskul"
+                    ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)
+                    : []);
               const isWalas = !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali);
               const teacherObj = {
                 ...d,
@@ -632,11 +678,11 @@ export const firebaseApi = {
                 name: d.name || d.nama || d.namaGuru || d.nama_lengkap || d.namaLengkap || d.fullname || "Guru",
                 username: d.username || d.user || d.email || docSnap.id,
                 password: d.password || d.pass || "123",
-                subject: d.subject || d.mapel || d.mataPelajaran || d.mata_pelajaran || "Guru",
-                subjects: subs.length > 0 ? subs : [d.subject || "PAI"],
+                subject: subs.length > 0 ? subs.join(", ") : (d.subject || (isEks ? "Pembina Ekskul" : "")),
+                subjects: subs,
                 isWaliKelas: isWalas,
                 kelas: isWalas ? (d.kelas || d.rombel || d.class || "") : "",
-                isEkskulTeacher: !!(d.isEkskulTeacher || d.is_ekskul_teacher || d.ekskulName),
+                isEkskulTeacher: isEks,
                 ekskulName: d.ekskulName || d.ekskul || "",
               };
               if (isDummyTeacher(teacherObj)) {
@@ -673,11 +719,11 @@ export const firebaseApi = {
     let finalSubjects: string[] = [];
     if (Array.isArray(subjects) && subjects.length > 0) {
       finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
-    } else if (subject) {
+    } else if (subject && subject !== "-" && subject !== "Pembina Ekskul") {
       finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
     }
-    if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
-    const finalSubjectStr = finalSubjects.join(", ");
+    const isEkskulTeacherFlag = Boolean(isEkskulTeacher || ekskulName || (Array.isArray(body?.ekskulNames) && body.ekskulNames.length > 0));
+    const finalSubjectStr = finalSubjects.length > 0 ? finalSubjects.join(", ") : (isEkskulTeacherFlag ? "Pembina Ekskul" : "");
 
     const id = "t_" + Date.now();
     let finalEkskuls: string[] = [];
@@ -747,13 +793,13 @@ export const firebaseApi = {
     const cleanEksName = isEks ? finalEkskuls.join(", ") : "";
 
     let finalSubjects: string[] = [];
-    if (Array.isArray(subjects) && subjects.length > 0) {
+    if (Array.isArray(subjects)) {
       finalSubjects = Array.from(new Set(subjects.map((s: any) => String(s || '').trim()).filter(Boolean)));
-    } else if (subject) {
+    } else if (subject && subject !== "-" && subject !== "Pembina Ekskul") {
       finalSubjects = Array.from(new Set(String(subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)));
     }
-    if (finalSubjects.length === 0) finalSubjects = [subject || "PAI"];
-    const finalSubjectStr = finalSubjects.join(", ");
+    const isEkskulTeacherFlag = Boolean(isEkskulTeacher || ekskulName || (Array.isArray(ekskulNames) && ekskulNames.length > 0));
+    const finalSubjectStr = finalSubjects.length > 0 ? finalSubjects.join(", ") : (isEkskulTeacherFlag ? "Pembina Ekskul" : "");
 
     const updated = {
       id,
@@ -1112,7 +1158,27 @@ export const firebaseApi = {
     return fallback;
   },
   postWaliKelasNotes: async (body: any) => {
+    const fallback = getLocalFallbackData();
+    if (!fallback.walikelas_notes) fallback.walikelas_notes = {};
     const { studentId, sakit, izin, alpa, catatan, spiritualUsaha, spiritualProses, spiritualCapaian, spiritualDeskripsi, sosialUsaha, sosialProses, sosialCapaian, sosialDeskripsi, ekskul } = body;
+    const existing = fallback.walikelas_notes[studentId] || {};
+    const existingEkskuls = Array.isArray(existing.ekskul) ? existing.ekskul : [];
+    const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
+
+    const mergedEkskulMap = new Map();
+    existingEkskuls.forEach((e: any) => {
+      const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+      if (key) mergedEkskulMap.set(key, e);
+    });
+    incomingEkskuls.forEach((e: any) => {
+      const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+      if (key) {
+        const prev = mergedEkskulMap.get(key) || {};
+        mergedEkskulMap.set(key, { ...prev, ...e });
+      }
+    });
+    const finalEkskul = Array.from(mergedEkskulMap.values());
+
     const note = {
       sakit: Number(sakit || 0),
       izin: Number(izin || 0),
@@ -1126,7 +1192,7 @@ export const firebaseApi = {
       sosialProses: sosialProses || "B",
       sosialCapaian: sosialCapaian || "B",
       sosialDeskripsi: sosialDeskripsi || "",
-      ekskul: ekskul || []
+      ekskul: finalEkskul
     };
 
     // Update local
@@ -1152,11 +1218,13 @@ export const firebaseApi = {
 
   // 6. GET, POST, DELETE /api/tps
   getTPs: async (kelas?: string) => {
+    const deletedTpSet = getDeletedSet('tps');
     const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
     let templates: Record<string, any[]> = {};
     for (const [sub, list] of Object.entries(fallback)) {
+      if (isEkskulSubject(sub)) continue;
       if (Array.isArray(list)) {
-        templates[sub] = cleanTpList(list);
+        templates[sub] = cleanTpList(list).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
       }
     }
 
@@ -1167,8 +1235,12 @@ export const firebaseApi = {
           snap.docs.forEach((docSnap) => {
             const data = docSnap.data();
             const subjectId = docSnap.id;
+            if (isEkskulSubject(subjectId)) {
+              deleteDoc(doc(db, "tujuan_pembelajaran_templates", subjectId)).catch(() => {});
+              return;
+            }
             const originalList = Array.isArray(data.tps) ? data.tps : [];
-            let tpsList = cleanTpList(originalList);
+            let tpsList = cleanTpList(originalList).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
             const normKey = normalizeSubjectKey(subjectId) || subjectId;
             const existing = Array.isArray(templates[normKey])
               ? templates[normKey]
@@ -1176,8 +1248,8 @@ export const firebaseApi = {
 
             // Non-destructive merge between local and cloud TPs
             const mergedMap = new Map<string, any>();
-            existing.forEach((tp: any) => { if (tp && tp.id) mergedMap.set(String(tp.id).trim(), tp); });
-            tpsList.forEach((tp: any) => { if (tp && tp.id) mergedMap.set(String(tp.id).trim(), tp); });
+            existing.forEach((tp: any) => { if (tp && tp.id && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp); });
+            tpsList.forEach((tp: any) => { if (tp && tp.id && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp); });
             const mergedList = Array.from(mergedMap.values());
 
             templates[subjectId] = mergedList;
@@ -1198,19 +1270,19 @@ export const firebaseApi = {
       }
     }
 
-    // Safety net: Recover any TPs embedded in grades
+    // Safety net: Recover any TPs embedded in grades (excluding ekskul and deleted TPs)
     try {
       const grades = await firebaseApi.getGrades() as any[];
       if (Array.isArray(grades)) {
         grades.forEach((g: any) => {
-          if (g && g.subject && Array.isArray(g.tps) && g.tps.length > 0) {
+          if (g && g.subject && !isEkskulSubject(g.subject) && Array.isArray(g.tps) && g.tps.length > 0) {
             const sub = g.subject;
             const normSub = normalizeSubjectKey(sub) || sub;
-            const validTps = cleanTpList(g.tps);
+            const validTps = cleanTpList(g.tps).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
             if (validTps.length > 0) {
               const current = Array.isArray(templates[normSub]) ? templates[normSub] : [];
               const map = new Map<string, any>();
-              current.forEach((t) => map.set(String(t.id).trim(), t));
+              current.forEach((t) => { if (!deletedTpSet.has(String(t.id).trim())) map.set(String(t.id).trim(), t); });
               const fallbackStudents = getLocalFallbackData().students || [];
               const student = fallbackStudents.find((s: any) => String(s.id) === String(g.studentId));
               const studentClass = student ? String(student.kelas || student.classId || "") : "";
@@ -1460,8 +1532,18 @@ export const firebaseApi = {
                 );
               }
             }
-            localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
           }
+
+          // Purge deleted TP from all grades so recovery won't resurrect it
+          if (Array.isArray(dbObj.grades)) {
+            dbObj.grades.forEach((g: any) => {
+              if (Array.isArray(g.tps)) {
+                g.tps = g.tps.filter((x: any) => String(x.id).trim() !== cleanTpId);
+              }
+            });
+          }
+
+          localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
         }
       }
     } catch (e) {}
@@ -1810,6 +1892,7 @@ export const firebaseApi = {
       capaian: finalCapaian,
       predicate: finalCapaian,
       description: description || deskripsi || "",
+      tpAchievements: body?.tpAchievements || {},
     };
 
     if (existingIdx >= 0) {
@@ -1847,7 +1930,7 @@ export const firebaseApi = {
       ? fallback.ekskul
       : [
           { "id": "e1", "name": "Pramuka Siaga & Penggalang", "type": "Wajib" },
-          { "id": "e2", "name": "Mentoring & Bina Pribadi Islami", "type": "Wajib" },
+          { "id": "e2", "name": "Mentoring", "type": "Wajib" },
           { "id": "e3", "name": "Futsal", "type": "Pilihan" },
           { "id": "e4", "name": "Bulu Tangkis", "type": "Pilihan" },
           { "id": "e5", "name": "Panahan Tradisional", "type": "Pilihan" },

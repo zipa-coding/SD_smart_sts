@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Teacher, Student, SUBJECT_LIST, EkskulItem, getSubjectTps, matchTpClass, normalizeSubjectKey, isKeislamanSubject } from "../types";
+import { Teacher, Student, SUBJECT_LIST, EkskulItem, getSubjectTps, matchTpClass, normalizeSubjectKey, isKeislamanSubject, isEkskulSubject, getEkskulTps } from "../types";
 import { isFirebaseConfigured, firebaseApi } from "../lib/firebase";
 import {
   Users,
@@ -150,8 +150,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     name: "",
     username: "",
     password: "",
-    subject: "PAI",
-    subjects: ["PAI"] as string[],
+    subject: "",
+    subjects: [] as string[],
     isWaliKelas: false,
     kelas: "",
     isEkskulTeacher: false,
@@ -973,21 +973,22 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     }
     const cleanEkskulName = isEks ? chosenEkskuls.join(", ") : "";
 
-    const chosenSubjects = Array.isArray(teacherForm.subjects) && teacherForm.subjects.length > 0
+    const chosenSubjects = Array.isArray(teacherForm.subjects)
       ? teacherForm.subjects.filter(Boolean)
-      : (teacherForm.subject ? teacherForm.subject.split(",").map(s => s.trim()).filter(Boolean) : []);
+      : (teacherForm.subject && teacherForm.subject !== "-" && teacherForm.subject !== "Pembina Ekskul" 
+          ? teacherForm.subject.split(",").map(s => s.trim()).filter(Boolean) 
+          : []);
 
-    if (chosenSubjects.length === 0) {
-      setTeacherModalError("Silakan pilih setidaknya satu mata pelajaran yang diampu oleh guru.");
-      return;
-    }
+    const cleanSubject = chosenSubjects.length > 0
+      ? chosenSubjects.join(", ")
+      : (isEks ? "Pembina Ekskul" : "");
 
     const payload = {
       ...teacherForm,
       name: teacherForm.name.trim(),
       username: teacherForm.username.trim().toLowerCase(),
       password: teacherForm.password.trim(),
-      subject: chosenSubjects.join(", "),
+      subject: cleanSubject,
       subjects: chosenSubjects,
       kelas: teacherForm.isWaliKelas ? teacherForm.kelas : "",
       isEkskulTeacher: isEks && chosenEkskuls.length > 0,
@@ -1048,8 +1049,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
         name: "",
         username: "",
         password: "",
-        subject: subjectsList[0] || "PAI",
-        subjects: [subjectsList[0] || "PAI"],
+        subject: "",
+        subjects: [],
         isWaliKelas: false,
         kelas: "",
         isEkskulTeacher: false,
@@ -1097,15 +1098,17 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     const isEks = Boolean(t.isEkskulTeacher || assignedEksList.length > 0);
     const finalEkskuls = isEks ? (assignedEksList.length > 0 ? assignedEksList : (ekskuls.length > 0 ? [ekskuls[0].name] : [])) : [];
 
-    const subs = Array.isArray(t.subjects) && t.subjects.length > 0
-      ? t.subjects
-      : (t.subject ? t.subject.split(",").map(s => s.trim()).filter(Boolean) : [subjectsList[0] || "PAI"]);
+    const subs = Array.isArray(t.subjects)
+      ? t.subjects.filter(Boolean)
+      : (t.subject && t.subject !== "-" && t.subject !== "Pembina Ekskul" && t.subject !== "Pelatih Ekskul"
+          ? t.subject.split(",").map(s => s.trim()).filter(Boolean)
+          : []);
 
     setTeacherForm({
       name: t.name || "",
       username: t.username || "",
       password: t.password || "123",
-      subject: t.subject || subs.join(", ") || "PAI",
+      subject: subs.length > 0 ? subs.join(", ") : (isEks ? "Pembina Ekskul" : (t.subject || "")),
       subjects: subs,
       isWaliKelas: Boolean(t.isWaliKelas),
       kelas: t.kelas || "",
@@ -1736,8 +1739,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     name: "",
                     username: "",
                     password: "123",
-                    subject: subjectsList[0] || "PAI",
-                    subjects: [subjectsList[0] || "PAI"],
+                    subject: "",
+                    subjects: [],
                     isWaliKelas: false,
                     kelas: "",
                     isEkskulTeacher: false,
@@ -1828,7 +1831,14 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                             : (t.subject ? t.subject.split(",").map((s) => s.trim()).filter(Boolean) : []);
 
                           if (subs.length === 0) {
-                            return <span className="text-slate-500 italic text-[11px]">-</span>;
+                            if (t.isEkskulTeacher || (Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0) || t.subject === "Pembina Ekskul") {
+                              return (
+                                <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-950/80 text-amber-300 border border-amber-800/60 inline-flex items-center gap-1">
+                                  ⚽ Pembina Ekskul Saja
+                                </span>
+                              );
+                            }
+                            return <span className="text-slate-500 italic text-[11px]">- (Tanpa Mapel)</span>;
                           }
 
                           return (
@@ -2516,11 +2526,22 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 }
                 className="w-full p-2.5 bg-[#0c1424] border border-[#1e2e4a] rounded-xl text-xs md:text-sm text-white focus:outline-none focus:border-emerald-500 transition font-medium"
               >
-                {subjectsList.map((sub, i) => (
-                  <option key={i} value={sub}>
-                    {sub}
-                  </option>
-                ))}
+                <optgroup label="Mata Pelajaran">
+                  {subjectsList.filter((s) => !isEkskulSubject(s)).map((sub, i) => (
+                    <option key={i} value={sub}>
+                      {sub}
+                    </option>
+                  ))}
+                </optgroup>
+                {Array.isArray(ekskuls) && ekskuls.length > 0 && (
+                  <optgroup label="Ekstrakurikuler">
+                    {ekskuls.map((e) => (
+                      <option key={e.id} value={e.name}>
+                        ⚽ Ekskul: {e.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </div>
 
@@ -2573,7 +2594,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
 
           {/* Group display of subject templates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-            {subjectsList.map((subject) => {
+            {subjectsList.filter((s) => !isEkskulSubject(s)).map((subject) => {
               const allItems = getSubjectTps(tpsTemplates, subject);
               const items =
                 tpFilterClass === "all"
@@ -2650,6 +2671,71 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                             </div>
                           );
                         })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {Array.isArray(ekskuls) && ekskuls.map((ekskul) => {
+              const allItems = getEkskulTps(tpsTemplates, ekskul.name);
+              const items = tpFilterClass === "all"
+                ? allItems
+                : allItems.filter((item: any) => matchTpClass(item.kelas, tpFilterClass));
+
+              return (
+                <div
+                  key={`ekskul_${ekskul.id || ekskul.name}`}
+                  className="bg-[#090f1d] rounded-2xl border border-amber-600/40 p-4.5 shadow-sm flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 border-b border-[#1e2e4a] pb-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-3 py-1 bg-amber-950/80 text-amber-300 border border-amber-600/60 rounded-lg text-xs uppercase tracking-wider font-extrabold font-mono flex items-center gap-1.5">
+                          <span>⚽</span>
+                          <span>Ekskul: {ekskul.name}</span>
+                        </span>
+                        <span className="px-2 py-0.5 bg-amber-900/60 text-amber-200 border border-amber-700/40 rounded text-[10px] font-bold">
+                          {ekskul.type || "Pilihan"}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-mono text-amber-400 font-bold">
+                        {`${items.length} TP Ekskul`}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2">
+                      {items.length === 0 ? (
+                        <p className="text-xs text-slate-500 italic py-4 text-center bg-[#070d18] rounded-xl border border-dashed border-[#1e2e4a]">
+                          Belum ada indikator TP untuk kegiatan ekskul {ekskul.name}.
+                        </p>
+                      ) : (
+                        items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 bg-[#0c1424] rounded-xl border border-[#1e2e4a] flex items-start justify-between gap-3 text-xs hover:border-amber-500/40 transition"
+                          >
+                            <div className="flex-1 space-y-1.5">
+                              <p className="text-slate-100 leading-relaxed font-medium">
+                                {item.text}
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wide border font-mono bg-amber-950/70 text-amber-300 border-amber-800/60">
+                                  {item.isDefault ? "Indikator Standar" : "TP Tambahan Guru"}
+                                </span>
+                              </div>
+                            </div>
+                            {!item.isDefault && (
+                              <button
+                                onClick={() => deleteTpObjective(ekskul.name, item.id)}
+                                className="text-rose-400 hover:text-white p-1.5 rounded-lg hover:bg-rose-950/60 transition cursor-pointer shrink-0 mt-0.5"
+                                title="Hapus TP"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -3389,6 +3475,9 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-bold text-slate-200 font-mono uppercase tracking-wider">
                     Mata Pelajaran yang Diampu (Multi-Mapel)
+                    <span className="ml-1.5 text-[10px] text-amber-300 font-medium normal-case font-sans">
+                      (Boleh dikosongkan jika hanya menjadi Pembina Ekskul)
+                    </span>
                   </label>
                   <button
                     type="button"
@@ -3412,11 +3501,10 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                       const next = hasKeisl
                         ? teacherForm.subjects.filter((s) => s !== "Keislaman")
                         : [...teacherForm.subjects, "Keislaman"];
-                      const finalSubs = next.length > 0 ? next : ["PAI"];
                       setTeacherForm((prev) => ({
                         ...prev,
-                        subjects: finalSubs,
-                        subject: finalSubs.join(", "),
+                        subjects: next,
+                        subject: next.join(", "),
                       }));
                     }}
                     className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition border flex items-center gap-1 cursor-pointer ${
@@ -3425,7 +3513,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                         : "bg-slate-900 text-slate-300 border-slate-700 hover:border-teal-500 hover:text-white"
                     }`}
                   >
-                    <span>Paket Keislaman (4 Aspek Lengkap)</span>
+                    <span>Paket Keislaman (4 Aspek)</span>
                   </button>
 
                   <button
@@ -3444,22 +3532,38 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     + Pilih Mapel Umum
                   </button>
 
-                  {teacherForm.subjects.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const first = teacherForm.subjects[0] || "PAI";
-                        setTeacherForm((prev) => ({
-                          ...prev,
-                          subjects: [first],
-                          subject: first,
-                        }));
-                      }}
-                      className="px-2 py-1 text-[10px] font-medium text-rose-400 hover:text-rose-300 transition cursor-pointer underline"
-                    >
-                      Reset (Pilih 1 Saja)
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherForm((prev) => ({
+                        ...prev,
+                        subjects: ["PAI"],
+                        subject: "PAI",
+                      }));
+                    }}
+                    className="px-2 py-1 text-[10px] font-medium bg-slate-900 text-slate-300 hover:text-white border border-slate-800 rounded-lg transition cursor-pointer"
+                  >
+                    + PAI Saja
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTeacherForm((prev) => ({
+                        ...prev,
+                        subjects: [],
+                        subject: "",
+                      }));
+                    }}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition border cursor-pointer ${
+                      teacherForm.subjects.length === 0
+                        ? "bg-amber-950/80 text-amber-300 border-amber-600 font-extrabold"
+                        : "bg-slate-900 text-amber-400 border-slate-800 hover:border-amber-600/60 hover:text-amber-200"
+                    }`}
+                    title="Kosongkan semua mapel jika guru ini hanya membina ekstrakurikuler"
+                  >
+                    ✕ Kosongkan Mapel (Khusus Ekskul Saja)
+                  </button>
                 </div>
 
                 {/* Selected Subjects Tag Bar */}
@@ -3474,9 +3578,14 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   </div>
 
                   {teacherForm.subjects.length === 0 ? (
-                    <span className="text-xs text-rose-400 italic">
-                      Belum ada mapel terpilih. Silakan pilih minimal 1 mapel di bawah.
-                    </span>
+                    <div className="py-1">
+                      <span className="text-xs text-amber-300 italic font-medium">
+                        Tidak ada mata pelajaran yang dipilih.
+                      </span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        * Akun guru ini tetap dapat disimpan dengan sukses. Cocok untuk guru yang hanya menjadi <strong>Pembina Ekskul</strong> saja atau Wali Kelas.
+                      </p>
+                    </div>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {teacherForm.subjects.map((sub) => {
