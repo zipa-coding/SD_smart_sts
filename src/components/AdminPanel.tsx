@@ -1742,6 +1742,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     kelas: "",
                     isEkskulTeacher: false,
                     ekskulName: "",
+                    ekskulNames: [],
                   });
                   setIsTeacherModalOpen(true);
                 }}
@@ -3646,12 +3647,16 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                     onChange={(e) => {
                       const checked = e.target.checked;
                       const defaultEks = ekskuls.length > 0 ? ekskuls[0].name : "Pramuka Siaga & Penggalang";
+                      const currentEksNames = Array.isArray(teacherForm.ekskulNames) ? teacherForm.ekskulNames : [];
+                      let nextEksNames = [...currentEksNames];
+                      if (checked && nextEksNames.length === 0) {
+                        nextEksNames = [defaultEks];
+                      }
                       setTeacherForm((prev) => ({
                         ...prev,
                         isEkskulTeacher: checked,
-                        ekskulName: checked
-                          ? (prev.ekskulName && prev.ekskulName.trim() !== "" ? prev.ekskulName : defaultEks)
-                          : "",
+                        ekskulNames: checked ? nextEksNames : [],
+                        ekskulName: checked ? nextEksNames.join(", ") : "",
                       }));
                     }}
                     className="w-4 h-4 rounded border-slate-700 bg-[#070b14] text-amber-500 focus:ring-amber-500"
@@ -3683,12 +3688,12 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
 
                   {/* Selected Ekskul Badges Bar */}
                   <div className="p-2 bg-[#0c1424] border border-[#1e2e4a] rounded-lg flex flex-wrap gap-1.5 min-h-[36px] items-center">
-                    {teacherForm.ekskulNames.length === 0 ? (
+                    {(!Array.isArray(teacherForm.ekskulNames) || teacherForm.ekskulNames.length === 0) ? (
                       <span className="text-[11px] text-amber-400/80 italic">
                         Belum ada ekskul dipilih. Klik ekskul di bawah untuk menugaskan guru ini.
                       </span>
                     ) : (
-                      teacherForm.ekskulNames.map((eksName) => (
+                      (teacherForm.ekskulNames || []).map((eksName) => (
                         <span
                           key={eksName}
                           className="px-2.5 py-1 rounded-lg bg-amber-950 text-amber-200 border border-amber-600/80 text-xs font-bold flex items-center gap-1.5 shadow-xs"
@@ -3697,7 +3702,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                           <button
                             type="button"
                             onClick={() => {
-                              const next = teacherForm.ekskulNames.filter((n) => n !== eksName);
+                              const safeNames = Array.isArray(teacherForm.ekskulNames) ? teacherForm.ekskulNames : [];
+                              const next = safeNames.filter((n) => n !== eksName);
                               setTeacherForm((prev) => ({
                                 ...prev,
                                 ekskulNames: next,
@@ -3718,7 +3724,8 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   {/* Multi-Ekskul Selector Buttons Grid */}
                   <div className="max-h-[140px] overflow-y-auto p-2 bg-[#080d19] border border-[#1e2e4a] rounded-xl grid grid-cols-2 gap-1.5">
                     {ekskuls.map((eks) => {
-                      const isSelected = teacherForm.ekskulNames.includes(eks.name);
+                      const safeNames = Array.isArray(teacherForm.ekskulNames) ? teacherForm.ekskulNames : [];
+                      const isSelected = safeNames.includes(eks.name);
                       return (
                         <button
                           key={eks.id}
@@ -3726,9 +3733,9 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                           onClick={() => {
                             let next: string[];
                             if (isSelected) {
-                              next = teacherForm.ekskulNames.filter((n) => n !== eks.name);
+                              next = safeNames.filter((n) => n !== eks.name);
                             } else {
-                              next = [...teacherForm.ekskulNames, eks.name];
+                              next = [...safeNames, eks.name];
                             }
                             setTeacherForm((prev) => ({
                               ...prev,
