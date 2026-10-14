@@ -473,6 +473,22 @@ function extractTeacherSubjects(t: any): string[] {
     }
   }
 
+  if (t && t.isWaliKelas && expanded.filter(s => s !== "Pembina Ekskul" && s !== "Pelatih Ekskul" && s !== "Admin").length <= 1) {
+    const defaultWaliSubs = [
+      "Bahasa Indonesia",
+      "PPKN",
+      "Matematika",
+      "IPAS",
+      "Seni Budaya",
+      "TIK",
+      "Bahasa Inggris",
+      "Life skill"
+    ];
+    defaultWaliSubs.forEach(sub => {
+      if (!expanded.includes(sub)) expanded.push(sub);
+    });
+  }
+
   return expanded;
 }
 

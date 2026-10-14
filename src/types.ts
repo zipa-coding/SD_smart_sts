@@ -231,6 +231,23 @@ export function getTeacherAssignedSubjects(
   const cleanedAcademic = expanded.filter(
     (s) => s !== "Pembina Ekskul" && s !== "Pelatih Ekskul" && s !== "Admin" && s !== "-"
   );
+
+  if (teacher.isWaliKelas && cleanedAcademic.length <= 1) {
+    const defaultWaliSubs = [
+      "Bahasa Indonesia",
+      "PPKN",
+      "Matematika",
+      "IPAS",
+      "Seni Budaya",
+      "TIK",
+      "Bahasa Inggris",
+      "Life skill"
+    ];
+    defaultWaliSubs.forEach((sub) => {
+      if (!cleanedAcademic.includes(sub)) cleanedAcademic.push(sub);
+    });
+  }
+
   if (cleanedAcademic.length > 0) return cleanedAcademic;
 
   // If teacher has no academic subjects (e.g. Pembina Ekskul only), return empty array
