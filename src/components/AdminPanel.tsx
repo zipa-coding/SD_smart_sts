@@ -964,14 +964,14 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
     setError("");
 
     const isEks = Boolean(teacherForm.isEkskulTeacher);
-    const chosenEkskuls = Array.isArray(teacherForm.ekskulNames) && teacherForm.ekskulNames.length > 0
+    let chosenEkskuls = Array.isArray(teacherForm.ekskulNames) && teacherForm.ekskulNames.length > 0
       ? teacherForm.ekskulNames.filter(Boolean)
       : (teacherForm.ekskulName ? teacherForm.ekskulName.split(",").map(s => s.trim()).filter(Boolean) : []);
     
-    if (isEks && chosenEkskuls.length === 0 && ekskuls.length > 0) {
-      chosenEkskuls.push(ekskuls[0].name);
+    if (isEks && chosenEkskuls.length === 0 && editingTeacher) {
+      chosenEkskuls = Array.isArray(editingTeacher.ekskulNames) ? editingTeacher.ekskulNames : (editingTeacher.ekskulName ? editingTeacher.ekskulName.split(",").map((s: string) => s.trim()).filter(Boolean) : []);
     }
-    const cleanEkskulName = isEks ? chosenEkskuls.join(", ") : "";
+    const cleanEkskulName = (isEks && chosenEkskuls.length > 0) ? chosenEkskuls.join(", ") : "";
 
     const chosenSubjects = Array.isArray(teacherForm.subjects)
       ? teacherForm.subjects.filter(Boolean)

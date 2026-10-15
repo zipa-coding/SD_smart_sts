@@ -718,29 +718,34 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const list = db.teachers
         .filter((t: any) => !isDummyTeacher(t))
         .map((t: any) => {
-        const eks = db.ekskul.find(
-          (e: any) =>
-            (e.teacherId && String(e.teacherId) === String(t.id)) ||
-            (t.isEkskulTeacher && t.ekskulName && e.name.toLowerCase().trim() === t.ekskulName.toLowerCase().trim())
-        );
-        const subs = Array.isArray(t.subjects) && t.subjects.length > 0
-          ? t.subjects
-          : (t.subject ? String(t.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
-        const base = {
-          ...t,
-          subjects: subs.length > 0 ? subs : [t.subject || "PAI"],
-          isEkskulTeacher: Boolean(t.isEkskulTeacher || eks),
-          ekskulName: eks ? eks.name : (t.ekskulName || ""),
-        };
-        if (eks) {
+          const assignedEkskuls = (db.ekskul || [])
+            .filter((e: any) => e.teacherId && String(e.teacherId) === String(t.id))
+            .map((e: any) => e.name);
+
+          const rawEksNames = Array.isArray(t.ekskulNames) && t.ekskulNames.length > 0
+            ? t.ekskulNames
+            : (t.ekskulName ? String(t.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+
+          const allEksSet = new Set<string>();
+          assignedEkskuls.forEach((e: string) => { if (e) allEksSet.add(e.trim()); });
+          rawEksNames.forEach((e: string) => { if (e) allEksSet.add(e.trim()); });
+          const finalEkskuls = Array.from(allEksSet);
+
+          const subs = Array.isArray(t.subjects) && t.subjects.length > 0
+            ? t.subjects
+            : (t.subject ? String(t.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+
+          const isEks = Boolean(t.isEkskulTeacher || finalEkskuls.length > 0);
+
           return {
-            ...base,
-            isEkskulTeacher: true,
-            ekskulName: eks.name,
+            ...t,
+            subjects: subs.length > 0 ? subs : (t.subject ? [t.subject] : []),
+            subject: subs.length > 0 ? subs.join(", ") : (t.subject || ""),
+            isEkskulTeacher: isEks,
+            ekskulNames: finalEkskuls,
+            ekskulName: finalEkskuls.join(", "),
           };
-        }
-        return base;
-      });
+        });
 
       return new Response(JSON.stringify(list), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
@@ -1054,13 +1059,28 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const existingEkskuls = Array.isArray(existingNote.ekskul) ? existingNote.ekskul : [];
       const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
 
+      const normalizeEkskulKey = (name: string): string => {
+        if (!name) return "";
+        const clean = String(name).toLowerCase().trim();
+        if (clean.includes("panahan")) return "panahan";
+        if (clean.includes("pramuka")) return "pramuka";
+        if (clean.includes("futsal")) return "futsal";
+        if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
+        if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+        if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+        if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
+        if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
+        if (clean.includes("mentoring")) return "mentoring";
+        return clean;
+      };
+
       const mergedEkskulMap = new Map();
       existingEkskuls.forEach((e: any) => {
-        const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+        const key = normalizeEkskulKey(e.name || e.ekskulName || "");
         if (key) mergedEkskulMap.set(key, e);
       });
       incomingEkskuls.forEach((e: any) => {
-        const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+        const key = normalizeEkskulKey(e.name || e.ekskulName || "");
         if (key) {
           const prev = mergedEkskulMap.get(key) || {};
           mergedEkskulMap.set(key, { ...prev, ...e });
@@ -1068,19 +1088,31 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       });
       const finalEkskul = Array.from(mergedEkskulMap.values());
 
+      const spiritualDeskFinal =
+        spiritualDeskripsi !== undefined && spiritualDeskripsi !== null
+          ? String(spiritualDeskripsi)
+          : (existingNote.spiritualDeskripsi || "");
+      const sosialDeskFinal =
+        sosialDeskripsi !== undefined && sosialDeskripsi !== null
+          ? String(sosialDeskripsi)
+          : (existingNote.sosialDeskripsi || "");
+
       db.walikelas_notes[studentId] = {
-        sakit: Number(sakit || 0),
-        izin: Number(izin || 0),
-        alpa: Number(alpa || 0),
-        catatan: catatan || "",
-        spiritualUsaha: spiritualUsaha || "B",
-        spiritualProses: spiritualProses || "B",
-        spiritualCapaian: spiritualCapaian || "B",
-        spiritualDeskripsi: spiritualDeskripsi || "",
-        sosialUsaha: sosialUsaha || "B",
-        sosialProses: sosialProses || "B",
-        sosialCapaian: sosialCapaian || "B",
-        sosialDeskripsi: sosialDeskripsi || "",
+        sakit: sakit !== undefined && sakit !== null ? Number(sakit) : Number(existingNote.sakit || 0),
+        izin: izin !== undefined && izin !== null ? Number(izin) : Number(existingNote.izin || 0),
+        alpa: alpa !== undefined && alpa !== null ? Number(alpa) : Number(existingNote.alpa || 0),
+        catatan: catatan !== undefined && catatan !== null ? String(catatan) : (existingNote.catatan || ""),
+
+        spiritualUsaha: spiritualUsaha || existingNote.spiritualUsaha || "B",
+        spiritualProses: spiritualProses || existingNote.spiritualProses || "B",
+        spiritualCapaian: spiritualCapaian || existingNote.spiritualCapaian || "B",
+        spiritualDeskripsi: spiritualDeskFinal,
+
+        sosialUsaha: sosialUsaha || existingNote.sosialUsaha || "B",
+        sosialProses: sosialProses || existingNote.sosialProses || "B",
+        sosialCapaian: sosialCapaian || existingNote.sosialCapaian || "B",
+        sosialDeskripsi: sosialDeskFinal,
+
         ekskul: finalEkskul
       };
       saveDB(db);
@@ -1357,13 +1389,41 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         (e: any) => e.name.toLowerCase().trim() === trimmedName.toLowerCase().trim()
       );
 
+      const oldTeacherId = target ? target.teacherId : "";
+
       let assignedTeacherName = "";
       if (teacherId) {
         const t = db.teachers.find((tc: any) => String(tc.id) === String(teacherId));
         if (t) {
           assignedTeacherName = t.name;
           t.isEkskulTeacher = true;
-          t.ekskulName = trimmedName;
+          if (!Array.isArray(t.ekskulNames)) {
+            t.ekskulNames = t.ekskulName
+              ? String(t.ekskulName).split(",").map((s: any) => String(s || "").trim()).filter(Boolean)
+              : [];
+          }
+          if (!t.ekskulNames.includes(trimmedName)) {
+            t.ekskulNames.push(trimmedName);
+          }
+          t.ekskulName = t.ekskulNames.join(", ");
+        }
+      }
+
+      if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+        const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+        if (prevT) {
+          const remainingEkskuls = db.ekskul.filter(
+            (e: any) => String(e.id) !== String(target?.id) && String(e.teacherId) === String(oldTeacherId)
+          );
+          if (remainingEkskuls.length > 0) {
+            prevT.isEkskulTeacher = true;
+            prevT.ekskulNames = remainingEkskuls.map((e: any) => e.name);
+            prevT.ekskulName = prevT.ekskulNames.join(", ");
+          } else {
+            prevT.isEkskulTeacher = false;
+            prevT.ekskulNames = [];
+            prevT.ekskulName = "";
+          }
         }
       }
 
@@ -1461,6 +1521,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
       const idx = db.ekskul.findIndex((e: any) => String(e.id) === String(id));
       let target = idx !== -1 ? db.ekskul[idx] : null;
+      const oldTeacherId = target ? target.teacherId : "";
+      const oldName = target ? target.name : "";
 
       let assignedTeacherName = "";
       if (teacherId) {
@@ -1468,19 +1530,40 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         if (t) {
           assignedTeacherName = t.name;
           t.isEkskulTeacher = true;
-          t.ekskulName = trimmedName || (target ? target.name : "");
+          if (!Array.isArray(t.ekskulNames)) {
+            t.ekskulNames = t.ekskulName
+              ? String(t.ekskulName).split(",").map((s: any) => String(s || "").trim()).filter(Boolean)
+              : [];
+          }
+          if (oldName && oldName !== trimmedName) {
+            t.ekskulNames = t.ekskulNames.map((n: string) => n === oldName ? trimmedName : n);
+          }
+          if (!t.ekskulNames.includes(trimmedName)) {
+            t.ekskulNames.push(trimmedName);
+          }
+          t.ekskulName = t.ekskulNames.join(", ");
+        }
+      }
+
+      if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+        const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+        if (prevT) {
+          const remainingEkskuls = db.ekskul.filter(
+            (e: any) => String(e.id) !== String(id) && String(e.teacherId) === String(oldTeacherId)
+          );
+          if (remainingEkskuls.length > 0) {
+            prevT.isEkskulTeacher = true;
+            prevT.ekskulNames = remainingEkskuls.map((e: any) => e.name);
+            prevT.ekskulName = prevT.ekskulNames.join(", ");
+          } else {
+            prevT.isEkskulTeacher = false;
+            prevT.ekskulNames = [];
+            prevT.ekskulName = "";
+          }
         }
       }
 
       if (target) {
-        const oldTeacherId = target.teacherId;
-        if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
-          const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
-          if (prevT) {
-            prevT.isEkskulTeacher = false;
-            prevT.ekskulName = "";
-          }
-        }
         target.name = trimmedName || target.name;
         target.type = type || target.type;
         target.teacherId = teacherId || "";
@@ -1536,9 +1619,41 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         db.walikelas_notes[studentId].ekskul = [];
       }
 
-      const existingIdx = db.walikelas_notes[studentId].ekskul.findIndex(
-        (e: any) => e && (e.name === ekskulName || e.ekskulName === ekskulName)
-      );
+      const normTarget = ((name: string) => {
+        if (!name) return "";
+        const clean = String(name).toLowerCase().trim();
+        if (clean.includes("panahan")) return "panahan";
+        if (clean.includes("pramuka")) return "pramuka";
+        if (clean.includes("futsal")) return "futsal";
+        if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
+        if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+        if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+        if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
+        if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
+        if (clean.includes("mentoring")) return "mentoring";
+        return clean;
+      })(ekskulName);
+
+      const existingIdx = db.walikelas_notes[studentId].ekskul.findIndex((e: any) => {
+        if (!e) return false;
+        const eName = e.name || e.ekskulName || "";
+        if (eName === ekskulName) return true;
+        const eNorm = ((name: string) => {
+          if (!name) return "";
+          const clean = String(name).toLowerCase().trim();
+          if (clean.includes("panahan")) return "panahan";
+          if (clean.includes("pramuka")) return "pramuka";
+          if (clean.includes("futsal")) return "futsal";
+          if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
+          if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+          if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+          if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
+          if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
+          if (clean.includes("mentoring")) return "mentoring";
+          return clean;
+        })(eName);
+        return eNorm && normTarget && eNorm === normTarget;
+      });
 
       const finalCapaian = capaian || predicate || "B";
       const ekskulEntry = {

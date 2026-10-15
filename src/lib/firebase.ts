@@ -672,6 +672,9 @@ export const firebaseApi = {
                     ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)
                     : []);
               const isWalas = !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali);
+              const rawEks = Array.isArray(d.ekskulNames) && d.ekskulNames.length > 0
+                ? d.ekskulNames
+                : (d.ekskulName ? String(d.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
               const teacherObj = {
                 ...d,
                 id: docSnap.id,
@@ -683,7 +686,8 @@ export const firebaseApi = {
                 isWaliKelas: isWalas,
                 kelas: isWalas ? (d.kelas || d.rombel || d.class || "") : "",
                 isEkskulTeacher: isEks,
-                ekskulName: d.ekskulName || d.ekskul || "",
+                ekskulName: rawEks.join(", "),
+                ekskulNames: rawEks,
               };
               if (isDummyTeacher(teacherObj)) {
                 // Permanently clean from Firestore collection
@@ -1098,16 +1102,31 @@ export const firebaseApi = {
       };
     };
 
-    if (!db) return rawFallback.map(sanitizeGrade);
-    try {
-      const snap = await withTimeout(getDocs(collection(db, "grades")), 6000);
-      if (snap && !snap.empty) {
-        return snap.docs.map(docSnap => sanitizeGrade(docSnap.data()));
+    const gradeMap = new Map<string, any>();
+    rawFallback.forEach((g: any) => {
+      if (g && g.studentId && g.subject) {
+        const key = `${g.studentId}_${normalizeSubjectKey(g.subject)}`;
+        gradeMap.set(key, sanitizeGrade(g));
       }
-    } catch (e) {
-      console.warn("Failed to get grades from Firestore:", e);
+    });
+
+    if (db) {
+      try {
+        const snap = await withTimeout(getDocs(collection(db, "grades")), 6000);
+        if (snap && !snap.empty) {
+          snap.docs.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data && data.studentId && data.subject) {
+              const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
+              gradeMap.set(key, sanitizeGrade({ ...(gradeMap.get(key) || {}), ...data }));
+            }
+          });
+        }
+      } catch (e) {
+        console.warn("Failed to get grades from Firestore:", e);
+      }
     }
-    return rawFallback.map(sanitizeGrade);
+    return Array.from(gradeMap.values());
   },
   postGrade: async (body: any) => {
     const { studentId, subject, score, tps, teacherName, usaha, proses, capaian, deskripsi } = body;
@@ -1148,11 +1167,27 @@ export const firebaseApi = {
     try {
       const snap = await withTimeout(getDocs(collection(db, "walikelas_notes")), 3500);
       if (snap && !snap.empty) {
-        const notes: any = {};
-        snap.docs.forEach(docSnap => {
-          notes[docSnap.id] = docSnap.data();
+        const mergedNotes: any = { ...fallback };
+        snap.docs.forEach((docSnap) => {
+          const cloudData = docSnap.data();
+          const localData = mergedNotes[docSnap.id] || {};
+          const eksMap = new Map();
+          (Array.isArray(localData.ekskul) ? localData.ekskul : []).forEach((e: any) => {
+            if (e && (e.name || e.ekskulName)) eksMap.set(String(e.name || e.ekskulName).toLowerCase().trim(), e);
+          });
+          (Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []).forEach((e: any) => {
+            if (e && (e.name || e.ekskulName)) {
+              const k = String(e.name || e.ekskulName).toLowerCase().trim();
+              eksMap.set(k, { ...(eksMap.get(k) || {}), ...e });
+            }
+          });
+          mergedNotes[docSnap.id] = {
+            ...localData,
+            ...cloudData,
+            ekskul: Array.from(eksMap.values()),
+          };
         });
-        return notes;
+        return mergedNotes;
       }
     } catch (err) {}
     return fallback;
@@ -1165,13 +1200,28 @@ export const firebaseApi = {
     const existingEkskuls = Array.isArray(existing.ekskul) ? existing.ekskul : [];
     const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
 
+    const normalizeEkskulKey = (name: string): string => {
+      if (!name) return "";
+      const clean = String(name).toLowerCase().trim();
+      if (clean.includes("panahan")) return "panahan";
+      if (clean.includes("pramuka")) return "pramuka";
+      if (clean.includes("futsal")) return "futsal";
+      if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
+      if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+      if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+      if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
+      if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
+      if (clean.includes("mentoring")) return "mentoring";
+      return clean;
+    };
+
     const mergedEkskulMap = new Map();
     existingEkskuls.forEach((e: any) => {
-      const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+      const key = normalizeEkskulKey(e.name || e.ekskulName || "");
       if (key) mergedEkskulMap.set(key, e);
     });
     incomingEkskuls.forEach((e: any) => {
-      const key = (e.name || e.ekskulName || "").toLowerCase().trim();
+      const key = normalizeEkskulKey(e.name || e.ekskulName || "");
       if (key) {
         const prev = mergedEkskulMap.get(key) || {};
         mergedEkskulMap.set(key, { ...prev, ...e });
@@ -1179,19 +1229,31 @@ export const firebaseApi = {
     });
     const finalEkskul = Array.from(mergedEkskulMap.values());
 
+    const spiritualDeskFinal =
+      spiritualDeskripsi !== undefined && spiritualDeskripsi !== null
+        ? String(spiritualDeskripsi)
+        : (existing.spiritualDeskripsi || "");
+    const sosialDeskFinal =
+      sosialDeskripsi !== undefined && sosialDeskripsi !== null
+        ? String(sosialDeskripsi)
+        : (existing.sosialDeskripsi || "");
+
     const note = {
-      sakit: Number(sakit || 0),
-      izin: Number(izin || 0),
-      alpa: Number(alpa || 0),
-      catatan: catatan || "",
-      spiritualUsaha: spiritualUsaha || "B",
-      spiritualProses: spiritualProses || "B",
-      spiritualCapaian: spiritualCapaian || "B",
-      spiritualDeskripsi: spiritualDeskripsi || "",
-      sosialUsaha: sosialUsaha || "B",
-      sosialProses: sosialProses || "B",
-      sosialCapaian: sosialCapaian || "B",
-      sosialDeskripsi: sosialDeskripsi || "",
+      sakit: sakit !== undefined && sakit !== null ? Number(sakit) : Number(existing.sakit || 0),
+      izin: izin !== undefined && izin !== null ? Number(izin) : Number(existing.izin || 0),
+      alpa: alpa !== undefined && alpa !== null ? Number(alpa) : Number(existing.alpa || 0),
+      catatan: catatan !== undefined && catatan !== null ? String(catatan) : (existing.catatan || ""),
+
+      spiritualUsaha: spiritualUsaha || existing.spiritualUsaha || "B",
+      spiritualProses: spiritualProses || existing.spiritualProses || "B",
+      spiritualCapaian: spiritualCapaian || existing.spiritualCapaian || "B",
+      spiritualDeskripsi: spiritualDeskFinal,
+
+      sosialUsaha: sosialUsaha || existing.sosialUsaha || "B",
+      sosialProses: sosialProses || existing.sosialProses || "B",
+      sosialCapaian: sosialCapaian || existing.sosialCapaian || "B",
+      sosialDeskripsi: sosialDeskFinal,
+
       ekskul: finalEkskul
     };
 
@@ -1879,9 +1941,41 @@ export const firebaseApi = {
       fallback.walikelas_notes[studentId].ekskul = [];
     }
 
-    const existingIdx = fallback.walikelas_notes[studentId].ekskul.findIndex(
-      (e: any) => e && (e.name === ekskulName || e.ekskulName === ekskulName)
-    );
+    const normTarget = ((name: string) => {
+      if (!name) return "";
+      const clean = String(name).toLowerCase().trim();
+      if (clean.includes("panahan")) return "panahan";
+      if (clean.includes("pramuka")) return "pramuka";
+      if (clean.includes("futsal")) return "futsal";
+      if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
+      if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+      if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+      if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
+      if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
+      if (clean.includes("mentoring")) return "mentoring";
+      return clean;
+    })(ekskulName);
+
+    const existingIdx = fallback.walikelas_notes[studentId].ekskul.findIndex((e: any) => {
+      if (!e) return false;
+      const eName = e.name || e.ekskulName || "";
+      if (eName === ekskulName) return true;
+      const eNorm = ((name: string) => {
+        if (!name) return "";
+        const clean = String(name).toLowerCase().trim();
+        if (clean.includes("panahan")) return "panahan";
+        if (clean.includes("pramuka")) return "pramuka";
+        if (clean.includes("futsal")) return "futsal";
+        if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
+        if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+        if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+        if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
+        if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
+        if (clean.includes("mentoring")) return "mentoring";
+        return clean;
+      })(eName);
+      return eNorm && normTarget && eNorm === normTarget;
+    });
 
     const finalCapaian = capaian || predicate || "B";
     const ekskulEntry = {
@@ -1972,13 +2066,47 @@ export const firebaseApi = {
       (e: any) => e.name.toLowerCase().trim() === trimmedName.toLowerCase().trim()
     );
 
+    const oldTeacherId = target ? target.teacherId : "";
+
     let assignedTeacherName = "";
     if (teacherId) {
       const t = fallback.teachers.find((tc: any) => String(tc.id) === String(teacherId));
       if (t) {
         assignedTeacherName = t.name;
         t.isEkskulTeacher = true;
-        t.ekskulName = trimmedName;
+        if (!Array.isArray(t.ekskulNames)) {
+          t.ekskulNames = t.ekskulName
+            ? String(t.ekskulName).split(",").map((s: any) => String(s || "").trim()).filter(Boolean)
+            : [];
+        }
+        if (!t.ekskulNames.includes(trimmedName)) {
+          t.ekskulNames.push(trimmedName);
+        }
+        t.ekskulName = t.ekskulNames.join(", ");
+        if (db) {
+          withTimeout(setDoc(doc(db, "teachers", String(t.id)), t, { merge: true }), 2500).catch(() => {});
+        }
+      }
+    }
+
+    if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+      const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+      if (prevT) {
+        const remainingEkskuls = fallback.ekskul.filter(
+          (e: any) => String(e.id) !== String(target?.id) && String(e.teacherId) === String(oldTeacherId)
+        );
+        if (remainingEkskuls.length > 0) {
+          prevT.isEkskulTeacher = true;
+          prevT.ekskulNames = remainingEkskuls.map((e: any) => e.name);
+          prevT.ekskulName = prevT.ekskulNames.join(", ");
+        } else {
+          prevT.isEkskulTeacher = false;
+          prevT.ekskulNames = [];
+          prevT.ekskulName = "";
+        }
+        if (db) {
+          withTimeout(setDoc(doc(db, "teachers", String(prevT.id)), prevT, { merge: true }), 2500).catch(() => {});
+        }
       }
     }
 
@@ -2020,6 +2148,8 @@ export const firebaseApi = {
 
     const idx = fallback.ekskul.findIndex((e: any) => String(e.id) === String(id));
     let target = idx !== -1 ? fallback.ekskul[idx] : null;
+    const oldTeacherId = target ? target.teacherId : "";
+    const oldName = target ? target.name : "";
 
     let assignedTeacherName = "";
     if (teacherId) {
@@ -2027,19 +2157,46 @@ export const firebaseApi = {
       if (t) {
         assignedTeacherName = t.name;
         t.isEkskulTeacher = true;
-        t.ekskulName = trimmedName || (target ? target.name : "");
+        if (!Array.isArray(t.ekskulNames)) {
+          t.ekskulNames = t.ekskulName
+            ? String(t.ekskulName).split(",").map((s: any) => String(s || "").trim()).filter(Boolean)
+            : [];
+        }
+        if (oldName && oldName !== trimmedName) {
+          t.ekskulNames = t.ekskulNames.map((n: string) => n === oldName ? trimmedName : n);
+        }
+        if (!t.ekskulNames.includes(trimmedName)) {
+          t.ekskulNames.push(trimmedName);
+        }
+        t.ekskulName = t.ekskulNames.join(", ");
+        if (db) {
+          withTimeout(setDoc(doc(db, "teachers", String(t.id)), t, { merge: true }), 2500).catch(() => {});
+        }
+      }
+    }
+
+    if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+      const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
+      if (prevT) {
+        const remainingEkskuls = fallback.ekskul.filter(
+          (e: any) => String(e.id) !== String(id) && String(e.teacherId) === String(oldTeacherId)
+        );
+        if (remainingEkskuls.length > 0) {
+          prevT.isEkskulTeacher = true;
+          prevT.ekskulNames = remainingEkskuls.map((e: any) => e.name);
+          prevT.ekskulName = prevT.ekskulNames.join(", ");
+        } else {
+          prevT.isEkskulTeacher = false;
+          prevT.ekskulNames = [];
+          prevT.ekskulName = "";
+        }
+        if (db) {
+          withTimeout(setDoc(doc(db, "teachers", String(prevT.id)), prevT, { merge: true }), 2500).catch(() => {});
+        }
       }
     }
 
     if (target) {
-      const oldTeacherId = target.teacherId;
-      if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
-        const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
-        if (prevT) {
-          prevT.isEkskulTeacher = false;
-          prevT.ekskulName = "";
-        }
-      }
       target.name = trimmedName || target.name;
       target.type = type || target.type;
       target.teacherId = teacherId || "";
