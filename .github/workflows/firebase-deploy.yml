@@ -25,36 +25,55 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Verify & Deploy to Firebase
+      - name: Prepare Firebase Credentials
+        id: firebase_prep
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
+          RAW_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 || secrets.GCP_SA_KEY || secrets.GOOGLE_CREDENTIALS }}
+          RAW_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          node -e '
+            const fs = require("fs");
+            const saRaw = process.env.RAW_SA || "";
+            const tokenRaw = process.env.RAW_TOKEN || "";
+            let hasSa = false;
+            let projectId = "smart-sd-sts";
+
+            if (saRaw.trim().startsWith("{")) {
+              try {
+                const parsed = JSON.parse(saRaw.trim());
+                if (parsed.project_id) {
+                  projectId = parsed.project_id;
+                }
+                hasSa = true;
+                fs.writeFileSync(".firebaserc", JSON.stringify({ projects: { default: projectId } }, null, 2));
+                console.log("Detected Service Account for project:", projectId);
+              } catch (e) {
+                console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:", e.message);
+              }
+            }
+
+            const hasToken = !hasSa && tokenRaw.trim().length > 0;
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_sa=${hasSa}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_token=${hasToken}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `project_id=${projectId}\n`);
+
+            if (!hasSa && !hasToken) {
+              console.warn("PERINGATAN: Belum ada secret FIREBASE_SERVICE_ACCOUNT atau FIREBASE_TOKEN di GitHub Secrets.");
+            }
+          '
+
+      - name: Deploy to Firebase Hosting (Service Account)
+        if: steps.firebase_prep.outputs.has_sa == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 || secrets.GCP_SA_KEY || secrets.GOOGLE_CREDENTIALS }}
+          channelId: live
+          projectId: ${{ steps.firebase_prep.outputs.project_id }}
+
+      - name: Deploy to Firebase Hosting (Token)
+        if: steps.firebase_prep.outputs.has_token == 'true'
+        env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
-          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "✅ Menggunakan FIREBASE_SERVICE_ACCOUNT..."
-            echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json
-            npx -y firebase-tools deploy --only firestore:rules --project smart-sd-sts || echo "Firestore rules deploy skipped"
-            npx -y firebase-tools deploy --only hosting --project smart-sd-sts
-            rm -f /tmp/sa.json
-          elif [ -n "$FIREBASE_TOKEN" ]; then
-            echo "✅ Menggunakan FIREBASE_TOKEN..."
-            npx -y firebase-tools deploy --only firestore:rules --project smart-sd-sts --token "$FIREBASE_TOKEN" || echo "Firestore rules deploy skipped"
-            npx -y firebase-tools deploy --only hosting --project smart-sd-sts --token "$FIREBASE_TOKEN"
-          else
-            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT atau FIREBASE_TOKEN belum disetel di GitHub Secrets!"
-            echo "======================================================================================"
-            echo "PETUNJUK PENYELESAIAN:"
-            echo "1. Buka Firebase Console: https://console.firebase.google.com/project/smart-sd-sts/settings/serviceaccounts/adminsdk"
-            echo "2. Klik tombol 'Generate new private key' (akan mendownload file .json)"
-            echo "3. Buka repository ini di GitHub -> Settings -> Secrets and variables -> Actions"
-            echo "4. Klik 'New repository secret'"
-            echo "   - Name: FIREBASE_SERVICE_ACCOUNT"
-            echo "   - Secret: Tempelkan (paste) seluruh isi file .json tersebut"
-            echo "5. Klik 'Add secret', lalu jalankan ulang workflow ini (Re-run jobs)."
-            echo "======================================================================================"
-            exit 1
-          fi
-
-
-
+          npx -y firebase-tools deploy --only hosting --project "${{ steps.firebase_prep.outputs.project_id }}" --token "$FIREBASE_TOKEN"
