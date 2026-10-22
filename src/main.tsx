@@ -23,15 +23,17 @@ if (import.meta.env.PROD) {
 // Keep reference to original fetch
 const originalFetch = window.fetch;
 
-// Determine if we should use local localStorage mock API
-// We use mock API if on *.github.io, if protocol is file:, or if there is no server running
+// Determine if we should use local localStorage/Firebase mock API directly without hitting an Express backend first
 const isStaticHost = 
   window.location.hostname.includes('github.io') || 
   window.location.hostname.includes('gmpg.io') ||
+  window.location.hostname.includes('web.app') ||
+  window.location.hostname.includes('firebaseapp.com') ||
   window.location.protocol === 'file:';
 
 // Memory cache for client-side storage simulation
 let clientDbCache: any = null;
+let clientDbVersion = Date.now();
 
 // Initialize localStorage with db.json seed data if empty
 function initializeLocalStorage() {
@@ -186,6 +188,9 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
   initializeLocalStorage();
   const getDB = () => {
+    if (clientDbCache) {
+      return clientDbCache;
+    }
     try {
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem('smart_sts_db');
@@ -198,14 +203,16 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         }
       }
     } catch (e) {}
-    const db = clientDbCache || JSON.parse(JSON.stringify(dbData));
+    const db = JSON.parse(JSON.stringify(dbData));
     if (Array.isArray(db.teachers)) {
       db.teachers = db.teachers.filter((t: any) => !isDummyTeacher(t));
     }
+    clientDbCache = db;
     return db;
   };
   const saveDB = (data: any) => {
     clientDbCache = data;
+    clientDbVersion = Date.now();
     localStorage.setItem('smart_sts_db', JSON.stringify(data));
   };
 
@@ -215,6 +222,13 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     
   const method = init?.method?.toUpperCase() || 'GET';
   const body = init?.body ? JSON.parse(init.body as string) : null;
+
+  if (path === '/api/db-version' && method === 'GET') {
+    return new Response(JSON.stringify({ version: clientDbVersion, timestamp: Date.now() }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 
   try {
     if (isFirebaseConfigured) {

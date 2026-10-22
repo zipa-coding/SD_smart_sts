@@ -57,6 +57,9 @@ export default function App() {
     let lastVersion = 0;
 
     const checkServerSync = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       try {
         const res = await fetch("/api/db-version", { cache: "no-store" });
         if (res.ok) {
@@ -77,12 +80,14 @@ export default function App() {
     // Initial check
     checkServerSync();
 
-    // Check periodically every 3 seconds for instant real-time sync across laptops/phones
-    const syncInterval = setInterval(checkServerSync, 3000);
+    // Check periodically every 8 seconds for multi-device sync without overloading CPU/network
+    const syncInterval = setInterval(checkServerSync, 8000);
 
     // Also check immediately when window gets focus or user switches tab
     const handleFocusSync = () => {
-      checkServerSync();
+      if (document.visibilityState === "visible") {
+        checkServerSync();
+      }
     };
 
     window.addEventListener("focus", handleFocusSync);
@@ -173,14 +178,19 @@ export default function App() {
       }
     };
 
+    let lastWriteTime = Date.now();
     const updateActivity = () => {
-      sessionStorage.setItem("smp_islam_smart_last_active", Date.now().toString());
+      const now = Date.now();
+      if (now - lastWriteTime > 5000) {
+        lastWriteTime = now;
+        sessionStorage.setItem("smp_islam_smart_last_active", now.toString());
+      }
     };
 
-    // Listen to various desktop & mobile user events
-    const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart", "click"];
+    // Listen to various desktop & mobile user events with passive option for smooth scrolling
+    const events = ["mousedown", "keydown", "touchstart", "click"];
     events.forEach(event => {
-      window.addEventListener(event, updateActivity);
+      window.addEventListener(event, updateActivity, { passive: true });
     });
 
     // Check inactivity every 20 seconds
@@ -207,7 +217,7 @@ export default function App() {
 
   const handleLoginSuccess = (user: Teacher) => {
     setCurrentUser(user);
-    setVisitedTabs({ progress: true, teacher_panel: true });
+    setVisitedTabs({ progress: true });
     sessionStorage.setItem("smp_islam_smart_user", JSON.stringify(user));
     sessionStorage.setItem("smp_islam_smart_last_active", Date.now().toString());
     try {

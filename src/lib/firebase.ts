@@ -70,12 +70,69 @@ export function isDummyTeacher(t: any): boolean {
   return false;
 }
 
+let cachedRawDbStr: string | null = null;
+let cachedParsedDb: any = null;
+
+// Short-lived in-memory cache & in-flight request deduplication for Firestore reads
+const firestoreReadCache: Record<string, { data: any; timestamp: number; promise?: Promise<any> }> = {};
+const CACHE_TTL_MS = 5000;
+
+function getCachedOrFetch<T>(key: string, fetcher: () => Promise<T>, ttlMs = CACHE_TTL_MS): Promise<T> {
+  const now = Date.now();
+  const entry = firestoreReadCache[key];
+  if (entry) {
+    if (entry.data !== undefined && now - entry.timestamp < ttlMs) {
+      return Promise.resolve(entry.data as T);
+    }
+    if (entry.promise) {
+      return entry.promise as Promise<T>;
+    }
+  }
+  const p = fetcher()
+    .then((res) => {
+      firestoreReadCache[key] = { data: res, timestamp: Date.now() };
+      return res;
+    })
+    .catch((err) => {
+      if (firestoreReadCache[key]) delete firestoreReadCache[key].promise;
+      throw err;
+    });
+  firestoreReadCache[key] = { data: entry?.data, timestamp: entry?.timestamp || 0, promise: p };
+  return p;
+}
+
+function invalidateFirestoreCache(keys?: string[]) {
+  if (!keys || keys.length === 0) {
+    for (const k of Object.keys(firestoreReadCache)) {
+      delete firestoreReadCache[k];
+    }
+    return;
+  }
+  for (const k of keys) {
+    delete firestoreReadCache[k];
+  }
+}
+
+function saveLocalFallbackDb(dbObj: any) {
+  try {
+    if (typeof window !== 'undefined') {
+      const str = JSON.stringify(dbObj);
+      cachedRawDbStr = str;
+      cachedParsedDb = dbObj;
+      localStorage.setItem("smart_sts_db", str);
+    }
+  } catch (e) {}
+}
+
 // Helpers to guarantee data is NEVER lost and immediately persists
 export function getLocalFallbackData() {
   try {
     if (typeof window !== 'undefined') {
       const raw = localStorage.getItem("smart_sts_db");
       if (raw) {
+        if (raw === cachedRawDbStr && cachedParsedDb) {
+          return cachedParsedDb;
+        }
         const parsed = JSON.parse(raw);
         if (parsed && typeof parsed === 'object') {
           let updated = false;
@@ -126,7 +183,10 @@ export function getLocalFallbackData() {
             });
           }
           if (updated) {
-            localStorage.setItem("smart_sts_db", JSON.stringify(parsed));
+            saveLocalFallbackDb(parsed);
+          } else {
+            cachedRawDbStr = raw;
+            cachedParsedDb = parsed;
           }
           return parsed;
         }
@@ -177,8 +237,7 @@ export function unmarkDeletedId(key: string, id: string | string[]) {
 export function updateLocalFallbackItem(collectionName: 'students' | 'teachers' | 'grades' | 'ekskul', item: any, idKey: string = 'id') {
   try {
     if (typeof window === 'undefined') return;
-    const raw = localStorage.getItem("smart_sts_db");
-    const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+    const dbObj = getLocalFallbackData();
     if (!dbObj[collectionName]) dbObj[collectionName] = [];
     
     if (collectionName === 'grades') {
@@ -209,7 +268,8 @@ export function updateLocalFallbackItem(collectionName: 'students' | 'teachers' 
         dbObj[collectionName].push(item);
       }
     }
-    localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+    saveLocalFallbackDb(dbObj);
+    invalidateFirestoreCache([collectionName, 'tps']);
   } catch (e) {
     console.warn("Failed to update local storage item:", e);
   }
@@ -218,10 +278,8 @@ export function updateLocalFallbackItem(collectionName: 'students' | 'teachers' 
 export function deleteLocalFallbackItem(collectionName: 'students' | 'teachers' | 'grades' | 'ekskul', id: string, idKey: string = 'id') {
   try {
     if (typeof window === 'undefined') return;
-    const raw = localStorage.getItem("smart_sts_db");
-    if (!raw) return;
-    const dbObj = JSON.parse(raw);
-    if (!dbObj[collectionName]) return;
+    const dbObj = getLocalFallbackData();
+    if (!dbObj || !dbObj[collectionName]) return;
     dbObj[collectionName] = dbObj[collectionName].filter((x: any) => String(x[idKey]) !== String(id));
     
     // Cascading clean up for students
@@ -234,7 +292,8 @@ export function deleteLocalFallbackItem(collectionName: 'students' | 'teachers' 
       }
     }
 
-    localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+    saveLocalFallbackDb(dbObj);
+    invalidateFirestoreCache([collectionName, 'grades', 'notes', 'tps']);
   } catch (e) {}
 }
 
@@ -682,68 +741,69 @@ export const firebaseApi = {
 
   // 2. GET & POST /api/teachers
   getTeachers: async (): Promise<any[]> => {
-    const deleted = getDeletedSet('teachers');
-    const fallback = (getLocalFallbackData().teachers || []).filter(
-      (t: any) => !deleted.has(String(t.id)) && !deleted.has(String(t.username || ""))
-    );
-    if (!db) return fallback;
-    const teacherCollections = ["teachers", "guru", "Teachers", "Guru", "data_guru", "dataGuru", "data_teachers", "DataGuru", "ustadz"];
-    try {
-      for (const colName of teacherCollections) {
-        try {
-          const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
-          if (snap && !snap.empty) {
-            const list: any[] = [];
-            for (const docSnap of snap.docs) {
-              const d = docSnap.data();
-              const isEks = !!(d.isEkskulTeacher || d.is_ekskul_teacher || d.ekskulName || (Array.isArray(d.ekskulNames) && d.ekskulNames.length > 0));
-              const subs = Array.isArray(d.subjects)
-                ? d.subjects.filter(Boolean)
-                : (d.subject && d.subject !== "-" && d.subject !== "Pembina Ekskul" && d.subject !== "Pelatih Ekskul"
-                    ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)
-                    : []);
-              const isWalas = !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali);
-              const rawEks = Array.isArray(d.ekskulNames) && d.ekskulNames.length > 0
-                ? d.ekskulNames
-                : (d.ekskulName ? String(d.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
-              const teacherObj = {
-                ...d,
-                id: docSnap.id,
-                name: d.name || d.nama || d.namaGuru || d.nama_lengkap || d.namaLengkap || d.fullname || "Guru",
-                username: d.username || d.user || d.email || docSnap.id,
-                password: d.password || d.pass || "123",
-                subject: subs.length > 0 ? subs.join(", ") : (d.subject || (isEks ? "Pembina Ekskul" : "")),
-                subjects: subs,
-                isWaliKelas: isWalas,
-                kelas: isWalas ? (d.kelas || d.rombel || d.class || "") : "",
-                isEkskulTeacher: isEks,
-                ekskulName: rawEks.join(", "),
-                ekskulNames: rawEks,
-              };
-              if (isDummyTeacher(teacherObj)) {
-                // Permanently clean from Firestore collection
-                deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
-                continue;
+    return getCachedOrFetch('teachers', async () => {
+      const deleted = getDeletedSet('teachers');
+      const fallback = (getLocalFallbackData().teachers || []).filter(
+        (t: any) => !deleted.has(String(t.id)) && !deleted.has(String(t.username || ""))
+      );
+      if (!db) return fallback;
+      const teacherCollections = ["teachers", "guru"];
+      try {
+        for (const colName of teacherCollections) {
+          try {
+            const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
+            if (snap && !snap.empty) {
+              const list: any[] = [];
+              for (const docSnap of snap.docs) {
+                const d = docSnap.data();
+                const isEks = !!(d.isEkskulTeacher || d.is_ekskul_teacher || d.ekskulName || (Array.isArray(d.ekskulNames) && d.ekskulNames.length > 0));
+                const subs = Array.isArray(d.subjects)
+                  ? d.subjects.filter(Boolean)
+                  : (d.subject && d.subject !== "-" && d.subject !== "Pembina Ekskul" && d.subject !== "Pelatih Ekskul"
+                      ? String(d.subject).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)
+                      : []);
+                const isWalas = !!(d.isWaliKelas || d.waliKelas || d.is_wali_kelas || d.isWali);
+                const rawEks = Array.isArray(d.ekskulNames) && d.ekskulNames.length > 0
+                  ? d.ekskulNames
+                  : (d.ekskulName ? String(d.ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean) : []);
+                const teacherObj = {
+                  ...d,
+                  id: docSnap.id,
+                  name: d.name || d.nama || d.namaGuru || d.nama_lengkap || d.namaLengkap || d.fullname || "Guru",
+                  username: d.username || d.user || d.email || docSnap.id,
+                  password: d.password || d.pass || "123",
+                  subject: subs.length > 0 ? subs.join(", ") : (d.subject || (isEks ? "Pembina Ekskul" : "")),
+                  subjects: subs,
+                  isWaliKelas: isWalas,
+                  kelas: isWalas ? (d.kelas || d.rombel || d.class || "") : "",
+                  isEkskulTeacher: isEks,
+                  ekskulName: rawEks.join(", "),
+                  ekskulNames: rawEks,
+                };
+                if (isDummyTeacher(teacherObj)) {
+                  deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+                  continue;
+                }
+                const purgedIds = ["t_1790913955043", "t_1790914206952", "t_1790914287812", "t_1790914329138"];
+                if (purgedIds.includes(String(teacherObj.id))) {
+                  deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
+                  continue;
+                }
+                if (!deleted.has(String(teacherObj.id)) && !deleted.has(String(teacherObj.username || ""))) {
+                  list.push(teacherObj);
+                }
               }
-              const purgedIds = ["t_1790913955043", "t_1790914206952", "t_1790914287812", "t_1790914329138"];
-              if (purgedIds.includes(String(teacherObj.id))) {
-                deleteDoc(doc(db, colName, docSnap.id)).catch(() => {});
-                continue;
-              }
-              if (!deleted.has(String(teacherObj.id)) && !deleted.has(String(teacherObj.username || ""))) {
-                list.push(teacherObj);
-              }
+              return list;
             }
-            return list;
+          } catch (err) {
+            // continue
           }
-        } catch (err) {
-          // continue
         }
+      } catch (e) {
+        console.warn("Failed to get teachers from Firestore:", e);
       }
-    } catch (e) {
-      console.warn("Failed to get teachers from Firestore:", e);
-    }
-    return fallback;
+      return fallback;
+    });
   },
   postTeacher: async (body: any) => {
     const { name, username, password, subject, subjects, isWaliKelas, kelas, isEkskulTeacher, ekskulName } = body;
@@ -916,37 +976,39 @@ export const firebaseApi = {
 
   // 3. GET, POST, PUT, DELETE /api/students
   getStudents: async (): Promise<any[]> => {
-    const deleted = getDeletedSet('students');
-    const fallback = (getLocalFallbackData().students || []).filter(
-      (s: any) => !deleted.has(String(s.id)) && !deleted.has(String(s.nisn || ""))
-    );
-    if (!db) return fallback;
-    const studentCollections = ["students", "siswa", "Students", "Siswa", "data_siswa", "dataSiswa", "data_students", "DataSiswa", "santri"];
-    try {
-      for (const colName of studentCollections) {
-        try {
-          const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
-          if (snap && !snap.empty) {
-            const list = snap.docs.map(docSnap => {
-              const d = docSnap.data();
-              return {
-                id: docSnap.id,
-                name: d.name || d.nama || d.namaSiswa || d.nama_lengkap || d.namaLengkap || d.fullname || "Siswa",
-                nisn: d.nisn || d.nis || d.nisnSiswa || d.nis_nisn || d.no_induk || docSnap.id,
-                kelas: String(d.kelas || d.rombel || d.class || d.tingkat || "1").trim(),
-                ...d
-              };
-            });
-            return list.filter((s: any) => !deleted.has(String(s.id)) && !deleted.has(String(s.nisn || "")));
+    return getCachedOrFetch('students', async () => {
+      const deleted = getDeletedSet('students');
+      const fallback = (getLocalFallbackData().students || []).filter(
+        (s: any) => !deleted.has(String(s.id)) && !deleted.has(String(s.nisn || ""))
+      );
+      if (!db) return fallback;
+      const studentCollections = ["students", "siswa"];
+      try {
+        for (const colName of studentCollections) {
+          try {
+            const snap = await withTimeout(getDocs(collection(db, colName)), 4000).catch(() => null);
+            if (snap && !snap.empty) {
+              const list = snap.docs.map(docSnap => {
+                const d = docSnap.data();
+                return {
+                  id: docSnap.id,
+                  name: d.name || d.nama || d.namaSiswa || d.nama_lengkap || d.namaLengkap || d.fullname || "Siswa",
+                  nisn: d.nisn || d.nis || d.nisnSiswa || d.nis_nisn || d.no_induk || docSnap.id,
+                  kelas: String(d.kelas || d.rombel || d.class || d.tingkat || "1").trim(),
+                  ...d
+                };
+              });
+              return list.filter((s: any) => !deleted.has(String(s.id)) && !deleted.has(String(s.nisn || "")));
+            }
+          } catch (err) {
+            // continue
           }
-        } catch (err) {
-          // continue
         }
+      } catch (e) {
+        console.warn("Failed to get students from Firestore:", e);
       }
-    } catch (e) {
-      console.warn("Failed to get students from Firestore:", e);
-    }
-    return fallback;
+      return fallback;
+    });
   },
   postStudent: async (body: any) => {
     const { name, nisn, kelas } = body;
@@ -1123,54 +1185,55 @@ export const firebaseApi = {
 
   // 4. GET & POST /api/grades
   getGrades: async (): Promise<any[]> => {
-    const rawFallback = getLocalFallbackData().grades || [];
-    const sanitizeGrade = (g: any) => {
-      if (!g) return g;
-      const cleanTps = Array.isArray(g.tps) ? cleanTpList(g.tps) : [];
-      return {
-        ...g,
-        tps: cleanTps,
+    return getCachedOrFetch('grades', async () => {
+      const rawFallback = getLocalFallbackData().grades || [];
+      const sanitizeGrade = (g: any) => {
+        if (!g) return g;
+        const cleanTps = Array.isArray(g.tps) ? cleanTpList(g.tps) : [];
+        return {
+          ...g,
+          tps: cleanTps,
+        };
       };
-    };
 
-    const gradeMap = new Map<string, any>();
-    rawFallback.forEach((g: any) => {
-      if (g && g.studentId && g.subject) {
-        const key = `${g.studentId}_${normalizeSubjectKey(g.subject)}`;
-        const prev = gradeMap.get(key);
-        gradeMap.set(key, prev ? pickNewerGrade(prev, sanitizeGrade(g)) : sanitizeGrade(g));
-      }
-    });
-
-    if (db) {
-      try {
-        const snap = await withTimeout(getDocs(collection(db, "grades")), 6000);
-        if (snap && !snap.empty) {
-          snap.docs.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data && data.studentId && data.subject) {
-              const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
-              const prev = gradeMap.get(key);
-              const cleaned = sanitizeGrade(data);
-              gradeMap.set(key, prev ? pickNewerGrade(prev, cleaned) : cleaned);
-            }
-          });
-
-          // Persist deduplicated最新 grades back to localStorage so local cache is never stale
-          try {
-            if (typeof window !== "undefined") {
-              const raw = localStorage.getItem("smart_sts_db");
-              const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
-              dbObj.grades = Array.from(gradeMap.values());
-              localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
-            }
-          } catch (e) {}
+      const gradeMap = new Map<string, any>();
+      rawFallback.forEach((g: any) => {
+        if (g && g.studentId && g.subject) {
+          const key = `${g.studentId}_${normalizeSubjectKey(g.subject)}`;
+          const prev = gradeMap.get(key);
+          gradeMap.set(key, prev ? pickNewerGrade(prev, sanitizeGrade(g)) : sanitizeGrade(g));
         }
-      } catch (e) {
-        console.warn("Failed to get grades from Firestore:", e);
+      });
+
+      if (db) {
+        try {
+          const snap = await withTimeout(getDocs(collection(db, "grades")), 6000);
+          if (snap && !snap.empty) {
+            snap.docs.forEach((docSnap) => {
+              const data = docSnap.data();
+              if (data && data.studentId && data.subject) {
+                const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
+                const prev = gradeMap.get(key);
+                const cleaned = sanitizeGrade(data);
+                gradeMap.set(key, prev ? pickNewerGrade(prev, cleaned) : cleaned);
+              }
+            });
+
+            // Persist deduplicated grades back to localStorage so local cache is never stale
+            try {
+              if (typeof window !== "undefined") {
+                const dbObj = getLocalFallbackData();
+                dbObj.grades = Array.from(gradeMap.values());
+                saveLocalFallbackDb(dbObj);
+              }
+            } catch (e) {}
+          }
+        } catch (e) {
+          console.warn("Failed to get grades from Firestore:", e);
+        }
       }
-    }
-    return Array.from(gradeMap.values());
+      return Array.from(gradeMap.values());
+    });
   },
   postGrade: async (body: any) => {
     const { studentId, subject, score, tps, teacherName, usaha, proses, capaian, deskripsi } = body;
@@ -1228,84 +1291,84 @@ export const firebaseApi = {
 
   // 5. GET & POST /api/walikelas/notes
   getWaliKelasNotes: async () => {
-    const fallbackDb = getLocalFallbackData();
-    const fallback = fallbackDb.walikelas_notes || {};
-    const masterEkskuls = Array.isArray(fallbackDb.ekskul) ? fallbackDb.ekskul : [];
+    return getCachedOrFetch('notes', async () => {
+      const fallbackDb = getLocalFallbackData();
+      const fallback = fallbackDb.walikelas_notes || {};
+      const masterEkskuls = Array.isArray(fallbackDb.ekskul) ? fallbackDb.ekskul : [];
 
-    const cleanNoteMap = (rawMap: any) => {
-      const res: any = {};
-      for (const [sId, noteObj] of Object.entries(rawMap || {})) {
-        const n = noteObj as any;
-        if (!n || typeof n !== "object") continue;
-        res[sId] = {
-          ...n,
-          ekskul: deduplicateStudentEkskuls(n.ekskul, n.deletedEkskuls, masterEkskuls),
-        };
-      }
-      return res;
-    };
-
-    if (!db) return cleanNoteMap(fallback);
-    try {
-      const snap = await withTimeout(getDocs(collection(db, "walikelas_notes")), 3500);
-      if (snap && !snap.empty) {
-        const mergedNotes: any = { ...fallback };
-        snap.docs.forEach((docSnap) => {
-          const cloudData = docSnap.data() || {};
-          const localData = mergedNotes[docSnap.id] || {};
-
-          const combinedDeleted = Array.from(
-            new Set([
-              ...(Array.isArray(localData.deletedEkskuls) ? localData.deletedEkskuls : []),
-              ...(Array.isArray(cloudData.deletedEkskuls) ? cloudData.deletedEkskuls : []),
-            ])
-          );
-
-          const combinedEkskuls = [
-            ...(Array.isArray(localData.ekskul) ? localData.ekskul : []),
-            ...(Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []),
-          ];
-          const dedupedEkskul = deduplicateStudentEkskuls(combinedEkskuls, combinedDeleted, masterEkskuls);
-
-          // Never let an empty string from an ekskul-only save overwrite a teacher's spiritual/sosial description
-          const cloudSpDesc = String(cloudData.spiritualDeskripsi || "").trim();
-          const localSpDesc = String(localData.spiritualDeskripsi || "").trim();
-          const cloudSoDesc = String(cloudData.sosialDeskripsi || "").trim();
-          const localSoDesc = String(localData.sosialDeskripsi || "").trim();
-          const cloudCat = String(cloudData.catatan || "").trim();
-          const localCat = String(localData.catatan || "").trim();
-
-          mergedNotes[docSnap.id] = {
-            ...localData,
-            ...cloudData,
-            spiritualUsaha: cloudData.spiritualUsaha || localData.spiritualUsaha || "B",
-            spiritualProses: cloudData.spiritualProses || localData.spiritualProses || "B",
-            spiritualCapaian: cloudData.spiritualCapaian || localData.spiritualCapaian || "B",
-            spiritualDeskripsi: cloudSpDesc || localSpDesc || "",
-            sosialUsaha: cloudData.sosialUsaha || localData.sosialUsaha || "B",
-            sosialProses: cloudData.sosialProses || localData.sosialProses || "B",
-            sosialCapaian: cloudData.sosialCapaian || localData.sosialCapaian || "B",
-            sosialDeskripsi: cloudSoDesc || localSoDesc || "",
-            catatan: cloudCat || localCat || "",
-            ekskul: dedupedEkskul,
-            deletedEkskuls: combinedDeleted,
+      const cleanNoteMap = (rawMap: any) => {
+        const res: any = {};
+        for (const [sId, noteObj] of Object.entries(rawMap || {})) {
+          const n = noteObj as any;
+          if (!n || typeof n !== "object") continue;
+          res[sId] = {
+            ...n,
+            ekskul: deduplicateStudentEkskuls(n.ekskul, n.deletedEkskuls, masterEkskuls),
           };
-        });
+        }
+        return res;
+      };
 
-        const finalCleaned = cleanNoteMap(mergedNotes);
-        try {
-          if (typeof window !== "undefined") {
-            const raw = localStorage.getItem("smart_sts_db");
-            const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
-            dbObj.walikelas_notes = finalCleaned;
-            localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
-          }
-        } catch (e) {}
+      if (!db) return cleanNoteMap(fallback);
+      try {
+        const snap = await withTimeout(getDocs(collection(db, "walikelas_notes")), 3500);
+        if (snap && !snap.empty) {
+          const mergedNotes: any = { ...fallback };
+          snap.docs.forEach((docSnap) => {
+            const cloudData = docSnap.data() || {};
+            const localData = mergedNotes[docSnap.id] || {};
 
-        return finalCleaned;
-      }
-    } catch (err) {}
-    return cleanNoteMap(fallback);
+            const combinedDeleted = Array.from(
+              new Set([
+                ...(Array.isArray(localData.deletedEkskuls) ? localData.deletedEkskuls : []),
+                ...(Array.isArray(cloudData.deletedEkskuls) ? cloudData.deletedEkskuls : []),
+              ])
+            );
+
+            const combinedEkskuls = [
+              ...(Array.isArray(localData.ekskul) ? localData.ekskul : []),
+              ...(Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []),
+            ];
+            const dedupedEkskul = deduplicateStudentEkskuls(combinedEkskuls, combinedDeleted, masterEkskuls);
+
+            const cloudSpDesc = String(cloudData.spiritualDeskripsi || "").trim();
+            const localSpDesc = String(localData.spiritualDeskripsi || "").trim();
+            const cloudSoDesc = String(cloudData.sosialDeskripsi || "").trim();
+            const localSoDesc = String(localData.sosialDeskripsi || "").trim();
+            const cloudCat = String(cloudData.catatan || "").trim();
+            const localCat = String(localData.catatan || "").trim();
+
+            mergedNotes[docSnap.id] = {
+              ...localData,
+              ...cloudData,
+              spiritualUsaha: cloudData.spiritualUsaha || localData.spiritualUsaha || "B",
+              spiritualProses: cloudData.spiritualProses || localData.spiritualProses || "B",
+              spiritualCapaian: cloudData.spiritualCapaian || localData.spiritualCapaian || "B",
+              spiritualDeskripsi: cloudSpDesc || localSpDesc || "",
+              sosialUsaha: cloudData.sosialUsaha || localData.sosialUsaha || "B",
+              sosialProses: cloudData.sosialProses || localData.sosialProses || "B",
+              sosialCapaian: cloudData.sosialCapaian || localData.sosialCapaian || "B",
+              sosialDeskripsi: cloudSoDesc || localSoDesc || "",
+              catatan: cloudCat || localCat || "",
+              ekskul: dedupedEkskul,
+              deletedEkskuls: combinedDeleted,
+            };
+          });
+
+          const finalCleaned = cleanNoteMap(mergedNotes);
+          try {
+            if (typeof window !== "undefined") {
+              const dbObj = getLocalFallbackData();
+              dbObj.walikelas_notes = finalCleaned;
+              saveLocalFallbackDb(dbObj);
+            }
+          } catch (e) {}
+
+          return finalCleaned;
+        }
+      } catch (err) {}
+      return cleanNoteMap(fallback);
+    });
   },
   postWaliKelasNotes: async (body: any) => {
     const fallback = getLocalFallbackData();
@@ -1379,11 +1442,11 @@ export const firebaseApi = {
     // Update local
     try {
       if (typeof window !== 'undefined') {
-        const raw = localStorage.getItem("smart_sts_db");
-        const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+        const dbObj = getLocalFallbackData();
         if (!dbObj.walikelas_notes) dbObj.walikelas_notes = {};
         dbObj.walikelas_notes[studentId] = note;
-        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        saveLocalFallbackDb(dbObj);
+        invalidateFirestoreCache(['notes']);
       }
     } catch (e) {}
 
@@ -1399,91 +1462,98 @@ export const firebaseApi = {
 
   // 6. GET, POST, DELETE /api/tps
   getTPs: async (kelas?: string) => {
-    const deletedTpSet = getDeletedSet('tps');
-    const fallback = getLocalFallbackData().tujuan_pembelajaran_templates || {};
-    let templates: Record<string, any[]> = {};
-    for (const [sub, list] of Object.entries(fallback)) {
-      if (isEkskulSubject(sub)) continue;
-      if (Array.isArray(list)) {
-        templates[sub] = cleanTpList(list).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
+    const templates = await getCachedOrFetch('tps', async () => {
+      const deletedTpSet = getDeletedSet('tps');
+      const fallbackData = getLocalFallbackData();
+      const fallback = fallbackData.tujuan_pembelajaran_templates || {};
+      const builtTemplates: Record<string, any[]> = {};
+      for (const [sub, list] of Object.entries(fallback)) {
+        if (isEkskulSubject(sub)) continue;
+        if (Array.isArray(list)) {
+          builtTemplates[sub] = cleanTpList(list).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
+        }
       }
-    }
 
-    if (db) {
+      if (db) {
+        try {
+          const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 3500);
+          if (snap && !snap.empty) {
+            snap.docs.forEach((docSnap) => {
+              const data = docSnap.data();
+              const subjectId = docSnap.id;
+              if (isEkskulSubject(subjectId)) {
+                deleteDoc(doc(db, "tujuan_pembelajaran_templates", subjectId)).catch(() => {});
+                return;
+              }
+              const originalList = Array.isArray(data.tps) ? data.tps : [];
+              const tpsList = cleanTpList(originalList).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
+              const normKey = normalizeSubjectKey(subjectId) || subjectId;
+              const existing = Array.isArray(builtTemplates[normKey])
+                ? builtTemplates[normKey]
+                : (Array.isArray(builtTemplates[subjectId]) ? builtTemplates[subjectId] : []);
+
+              // Non-destructive merge between local and cloud TPs
+              const mergedMap = new Map<string, any>();
+              existing.forEach((tp: any) => { if (tp && tp.id && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp); });
+              tpsList.forEach((tp: any) => { if (tp && tp.id && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp); });
+              const mergedList = Array.from(mergedMap.values());
+
+              builtTemplates[subjectId] = mergedList;
+              builtTemplates[normKey] = mergedList;
+
+              if (originalList.length !== tpsList.length) {
+                setDoc(
+                  doc(db, "tujuan_pembelajaran_templates", docSnap.id),
+                  { tps: tpsList, updatedAt: new Date().toISOString() },
+                  { merge: true }
+                ).catch(() => {});
+              }
+            });
+          }
+        } catch (e) {
+          // Fallback gracefully to local storage
+        }
+      }
+
+      // Safety net: Recover any TPs embedded in grades using O(1) student lookup map
       try {
-        const snap = await withTimeout(getDocs(collection(db, "tujuan_pembelajaran_templates")), 3500);
-        if (snap && !snap.empty) {
-          snap.docs.forEach((docSnap) => {
-            const data = docSnap.data();
-            const subjectId = docSnap.id;
-            if (isEkskulSubject(subjectId)) {
-              deleteDoc(doc(db, "tujuan_pembelajaran_templates", subjectId)).catch(() => {});
-              return;
-            }
-            const originalList = Array.isArray(data.tps) ? data.tps : [];
-            let tpsList = cleanTpList(originalList).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
-            const normKey = normalizeSubjectKey(subjectId) || subjectId;
-            const existing = Array.isArray(templates[normKey])
-              ? templates[normKey]
-              : (Array.isArray(templates[subjectId]) ? templates[subjectId] : []);
+        const grades = fallbackData.grades || [];
+        const studentClassMap = new Map<string, string>();
+        (fallbackData.students || []).forEach((s: any) => {
+          if (s && s.id) studentClassMap.set(String(s.id), String(s.kelas || s.classId || ""));
+        });
 
-            // Non-destructive merge between local and cloud TPs
-            const mergedMap = new Map<string, any>();
-            existing.forEach((tp: any) => { if (tp && tp.id && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp); });
-            tpsList.forEach((tp: any) => { if (tp && tp.id && !deletedTpSet.has(String(tp.id).trim())) mergedMap.set(String(tp.id).trim(), tp); });
-            const mergedList = Array.from(mergedMap.values());
-
-            templates[subjectId] = mergedList;
-            templates[normKey] = mergedList;
-
-            // Auto-clean Firestore doc if it contained dummy templates
-            if (originalList.length !== tpsList.length) {
-              setDoc(
-                doc(db, "tujuan_pembelajaran_templates", docSnap.id),
-                { tps: tpsList, updatedAt: new Date().toISOString() },
-                { merge: true }
-              ).catch(() => {});
+        if (Array.isArray(grades)) {
+          grades.forEach((g: any) => {
+            if (g && g.subject && !isEkskulSubject(g.subject) && Array.isArray(g.tps) && g.tps.length > 0) {
+              const sub = g.subject;
+              const normSub = normalizeSubjectKey(sub) || sub;
+              const validTps = cleanTpList(g.tps).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
+              if (validTps.length > 0) {
+                const current = Array.isArray(builtTemplates[normSub]) ? builtTemplates[normSub] : [];
+                const map = new Map<string, any>();
+                current.forEach((t) => { if (!deletedTpSet.has(String(t.id).trim())) map.set(String(t.id).trim(), t); });
+                const studentClass = studentClassMap.get(String(g.studentId)) || "";
+                validTps.forEach((t) => {
+                  const prev = map.get(String(t.id).trim());
+                  map.set(String(t.id).trim(), {
+                    ...prev,
+                    id: t.id,
+                    text: t.text,
+                    kelas: t.kelas || (prev && prev.kelas) || studentClass || "all",
+                  });
+                });
+                const combined = Array.from(map.values());
+                builtTemplates[normSub] = combined;
+                builtTemplates[sub] = combined;
+              }
             }
           });
         }
-      } catch (e) {
-        // Fallback gracefully to local storage
-      }
-    }
+      } catch (e) {}
 
-    // Safety net: Recover any TPs embedded in grades (excluding ekskul and deleted TPs)
-    try {
-      const grades = await firebaseApi.getGrades() as any[];
-      if (Array.isArray(grades)) {
-        grades.forEach((g: any) => {
-          if (g && g.subject && !isEkskulSubject(g.subject) && Array.isArray(g.tps) && g.tps.length > 0) {
-            const sub = g.subject;
-            const normSub = normalizeSubjectKey(sub) || sub;
-            const validTps = cleanTpList(g.tps).filter((tp: any) => !deletedTpSet.has(String(tp.id).trim()));
-            if (validTps.length > 0) {
-              const current = Array.isArray(templates[normSub]) ? templates[normSub] : [];
-              const map = new Map<string, any>();
-              current.forEach((t) => { if (!deletedTpSet.has(String(t.id).trim())) map.set(String(t.id).trim(), t); });
-              const fallbackStudents = getLocalFallbackData().students || [];
-              const student = fallbackStudents.find((s: any) => String(s.id) === String(g.studentId));
-              const studentClass = student ? String(student.kelas || student.classId || "") : "";
-              validTps.forEach((t) => {
-                const prev = map.get(String(t.id).trim());
-                map.set(String(t.id).trim(), {
-                  ...prev,
-                  id: t.id,
-                  text: t.text,
-                  kelas: t.kelas || (prev && prev.kelas) || studentClass || "all",
-                });
-              });
-              const combined = Array.from(map.values());
-              templates[normSub] = combined;
-              templates[sub] = combined;
-            }
-          }
-        });
-      }
-    } catch (e) {}
+      return builtTemplates;
+    });
 
     if (kelas) {
       const filtered: Record<string, any[]> = {};
@@ -1543,7 +1613,8 @@ export const firebaseApi = {
             dbObj.tujuan_pembelajaran_templates[k] = dbObj.tujuan_pembelajaran_templates[targetKey];
           }
         }
-        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        saveLocalFallbackDb(dbObj);
+        invalidateFirestoreCache(['tps']);
       }
     } catch (e) {}
 
@@ -1630,7 +1701,8 @@ export const firebaseApi = {
                 });
               }
             }
-            localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+            saveLocalFallbackDb(dbObj);
+            invalidateFirestoreCache(['tps']);
           }
         }
       }
@@ -1724,7 +1796,8 @@ export const firebaseApi = {
             });
           }
 
-          localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+          saveLocalFallbackDb(dbObj);
+          invalidateFirestoreCache(['tps', 'grades']);
         }
       }
     } catch (e) {}
@@ -2139,7 +2212,8 @@ export const firebaseApi = {
           ekskul: fallback.walikelas_notes[studentId].ekskul,
           deletedEkskuls: fallback.walikelas_notes[studentId].deletedEkskuls || [],
         };
-        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        saveLocalFallbackDb(dbObj);
+        invalidateFirestoreCache(['notes']);
       }
     } catch (e) {}
 
@@ -2216,7 +2290,8 @@ export const firebaseApi = {
         if (!dbObj.walikelas_notes[studentId]) dbObj.walikelas_notes[studentId] = {};
         dbObj.walikelas_notes[studentId].ekskul = fallback.walikelas_notes[studentId].ekskul;
         dbObj.walikelas_notes[studentId].deletedEkskuls = updatedDeleted;
-        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+        saveLocalFallbackDb(dbObj);
+        invalidateFirestoreCache(['notes']);
       }
     } catch (e) {}
 

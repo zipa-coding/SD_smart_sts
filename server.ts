@@ -67,6 +67,9 @@ async function readDB() {
     if (!memoryDB || stat.mtimeMs > lastDbMtime) {
       const data = await fs.readFile(DB_PATH, "utf-8");
       memoryDB = JSON.parse(data);
+      if (Array.isArray(memoryDB.grades)) {
+        memoryDB.grades = deduplicateGradesList(memoryDB.grades);
+      }
       lastDbMtime = stat.mtimeMs;
     }
     return memoryDB;
@@ -1063,7 +1066,7 @@ app.delete("/api/students/:id", async (req, res) => {
 // 4. Grades & Objectives Management
 app.get("/api/grades", async (req, res) => {
   const db = await readDB();
-  res.json(deduplicateGradesList(db.grades));
+  res.json(db.grades || []);
 });
 
 app.post("/api/grades", async (req, res) => {
@@ -1163,33 +1166,34 @@ app.post("/api/grades", async (req, res) => {
     }
   }
 
-  await writeDB(db);
+  asyncPersistDB();
 
   if (firestoreDb) {
-    try {
-      await setDoc(doc(firestoreDb, "grades", docId), updatedGrade, { merge: true });
-      const legacySuffixes: Record<string, string[]> = {
-        Sirah: ["Siroh", "Sirah_Nabawiyah"],
-        Life_Skill: ["Life_skill", "Life_skills", "Life_Skills"],
-        TIK: ["Informatika"],
-        Tahfizh_Al_Qur_an: ["Tahfidz_Al_Qur_an", "Tahfizh"],
-        Do_a_Harian_dan_Hadits: ["Doa_Harian_dan_Hadits", "Doa_dan_Hadist"],
-      };
-      const extraIdsToClean = new Set<string>();
-      if (rawDocId && rawDocId !== docId) {
-        extraIdsToClean.add(rawDocId);
-      }
-      if (legacySuffixes[cleanSub]) {
-        legacySuffixes[cleanSub].forEach((suf) => extraIdsToClean.add(`${studentId}_${suf}`));
-      }
-      extraIdsToClean.forEach((oldId) => {
-        if (oldId !== docId) {
-          deleteDoc(doc(firestoreDb, "grades", oldId)).catch(() => {});
+    setDoc(doc(firestoreDb, "grades", docId), updatedGrade, { merge: true })
+      .then(() => {
+        const legacySuffixes: Record<string, string[]> = {
+          Sirah: ["Siroh", "Sirah_Nabawiyah"],
+          Life_Skill: ["Life_skill", "Life_skills", "Life_Skills"],
+          TIK: ["Informatika"],
+          Tahfizh_Al_Qur_an: ["Tahfidz_Al_Qur_an", "Tahfizh"],
+          Do_a_Harian_dan_Hadits: ["Doa_Harian_dan_Hadits", "Doa_dan_Hadist"],
+        };
+        const extraIdsToClean = new Set<string>();
+        if (rawDocId && rawDocId !== docId) {
+          extraIdsToClean.add(rawDocId);
         }
+        if (legacySuffixes[cleanSub]) {
+          legacySuffixes[cleanSub].forEach((suf) => extraIdsToClean.add(`${studentId}_${suf}`));
+        }
+        extraIdsToClean.forEach((oldId) => {
+          if (oldId !== docId) {
+            deleteDoc(doc(firestoreDb, "grades", oldId)).catch(() => {});
+          }
+        });
+      })
+      .catch((e: any) => {
+        console.warn("Firestore grade save error:", e);
       });
-    } catch (e) {
-      console.warn("Firestore grade save error:", e);
-    }
   }
 
   res.json(updatedGrade);
@@ -1288,14 +1292,12 @@ app.post("/api/walikelas/notes", async (req, res) => {
     deletedEkskuls: mergedDeleted,
   };
 
-  await writeDB(db);
+  asyncPersistDB();
 
   if (firestoreDb) {
-    try {
-      await setDoc(doc(firestoreDb, "walikelas_notes", String(studentId)), db.walikelas_notes[studentId], { merge: true });
-    } catch (e) {
+    setDoc(doc(firestoreDb, "walikelas_notes", String(studentId)), db.walikelas_notes[studentId], { merge: true }).catch((e: any) => {
       console.warn("Firestore walikelas_notes sync error:", e);
-    }
+    });
   }
 
   res.json({ studentId, ...db.walikelas_notes[studentId] });
