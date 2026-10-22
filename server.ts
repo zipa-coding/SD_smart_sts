@@ -14,7 +14,7 @@ import {
   deleteDoc,
   setLogLevel
 } from "firebase/firestore";
-import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject } from "./src/types";
+import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls } from "./src/types";
 
 try {
   setLogLevel("error");
@@ -291,26 +291,44 @@ async function syncDatabaseWithFirestore() {
         if (!db.walikelas_notes) db.walikelas_notes = {};
         wSnap.forEach((d) => {
           const studentId = d.id;
-          const cloudData = d.data();
+          const cloudData = d.data() || {};
           const localData = db.walikelas_notes[studentId] || {};
 
-          const eksMap = new Map();
-          (Array.isArray(localData.ekskul) ? localData.ekskul : []).forEach((e: any) => {
-            if (e && (e.name || e.ekskulName)) {
-              eksMap.set(String(e.name || e.ekskulName).toLowerCase().trim(), e);
-            }
-          });
-          (Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []).forEach((e: any) => {
-            if (e && (e.name || e.ekskulName)) {
-              const k = String(e.name || e.ekskulName).toLowerCase().trim();
-              eksMap.set(k, { ...(eksMap.get(k) || {}), ...e });
-            }
-          });
+          const combinedDeleted = Array.from(
+            new Set([
+              ...(Array.isArray(localData.deletedEkskuls) ? localData.deletedEkskuls : []),
+              ...(Array.isArray(cloudData.deletedEkskuls) ? cloudData.deletedEkskuls : []),
+            ])
+          );
+
+          const combinedEkskuls = [
+            ...(Array.isArray(localData.ekskul) ? localData.ekskul : []),
+            ...(Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []),
+          ];
+          const dedupedEkskul = deduplicateStudentEkskuls(combinedEkskuls, combinedDeleted, db.ekskul);
+
+          // Never allow an empty string from an ekskul-only save to erase a filled spiritual/sosial description
+          const cloudSpDesc = String(cloudData.spiritualDeskripsi || "").trim();
+          const localSpDesc = String(localData.spiritualDeskripsi || "").trim();
+          const cloudSoDesc = String(cloudData.sosialDeskripsi || "").trim();
+          const localSoDesc = String(localData.sosialDeskripsi || "").trim();
+          const cloudCat = String(cloudData.catatan || "").trim();
+          const localCat = String(localData.catatan || "").trim();
 
           db.walikelas_notes[studentId] = {
             ...localData,
             ...cloudData,
-            ekskul: Array.from(eksMap.values()),
+            spiritualUsaha: cloudData.spiritualUsaha || localData.spiritualUsaha || "B",
+            spiritualProses: cloudData.spiritualProses || localData.spiritualProses || "B",
+            spiritualCapaian: cloudData.spiritualCapaian || localData.spiritualCapaian || "B",
+            spiritualDeskripsi: cloudSpDesc || localSpDesc || "",
+            sosialUsaha: cloudData.sosialUsaha || localData.sosialUsaha || "B",
+            sosialProses: cloudData.sosialProses || localData.sosialProses || "B",
+            sosialCapaian: cloudData.sosialCapaian || localData.sosialCapaian || "B",
+            sosialDeskripsi: cloudSoDesc || localSoDesc || "",
+            catatan: cloudCat || localCat || "",
+            ekskul: dedupedEkskul,
+            deletedEkskuls: combinedDeleted,
           };
         });
         changed = true;
@@ -1144,7 +1162,17 @@ app.post("/api/grades", async (req, res) => {
 // 5. Wali Kelas Notes & Attendance
 app.get("/api/walikelas/notes", async (req, res) => {
   const db = await readDB();
-  res.json(db.walikelas_notes || {});
+  const rawNotes = db.walikelas_notes || {};
+  const cleanedNotes: Record<string, any> = {};
+  for (const [sId, noteObj] of Object.entries(rawNotes)) {
+    const note = noteObj as any;
+    if (!note || typeof note !== "object") continue;
+    cleanedNotes[sId] = {
+      ...note,
+      ekskul: deduplicateStudentEkskuls(note.ekskul, note.deletedEkskuls, db.ekskul),
+    };
+  }
+  res.json(cleanedNotes);
 });
 
 app.post("/api/walikelas/notes", async (req, res) => {
@@ -1163,6 +1191,8 @@ app.post("/api/walikelas/notes", async (req, res) => {
     sosialCapaian,
     sosialDeskripsi,
     ekskul,
+    replaceEkskul,
+    deletedEkskuls,
   } = req.body;
 
   if (!studentId) {
@@ -1178,50 +1208,35 @@ app.post("/api/walikelas/notes", async (req, res) => {
   const existingEkskuls = Array.isArray(existingNote.ekskul) ? existingNote.ekskul : [];
   const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
 
-  const normalizeEkskulKey = (name: string): string => {
-    if (!name) return "";
-    const clean = String(name).toLowerCase().trim();
-    if (clean.includes("panahan")) return "panahan";
-    if (clean.includes("pramuka")) return "pramuka";
-    if (clean.includes("futsal")) return "futsal";
-    if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-    if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-    if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-    if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-    if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-    if (clean.includes("mentoring")) return "mentoring";
-    return clean;
-  };
+  const mergedDeleted = Array.from(
+    new Set([
+      ...(Array.isArray(existingNote.deletedEkskuls) ? existingNote.deletedEkskuls : []),
+      ...(Array.isArray(deletedEkskuls) ? deletedEkskuls : []),
+    ])
+  );
 
-  // Robustly preserve and merge ekskul grades so notes save never accidentally overwrites coach's work
-  const mergedEkskulMap = new Map();
-  existingEkskuls.forEach((e: any) => {
-    const key = normalizeEkskulKey(e.name || e.ekskulName || "");
-    if (key) mergedEkskulMap.set(key, e);
-  });
-  incomingEkskuls.forEach((e: any) => {
-    const key = normalizeEkskulKey(e.name || e.ekskulName || "");
-    if (key) {
-      const prev = mergedEkskulMap.get(key) || {};
-      mergedEkskulMap.set(key, { ...prev, ...e });
-    }
-  });
-  const finalEkskul = Array.from(mergedEkskulMap.values());
+  const rawEkskulList = replaceEkskul
+    ? incomingEkskuls
+    : [...existingEkskuls, ...incomingEkskuls];
+  const finalEkskul = deduplicateStudentEkskuls(rawEkskulList, mergedDeleted, db.ekskul);
 
-  const spiritualDeskFinal =
-    spiritualDeskripsi !== undefined && spiritualDeskripsi !== null
-      ? String(spiritualDeskripsi)
-      : (existingNote.spiritualDeskripsi || "");
-  const sosialDeskFinal =
-    sosialDeskripsi !== undefined && sosialDeskripsi !== null
-      ? String(sosialDeskripsi)
-      : (existingNote.sosialDeskripsi || "");
+  const incomingSpDesc = spiritualDeskripsi !== undefined && spiritualDeskripsi !== null ? String(spiritualDeskripsi).trim() : "";
+  const existingSpDesc = String(existingNote.spiritualDeskripsi || "").trim();
+  const spiritualDeskFinal = incomingSpDesc ? String(spiritualDeskripsi) : existingSpDesc;
+
+  const incomingSoDesc = sosialDeskripsi !== undefined && sosialDeskripsi !== null ? String(sosialDeskripsi).trim() : "";
+  const existingSoDesc = String(existingNote.sosialDeskripsi || "").trim();
+  const sosialDeskFinal = incomingSoDesc ? String(sosialDeskripsi) : existingSoDesc;
+
+  const incomingCatatan = catatan !== undefined && catatan !== null ? String(catatan).trim() : "";
+  const existingCatatan = String(existingNote.catatan || "").trim();
+  const catatanFinal = incomingCatatan ? String(catatan) : existingCatatan;
 
   db.walikelas_notes[studentId] = {
     sakit: sakit !== undefined && sakit !== null ? Number(sakit) : Number(existingNote.sakit || 0),
     izin: izin !== undefined && izin !== null ? Number(izin) : Number(existingNote.izin || 0),
     alpa: alpa !== undefined && alpa !== null ? Number(alpa) : Number(existingNote.alpa || 0),
-    catatan: catatan !== undefined && catatan !== null ? String(catatan) : (existingNote.catatan || ""),
+    catatan: catatanFinal,
 
     spiritualUsaha: spiritualUsaha || existingNote.spiritualUsaha || "B",
     spiritualProses: spiritualProses || existingNote.spiritualProses || "B",
@@ -1234,6 +1249,7 @@ app.post("/api/walikelas/notes", async (req, res) => {
     sosialDeskripsi: sosialDeskFinal,
 
     ekskul: finalEkskul,
+    deletedEkskuls: mergedDeleted,
   };
 
   await writeDB(db);
@@ -1739,10 +1755,10 @@ app.post("/api/ekskul", async (req, res) => {
 
 app.put("/api/ekskul/:id", async (req, res) => {
   const { id } = req.params;
-  const { name, type, teacherId } = req.body;
+  const { name, type, teacherId, onlyRename } = req.body;
   const trimmedName = String(name || "").trim();
-  if (!trimmedName || !type) {
-    return res.status(400).json({ error: "Nama dan tipe ekskul wajib diisi." });
+  if (!trimmedName) {
+    return res.status(400).json({ error: "Nama ekskul wajib diisi." });
   }
   const db = await readDB();
   if (!Array.isArray(db.ekskul)) {
@@ -1756,12 +1772,14 @@ app.put("/api/ekskul/:id", async (req, res) => {
     return res.status(404).json({ error: "Ekstrakurikuler tidak ditemukan." });
   }
 
-  const oldName = db.ekskul[idx].name;
-  const oldTeacherId = db.ekskul[idx].teacherId;
+  const oldName = String(db.ekskul[idx].name || "").trim();
+  const oldTeacherId = db.ekskul[idx].teacherId || "";
+  const effectiveType = onlyRename || !type ? (db.ekskul[idx].type || "Pilihan") : (type === "Wajib" ? "Wajib" : "Pilihan");
+  const effectiveTeacherId = (onlyRename || teacherId === undefined) ? oldTeacherId : (teacherId || "");
 
-  let assignedTeacherName = "";
-  if (teacherId) {
-    const tIdx = db.teachers.findIndex((t: any) => String(t.id) === String(teacherId));
+  let assignedTeacherName = db.ekskul[idx].teacherName || "";
+  if (effectiveTeacherId) {
+    const tIdx = db.teachers.findIndex((t: any) => String(t.id) === String(effectiveTeacherId));
     if (tIdx !== -1) {
       assignedTeacherName = db.teachers[tIdx].name;
       db.teachers[tIdx].isEkskulTeacher = true;
@@ -1770,11 +1788,12 @@ app.put("/api/ekskul/:id", async (req, res) => {
           ? String(db.teachers[tIdx].ekskulName).split(',').map((s: any) => String(s || '').trim()).filter(Boolean)
           : [];
       }
-      // If name changed, replace oldName with trimmedName
-      if (oldName !== trimmedName) {
-        db.teachers[tIdx].ekskulNames = db.teachers[tIdx].ekskulNames.map((n: string) => n === oldName ? trimmedName : n);
+      if (oldName && oldName !== trimmedName) {
+        db.teachers[tIdx].ekskulNames = db.teachers[tIdx].ekskulNames.map((n: string) =>
+          n.trim().toLowerCase() === oldName.toLowerCase() ? trimmedName : n
+        );
       }
-      if (!db.teachers[tIdx].ekskulNames.includes(trimmedName)) {
+      if (!db.teachers[tIdx].ekskulNames.some((n: string) => n.trim().toLowerCase() === trimmedName.toLowerCase())) {
         db.teachers[tIdx].ekskulNames.push(trimmedName);
       }
       db.teachers[tIdx].ekskulName = db.teachers[tIdx].ekskulNames.join(", ");
@@ -1786,10 +1805,12 @@ app.put("/api/ekskul/:id", async (req, res) => {
         }
       }
     }
+  } else if (!onlyRename && teacherId !== undefined) {
+    assignedTeacherName = "";
   }
 
-  // If previous teacher was removed or replaced
-  if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+  // If previous teacher was explicitly replaced (not during a simple rename)
+  if (!onlyRename && teacherId !== undefined && oldTeacherId && String(oldTeacherId) !== String(effectiveTeacherId)) {
     const prevTIdx = db.teachers.findIndex((t: any) => String(t.id) === String(oldTeacherId));
     if (prevTIdx !== -1) {
       const remainingEkskuls = db.ekskul.filter(
@@ -1814,29 +1835,113 @@ app.put("/api/ekskul/:id", async (req, res) => {
     }
   }
 
-  // Synchronize any teachers who have this ekskul assigned if name changed
-  if (oldName !== trimmedName) {
-    db.teachers.forEach((t: any) => {
-      if (t.isEkskulTeacher) {
-        if (Array.isArray(t.ekskulNames) && t.ekskulNames.includes(oldName)) {
-          t.ekskulNames = t.ekskulNames.map((n: string) => n === oldName ? trimmedName : n);
+  // Synchronize all existing data (teachers, student ekskul grades/descriptions, TP templates) if name changed
+  if (oldName && oldName !== trimmedName) {
+    const lowerOld = oldName.toLowerCase();
+
+    // 1. Update any teachers who have this ekskul in their ekskulNames / ekskulName
+    for (const t of db.teachers) {
+      let teacherModified = false;
+      if (Array.isArray(t.ekskulNames)) {
+        const hasOld = t.ekskulNames.some((n: string) => String(n || "").trim().toLowerCase() === lowerOld);
+        if (hasOld) {
+          t.ekskulNames = Array.from(
+            new Set(
+              t.ekskulNames.map((n: string) =>
+                String(n || "").trim().toLowerCase() === lowerOld ? trimmedName : String(n || "").trim()
+              ).filter(Boolean)
+            )
+          );
           t.ekskulName = t.ekskulNames.join(", ");
-        } else if (t.ekskulName && t.ekskulName.includes(oldName)) {
-          t.ekskulName = t.ekskulName.split(",").map((s: string) => s.trim() === oldName ? trimmedName : s.trim()).join(", ");
+          teacherModified = true;
+        }
+      } else if (t.ekskulName && String(t.ekskulName).toLowerCase().includes(lowerOld)) {
+        const parts = String(t.ekskulName)
+          .split(",")
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+          .map((s: string) => (s.toLowerCase() === lowerOld ? trimmedName : s));
+        t.ekskulNames = Array.from(new Set(parts));
+        t.ekskulName = t.ekskulNames.join(", ");
+        teacherModified = true;
+      }
+      if (teacherModified && firestoreDb) {
+        try {
+          await setDoc(doc(firestoreDb, "teachers", String(t.id)), t, { merge: true });
+        } catch (e) {
+          console.warn("Firestore teacher rename sync error:", e);
         }
       }
-    });
+    }
+
+    // 2. Preserve & migrate student ekskul grades and descriptions in walikelas_notes
+    if (db.walikelas_notes && typeof db.walikelas_notes === "object") {
+      for (const [sId, noteObj] of Object.entries(db.walikelas_notes)) {
+        const note = noteObj as any;
+        if (note && Array.isArray(note.ekskul)) {
+          let noteModified = false;
+          note.ekskul = note.ekskul.map((eks: any) => {
+            if (eks && String(eks.name || "").trim().toLowerCase() === lowerOld) {
+              noteModified = true;
+              return { ...eks, name: trimmedName };
+            }
+            return eks;
+          });
+          if (noteModified && firestoreDb) {
+            try {
+              await setDoc(doc(firestoreDb, "walikelas_notes", String(sId)), note, { merge: true });
+            } catch (e) {
+              console.warn("Firestore walikelas_notes rename sync error:", e);
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Preserve & migrate ekskul TP templates in tps_templates
+    if (db.tps_templates && typeof db.tps_templates === "object") {
+      const tpKeys = Object.keys(db.tps_templates);
+      for (const k of tpKeys) {
+        const kTrim = k.trim();
+        const kLower = kTrim.toLowerCase();
+        if (kLower === lowerOld || kLower === `ekskul ${lowerOld}`) {
+          const isPrefixed = kLower.startsWith("ekskul ");
+          const newKey = isPrefixed ? `Ekskul ${trimmedName}` : trimmedName;
+          const existingOldList = Array.isArray(db.tps_templates[k]) ? db.tps_templates[k] : [];
+          const existingNewList = Array.isArray(db.tps_templates[newKey]) ? db.tps_templates[newKey] : [];
+          const mergedMap = new Map<string, any>();
+          [...existingNewList, ...existingOldList].forEach((tp: any) => {
+            if (tp && tp.id) mergedMap.set(String(tp.id), tp);
+          });
+          db.tps_templates[newKey] = Array.from(mergedMap.values());
+          if (firestoreDb) {
+            try {
+              await setDoc(doc(firestoreDb, "tps_templates", newKey), { subject: newKey, tps: db.tps_templates[newKey] }, { merge: true });
+            } catch (e) {
+              console.warn("Firestore tps_templates rename sync error:", e);
+            }
+          }
+        }
+      }
+    }
   }
 
   db.ekskul[idx] = {
     ...db.ekskul[idx],
     name: trimmedName,
-    type: type === "Wajib" ? "Wajib" : "Pilihan",
-    teacherId: teacherId || "",
+    type: effectiveType,
+    teacherId: effectiveTeacherId,
     teacherName: assignedTeacherName,
   };
 
   await writeDB(db);
+  if (firestoreDb) {
+    try {
+      await setDoc(doc(firestoreDb, "ekskul", String(id)), db.ekskul[idx], { merge: true });
+    } catch (e) {
+      console.warn("Firestore ekskul sync error:", e);
+    }
+  }
   res.json(db.ekskul[idx]);
 });
 
@@ -1941,8 +2046,17 @@ app.delete("/api/ekskul/:id", async (req, res) => {
 // 6.6.1 Ekskul Grades API
 app.get("/api/ekskul/grades", async (req, res) => {
   const db = await readDB();
-  const notes = db.walikelas_notes || {};
-  res.json(notes);
+  const rawNotes = db.walikelas_notes || {};
+  const cleanedNotes: Record<string, any> = {};
+  for (const [sId, noteObj] of Object.entries(rawNotes)) {
+    const note = noteObj as any;
+    if (!note || typeof note !== "object") continue;
+    cleanedNotes[sId] = {
+      ...note,
+      ekskul: deduplicateStudentEkskuls(note.ekskul, note.deletedEkskuls, db.ekskul),
+    };
+  }
+  res.json(cleanedNotes);
 });
 
 app.post("/api/ekskul/grades", async (req, res) => {
@@ -1970,45 +2084,29 @@ app.post("/api/ekskul/grades", async (req, res) => {
       sosialCapaian: "B",
       sosialDeskripsi: "",
       ekskul: [],
+      deletedEkskuls: [],
     };
   }
   if (!Array.isArray(db.walikelas_notes[studentId].ekskul)) {
     db.walikelas_notes[studentId].ekskul = [];
   }
 
-  const normTarget = ((name: string) => {
-    if (!name) return "";
-    const clean = String(name).toLowerCase().trim();
-    if (clean.includes("panahan")) return "panahan";
-    if (clean.includes("pramuka")) return "pramuka";
-    if (clean.includes("futsal")) return "futsal";
-    if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-    if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-    if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-    if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-    if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-    if (clean.includes("mentoring")) return "mentoring";
-    return clean;
-  })(ekskulName);
+  const normTarget = normalizeEkskulKey(ekskulName);
+
+  // If this ekskul was previously unchecked/deleted, un-delete it since coach is saving it now
+  if (Array.isArray(db.walikelas_notes[studentId].deletedEkskuls)) {
+    db.walikelas_notes[studentId].deletedEkskuls = db.walikelas_notes[studentId].deletedEkskuls.filter(
+      (d: string) =>
+        String(d || "").toLowerCase().trim() !== String(ekskulName).toLowerCase().trim() &&
+        normalizeEkskulKey(d) !== normTarget
+    );
+  }
 
   const existingIdx = db.walikelas_notes[studentId].ekskul.findIndex((e: any) => {
     if (!e) return false;
     const eName = e.name || e.ekskulName || "";
     if (eName === ekskulName) return true;
-    const eNorm = ((name: string) => {
-      if (!name) return "";
-      const clean = String(name).toLowerCase().trim();
-      if (clean.includes("panahan")) return "panahan";
-      if (clean.includes("pramuka")) return "pramuka";
-      if (clean.includes("futsal")) return "futsal";
-      if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-      if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-      if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-      if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-      if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-      if (clean.includes("mentoring")) return "mentoring";
-      return clean;
-    })(eName);
+    const eNorm = normalizeEkskulKey(eName);
     return eNorm && normTarget && eNorm === normTarget;
   });
 
@@ -2030,11 +2128,25 @@ app.post("/api/ekskul/grades", async (req, res) => {
     db.walikelas_notes[studentId].ekskul.push(ekskulEntry);
   }
 
+  db.walikelas_notes[studentId].ekskul = deduplicateStudentEkskuls(
+    db.walikelas_notes[studentId].ekskul,
+    db.walikelas_notes[studentId].deletedEkskuls,
+    db.ekskul
+  );
+
   await writeDB(db);
 
+  // CRITICAL: Only sync ekskul & deletedEkskuls fields to Firestore so coach saves NEVER overwrite spiritualDeskripsi / sosialDeskripsi!
   if (firestoreDb) {
     try {
-      await setDoc(doc(firestoreDb, "walikelas_notes", String(studentId)), db.walikelas_notes[studentId], { merge: true });
+      await setDoc(
+        doc(firestoreDb, "walikelas_notes", String(studentId)),
+        {
+          ekskul: db.walikelas_notes[studentId].ekskul,
+          deletedEkskuls: db.walikelas_notes[studentId].deletedEkskuls || [],
+        },
+        { merge: true }
+      );
     } catch (e) {
       console.warn("Firestore ekskul grades sync error:", e);
     }
@@ -2042,6 +2154,70 @@ app.post("/api/ekskul/grades", async (req, res) => {
 
   res.json({ success: true, studentId, ekskul: db.walikelas_notes[studentId].ekskul });
 });
+
+// Delete / Uncheck an Ekskul from a specific student
+const handleDeleteStudentEkskul = async (req: any, res: any) => {
+  const { studentId, ekskulName } = req.body || {};
+  if (!studentId || !ekskulName) {
+    return res.status(400).json({ error: "ID Siswa dan Nama Ekskul wajib diisi." });
+  }
+
+  const db = await readDB();
+  if (!db.walikelas_notes) db.walikelas_notes = {};
+  if (!db.walikelas_notes[studentId]) {
+    return res.json({ success: true, studentId, ekskul: [] });
+  }
+
+  const normTarget = normalizeEkskulKey(ekskulName);
+  const rawTarget = String(ekskulName).toLowerCase().trim();
+
+  const currentDeleted = Array.isArray(db.walikelas_notes[studentId].deletedEkskuls)
+    ? db.walikelas_notes[studentId].deletedEkskuls
+    : [];
+  const updatedDeleted = Array.from(new Set([...currentDeleted, rawTarget, ...(normTarget ? [normTarget] : [])]));
+
+  const currentEkskuls = Array.isArray(db.walikelas_notes[studentId].ekskul)
+    ? db.walikelas_notes[studentId].ekskul
+    : [];
+  const filteredEkskuls = currentEkskuls.filter((e: any) => {
+    if (!e) return false;
+    const eName = String(e.name || e.ekskulName || "").toLowerCase().trim();
+    const eNorm = normalizeEkskulKey(eName);
+    if (eName === rawTarget) return false;
+    if (normTarget && eNorm === normTarget) return false;
+    return true;
+  });
+
+  db.walikelas_notes[studentId].deletedEkskuls = updatedDeleted;
+  db.walikelas_notes[studentId].ekskul = deduplicateStudentEkskuls(filteredEkskuls, updatedDeleted, db.ekskul);
+
+  await writeDB(db);
+
+  if (firestoreDb) {
+    try {
+      await setDoc(
+        doc(firestoreDb, "walikelas_notes", String(studentId)),
+        {
+          ekskul: db.walikelas_notes[studentId].ekskul,
+          deletedEkskuls: updatedDeleted,
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn("Firestore delete student ekskul sync error:", e);
+    }
+  }
+
+  res.json({
+    success: true,
+    studentId,
+    ekskul: db.walikelas_notes[studentId].ekskul,
+    deletedEkskuls: updatedDeleted,
+  });
+};
+
+app.post("/api/ekskul/grades/delete", handleDeleteStudentEkskul);
+app.delete("/api/ekskul/grades", handleDeleteStudentEkskul);
 
 // 6.7. Subjects (Mata Pelajaran) API
 const DEFAULT_SUBJECTS = [

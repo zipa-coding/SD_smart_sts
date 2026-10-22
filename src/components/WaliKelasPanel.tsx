@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Teacher, Student, Grade, WaliKelasNotesMap, normalizeSubjectKey } from "../types";
+import { Teacher, Student, Grade, WaliKelasNotesMap, normalizeSubjectKey, deduplicateStudentEkskuls } from "../types";
 import {
   Printer,
   ChevronRight,
@@ -15,7 +15,8 @@ import {
   X,
   AlertCircle,
   Archive,
-  Download
+  Download,
+  Trash2
 } from "lucide-react";
 import PrintRaportView from "./PrintRaportView";
 import { downloadAllRaportZip, BatchDownloadProgress } from "../lib/zipExporter";
@@ -68,6 +69,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
 
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [deletingEkskulName, setDeletingEkskulName] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -201,10 +203,26 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
         setSubjectsList(subData);
       }
 
-      // Auto-select first student in this class
+      // Auto-select first student in this class, or sync notes if student already selected
       const classStudents = studentsArray.filter((s: Student) => s.kelas === selectedClass);
       if (classStudents.length > 0 && !selectedStudent) {
         handleStudentSelect(classStudents[0], notesObj, ekskulArray);
+      } else if (selectedStudent && notesObj[selectedStudent.id]) {
+        const latestNote = notesObj[selectedStudent.id];
+        setSpiritualDeskripsi((prev) =>
+          prev && prev.trim() !== ""
+            ? prev
+            : latestNote.spiritualDeskripsi && String(latestNote.spiritualDeskripsi).trim() !== ""
+            ? latestNote.spiritualDeskripsi
+            : `Alhamdulillah ananda ${selectedStudent.name} menunjukkan perkembangan spiritual yang baik. Ia telah memahami tata cara beribadah harian dengan rajin serta menjaga adab ketertiban.`
+        );
+        setSosialDeskripsi((prev) =>
+          prev && prev.trim() !== ""
+            ? prev
+            : latestNote.sosialDeskripsi && String(latestNote.sosialDeskripsi).trim() !== ""
+            ? latestNote.sosialDeskripsi
+            : `Alhamdulillah ananda ${selectedStudent.name} mudah bergaul, memiliki rasa empati tinggi, serta sopan santun dalam berkata kata kepada guru maupun sesama kawan.`
+        );
       }
     } catch (err) {
       console.error("Error loading data:", err);
@@ -225,39 +243,130 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
 
     const safeNotesMap = notesMap && typeof notesMap === "object" && !Array.isArray(notesMap) ? notesMap : {};
 
+    const defaultSpiritualDesc = `Alhamdulillah ananda ${student.name} menunjukkan perkembangan spiritual yang baik. Ia telah memahami tata cara beribadah harian dengan rajin serta menjaga adab ketertiban.`;
+    const defaultSosialDesc = `Alhamdulillah ananda ${student.name} mudah bergaul, memiliki rasa empati tinggi, serta sopan santun dalam berkata kata kepada guru maupun sesama kawan.`;
+    const defaultCatatan = `Ananda ${student.name} menunjukkan kepribadian dan budi pekerti yang baik. Pertahankan terus semangat belajarmu.`;
+
     // Load attendance & notes if written
     const note = safeNotesMap[student.id];
     if (note) {
-      setSakit(String(note.sakit));
-      setIzin(String(note.izin));
-      setAlpa(String(note.alpa));
-      setCatatan(note.catatan);
+      setSakit(String(note.sakit ?? 0));
+      setIzin(String(note.izin ?? 0));
+      setAlpa(String(note.alpa ?? 0));
+      setCatatan(note.catatan && String(note.catatan).trim() !== "" ? note.catatan : defaultCatatan);
 
       setSpiritualUsaha(note.spiritualUsaha || "B");
       setSpiritualProses(note.spiritualProses || "B");
       setSpiritualCapaian(note.spiritualCapaian || "B");
-      setSpiritualDeskripsi(note.spiritualDeskripsi || "");
+      setSpiritualDeskripsi(
+        note.spiritualDeskripsi && String(note.spiritualDeskripsi).trim() !== ""
+          ? note.spiritualDeskripsi
+          : defaultSpiritualDesc
+      );
 
       setSosialUsaha(note.sosialUsaha || "B");
       setSosialProses(note.sosialProses || "B");
       setSosialCapaian(note.sosialCapaian || "B");
-      setSosialDeskripsi(note.sosialDeskripsi || "");
+      setSosialDeskripsi(
+        note.sosialDeskripsi && String(note.sosialDeskripsi).trim() !== ""
+          ? note.sosialDeskripsi
+          : defaultSosialDesc
+      );
     } else {
       setSakit("0");
       setIzin("0");
       setAlpa("0");
-      setCatatan(`Ananda ${student.name} menunjukkan kepribadian dan budi pekerti yang baik. Pertahankan terus semangat belajarmu.`);
+      setCatatan(defaultCatatan);
 
       setSpiritualUsaha("B");
       setSpiritualProses("B");
       setSpiritualCapaian("B");
-      setSpiritualDeskripsi(`Alhamdulillah ananda sholihah ${student.name} menunjukkan perkembangan spiritual yang baik. Ia telah memahami tata cara beribadah harian dengan rajin serta menjaga adab ketertiban.`);
+      setSpiritualDeskripsi(defaultSpiritualDesc);
 
       setSosialUsaha("B");
       setSosialProses("B");
       setSosialCapaian("B");
-      setSosialDeskripsi(`Alhamdulillah ananda sholihah ${student.name} mudah bergaul, memiliki rasa empati tinggi, serta sopan santun dalam berkata kata kepada guru maupun sesama kawan.`);
+      setSosialDeskripsi(defaultSosialDesc);
     }
+  };
+
+  // Uncheck / Hapus ekskul tidak diperlukan atau duplikat dari siswa
+  const handleDeleteStudentEkskul = async (ekskulName: string) => {
+    if (!selectedStudent || !ekskulName) return;
+    setError("");
+    setSuccess("");
+    setDeletingEkskulName(ekskulName);
+
+    try {
+      const response = await fetch("/api/ekskul/grades/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: selectedStudent.id,
+          ekskulName,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Gagal menghapus ekskul siswa.");
+      }
+
+      setSuccess(`Ekskul "${ekskulName}" berhasil di-unceklist / dihapus dari rapor ${selectedStudent.name}!`);
+      setTimeout(() => setSuccess(""), 4000);
+      onRefreshTrigger();
+
+      const getNotes = await fetch("/api/walikelas/notes");
+      const updatedNotes = await getNotes.json();
+      if (updatedNotes && typeof updatedNotes === "object") {
+        setAllClassNotes(updatedNotes);
+      }
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus ekskul siswa.");
+    } finally {
+      setDeletingEkskulName(null);
+    }
+  };
+
+  const saveCurrentStudentNotesPayload = async () => {
+    if (!selectedStudent) return null;
+    const currentNote = (allClassNotes && allClassNotes[selectedStudent.id]) || {};
+    const preservedEkskul = deduplicateStudentEkskuls(
+      currentNote.ekskul,
+      currentNote.deletedEkskuls,
+      activeEkskulList
+    );
+    const payload = {
+      studentId: selectedStudent.id,
+      sakit: Number(sakit || 0),
+      izin: Number(izin || 0),
+      alpa: Number(alpa || 0),
+      catatan,
+      spiritualUsaha,
+      spiritualProses,
+      spiritualCapaian,
+      spiritualDeskripsi,
+      sosialUsaha,
+      sosialProses,
+      sosialCapaian,
+      sosialDeskripsi,
+      ekskul: preservedEkskul,
+      deletedEkskuls: Array.isArray(currentNote.deletedEkskuls) ? currentNote.deletedEkskuls : [],
+    };
+
+    const response = await fetch("/api/walikelas/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Gagal menyimpan catatan.");
+
+    setAllClassNotes((prev) => ({
+      ...prev,
+      [selectedStudent.id]: payload,
+    }));
+    return payload;
   };
 
   const handleSaveNotes = async (e: React.FormEvent) => {
@@ -266,35 +375,9 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     setError("");
     setSuccess("");
 
-    // Preserve any existing ekskul grades entered by ekskul teachers
-    const currentNote = (allClassNotes && allClassNotes[selectedStudent.id]) || {};
-    const preservedEkskul = Array.isArray(currentNote.ekskul) ? currentNote.ekskul : [];
-
     setSaveLoading(true);
     try {
-      const response = await fetch("/api/walikelas/notes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          studentId: selectedStudent.id,
-          sakit: Number(sakit || 0),
-          izin: Number(izin || 0),
-          alpa: Number(alpa || 0),
-          catatan,
-          spiritualUsaha,
-          spiritualProses,
-          spiritualCapaian,
-          spiritualDeskripsi,
-          sosialUsaha,
-          sosialProses,
-          sosialCapaian,
-          sosialDeskripsi,
-          ekskul: preservedEkskul,
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Gagal menyimpan catatan.");
+      await saveCurrentStudentNotesPayload();
 
       setSuccess(`Presensi, capaian karakter spiritual, sosial, dan catatan untuk ${selectedStudent.name} berhasil disimpan!`);
       onRefreshTrigger(); // trigger live summary recalculation in dashboard app
@@ -307,6 +390,16 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     } finally {
       setSaveLoading(false);
     }
+  };
+
+  const handleOpenPreviewRaport = async () => {
+    if (!selectedStudent) return;
+    try {
+      await saveCurrentStudentNotesPayload();
+    } catch (e) {
+      // tetap buka pratinjau dengan state form terbaru meskipun offline
+    }
+    setRaportPrintTarget(selectedStudent);
   };
 
   // Robust grade finder that handles exact names, normalized keys, aliases, and punctuation variations
@@ -373,19 +466,28 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
   const gradesCount = subjectsList.filter((sub) => !!findGradeForSub(sub, studentGrades)).length;
 
   if (raportPrintTarget && selectedStudent) {
-    const studentNote = allClassNotes[selectedStudent.id] || {
-      sakit: 0,
-      izin: 0,
-      alpa: 0,
-      catatan: "",
-      spiritualUsaha: "B",
-      spiritualProses: "B",
-      spiritualCapaian: "B",
-      spiritualDeskripsi: "",
-      sosialUsaha: "B",
-      sosialProses: "B",
-      sosialCapaian: "B",
-      sosialDeskripsi: ""
+    const existingNote = allClassNotes[selectedStudent.id] || ({} as any);
+    const cleanEkskul = deduplicateStudentEkskuls(
+      existingNote.ekskul,
+      existingNote.deletedEkskuls,
+      activeEkskulList
+    );
+    const studentNote = {
+      ...existingNote,
+      studentId: selectedStudent.id,
+      sakit: Number(sakit ?? existingNote.sakit ?? 0),
+      izin: Number(izin ?? existingNote.izin ?? 0),
+      alpa: Number(alpa ?? existingNote.alpa ?? 0),
+      catatan: catatan || existingNote.catatan || "",
+      spiritualUsaha: spiritualUsaha || existingNote.spiritualUsaha || "B",
+      spiritualProses: spiritualProses || existingNote.spiritualProses || "B",
+      spiritualCapaian: spiritualCapaian || existingNote.spiritualCapaian || "B",
+      spiritualDeskripsi: spiritualDeskripsi || existingNote.spiritualDeskripsi || "",
+      sosialUsaha: sosialUsaha || existingNote.sosialUsaha || "B",
+      sosialProses: sosialProses || existingNote.sosialProses || "B",
+      sosialCapaian: sosialCapaian || existingNote.sosialCapaian || "B",
+      sosialDeskripsi: sosialDeskripsi || existingNote.sosialDeskripsi || "",
+      ekskul: cleanEkskul,
     };
     return (
       <PrintRaportView
@@ -396,7 +498,10 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
         onBack={() => setRaportPrintTarget(null)}
         allStudents={currentClassStudents}
         allGrades={grades}
-        allClassNotes={allClassNotes}
+        allClassNotes={{
+          ...allClassNotes,
+          [selectedStudent.id]: studentNote,
+        }}
         selectedClass={selectedClass}
       />
     );
@@ -552,7 +657,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
               {/* PDF and Word print trigger & Batch ZIP */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => setRaportPrintTarget(selectedStudent)}
+                  onClick={handleOpenPreviewRaport}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-800 hover:bg-emerald-950 text-white font-bold text-xs rounded transition shadow-xs cursor-pointer"
                   id="view-raport-trigger"
                   title="Buka pratinjau dan cetak/unduh rapor siswa ini"
@@ -784,19 +889,28 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
 
               {/* EXTRACURRICULAR PREVIEW CARD (FILLED BY EKSKUL TEACHERS) */}
               <div className="border-t border-slate-100 pt-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-extrabold text-[10px] uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <Award className="w-3.5 h-3.5 text-amber-600" />
-                    <span>Kegiatan Ekstrakurikuler (Ekskul)</span>
-                  </h4>
-                  <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <div>
+                    <h4 className="font-extrabold text-[10px] uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Kegiatan Ekstrakurikuler (Ekskul) Siswa</span>
+                    </h4>
+                    <p className="text-[10px] text-slate-500">
+                      Hapus centang (Unceklist) atau klik tombol <strong>Hapus</strong> untuk menghapus ekskul yang tidak diikuti siswa atau ekskul yang namanya ganda (double).
+                    </p>
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 w-fit">
                     Diinput oleh Guru Pembina Ekskul
                   </span>
                 </div>
 
                 {(() => {
                   const studentNote = allClassNotes[selectedStudent.id];
-                  const savedEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+                  const savedEkskuls = deduplicateStudentEkskuls(
+                    studentNote?.ekskul,
+                    studentNote?.deletedEkskuls,
+                    activeEkskulList
+                  );
 
                   if (savedEkskuls.length === 0) {
                     return (
@@ -820,6 +934,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
                         const usaha = eks.usaha || "B";
                         const proses = eks.proses || "B";
                         const capaian = eks.capaian || eks.predicate || "B";
+                        const isDeletingThis = deletingEkskulName === eks.name;
 
                         return (
                           <div
@@ -827,7 +942,14 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
                             className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
                           >
                             <div className="flex items-start gap-2.5">
-                              <span className="text-lg shrink-0">⚽</span>
+                              <input
+                                type="checkbox"
+                                checked={true}
+                                disabled={isDeletingThis}
+                                onChange={() => handleDeleteStudentEkskul(eks.name)}
+                                title={`Hapus centang (Unceklist) untuk menghapus ekskul ${eks.name} dari rapor ${selectedStudent.name}`}
+                                className="w-4 h-4 mt-1 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600 cursor-pointer shrink-0"
+                              />
                               <div>
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-bold text-xs text-slate-900">{eks.name}</span>
@@ -852,6 +974,16 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
                               <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono bg-emerald-100 text-emerald-900 border border-emerald-300 font-black">
                                 Capaian: {capaian}
                               </span>
+                              <button
+                                type="button"
+                                disabled={isDeletingThis}
+                                onClick={() => handleDeleteStudentEkskul(eks.name)}
+                                className="px-2.5 py-1 rounded text-[10px] font-bold bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                title={`Hapus / Unceklist ekskul ${eks.name} dari rapor ${selectedStudent.name}`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>{isDeletingThis ? "Menghapus..." : "Hapus / Unceklist"}</span>
+                              </button>
                             </div>
                           </div>
                         );

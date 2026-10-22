@@ -11,6 +11,8 @@ import {
   isKeislamanSubject,
   isEkskulSubject,
   getEkskulTps,
+  normalizeEkskulKey,
+  deduplicateStudentEkskuls,
 } from "../types";
 import {
   BookOpen,
@@ -1140,6 +1142,38 @@ export default function TeacherPanel({
     }
   };
 
+  // Delete / Uncheck Ekskul from Student directly by Ekskul Teacher / Pembina
+  const handleDeleteStudentEkskul = async (targetEkskulName: string) => {
+    if (!selectedStudent || !targetEkskulName) return;
+    setError("");
+    setSuccess("");
+    setEkskulSaveLoading(true);
+    try {
+      const response = await fetch("/api/ekskul/grades/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          studentId: selectedStudent.id,
+          ekskulName: targetEkskulName,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Gagal menghapus ekskul siswa.");
+
+      setSuccess(`Ekskul "${targetEkskulName}" berhasil di-unceklist / dihapus dari rapor ${selectedStudent.name}!`);
+      setTimeout(() => setSuccess(""), 4000);
+      onRefreshTrigger();
+
+      const resN = await fetch("/api/walikelas/notes");
+      const updatedNotes = await resN.json();
+      setAllNotes(updatedNotes);
+    } catch (err: any) {
+      setError(err.message || "Gagal menghapus ekskul dari siswa.");
+    } finally {
+      setEkskulSaveLoading(false);
+    }
+  };
+
   // Add TP template directly by the teacher
   const handleAddLocalTp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1370,8 +1404,13 @@ export default function TeacherPanel({
 
   const filledEkskulCount = classStudents.filter((s) => {
     const studentNote = allNotes[s.id];
-    const sEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
-    return sEkskuls.some((e: any) => e.name === currentEkskul || e.ekskulName === currentEkskul);
+    const sEkskuls = deduplicateStudentEkskuls(studentNote?.ekskul, studentNote?.deletedEkskuls, ekskulList);
+    return sEkskuls.some(
+      (e: any) =>
+        e.name === currentEkskul ||
+        e.ekskulName === currentEkskul ||
+        normalizeEkskulKey(e.name || e.ekskulName) === normalizeEkskulKey(currentEkskul)
+    );
   }).length;
 
   return (
@@ -1431,9 +1470,12 @@ export default function TeacherPanel({
                 );
 
               const studentNote = allNotes[s.id];
-              const sEkskuls = Array.isArray(studentNote?.ekskul) ? studentNote.ekskul : [];
+              const sEkskuls = deduplicateStudentEkskuls(studentNote?.ekskul, studentNote?.deletedEkskuls, ekskulList);
               const isFilledEkskul = sEkskuls.some(
-                (e: any) => e.name === currentEkskul || e.ekskulName === currentEkskul
+                (e: any) =>
+                  e.name === currentEkskul ||
+                  e.ekskulName === currentEkskul ||
+                  normalizeEkskulKey(e.name || e.ekskulName) === normalizeEkskulKey(currentEkskul)
               );
 
               const isFilled = activeViewTab === "ekskul" ? isFilledEkskul : isFilledSubject;
@@ -2481,7 +2523,96 @@ export default function TeacherPanel({
                 </div>
               </div>
 
-              <div className="border-t-2 border-amber-300 dark:border-[#223354] pt-4 text-right">
+              {/* Daftar Ekskul Tercatat pada Siswa Ini (Fitur Unceklist / Hapus Ekskul Ganda atau Tidak Diikuti) */}
+              {(() => {
+                const studentNote = allNotes[selectedStudent.id];
+                const studentEkskuls = deduplicateStudentEkskuls(
+                  studentNote?.ekskul,
+                  studentNote?.deletedEkskuls,
+                  ekskulList
+                );
+                if (studentEkskuls.length === 0) return null;
+                return (
+                  <div className="bg-amber-50/80 dark:bg-[#101829] border-2 border-amber-300 dark:border-amber-700/70 p-3.5 rounded-2xl space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div>
+                        <h5 className="text-xs font-black text-slate-900 dark:text-amber-200 uppercase tracking-wider">
+                          Daftar Ekskul Aktif pada Rapor {selectedStudent.name} ({studentEkskuls.length} Ekskul)
+                        </h5>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                          Hapus centang (Unceklist) atau klik tombol <strong>Hapus</strong> jika ekskul tidak diikuti oleh siswa ini atau namanya ganda.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {studentEkskuls.map((eks: any, i: number) => (
+                        <div
+                          key={i}
+                          className="p-2.5 bg-white dark:bg-[#070d1a] border border-amber-300 dark:border-amber-700/60 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                        >
+                          <label className="flex items-center gap-2.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={true}
+                              disabled={ekskulSaveLoading}
+                              onChange={() => handleDeleteStudentEkskul(eks.name)}
+                              className="w-4 h-4 rounded border-amber-500 text-amber-700 focus:ring-amber-500 cursor-pointer shrink-0"
+                              title={`Unceklist untuk menghapus ekskul ${eks.name} dari rapor ${selectedStudent.name}`}
+                            />
+                            <div>
+                              <span className="text-xs font-black text-slate-900 dark:text-white">
+                                {eks.name}
+                              </span>
+                              <span className="ml-2 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900">
+                                Capaian: {eks.capaian || eks.predicate || "B"}
+                              </span>
+                            </div>
+                          </label>
+                          <button
+                            type="button"
+                            disabled={ekskulSaveLoading}
+                            onClick={() => handleDeleteStudentEkskul(eks.name)}
+                            className="px-2.5 py-1 bg-rose-100 hover:bg-rose-700 text-rose-800 hover:text-white border border-rose-300 rounded-lg text-[11px] font-black transition flex items-center gap-1 cursor-pointer self-start sm:self-auto"
+                            title={`Hapus / Unceklist ekskul ${eks.name} dari siswa ini`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Hapus / Unceklist</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="border-t-2 border-amber-300 dark:border-[#223354] pt-4 flex flex-wrap items-center justify-between gap-3">
+                {(() => {
+                  const studentNote = allNotes[selectedStudent.id];
+                  const studentEkskuls = deduplicateStudentEkskuls(
+                    studentNote?.ekskul,
+                    studentNote?.deletedEkskuls,
+                    ekskulList
+                  );
+                  const hasCurrentEkskul = studentEkskuls.some(
+                    (e: any) =>
+                      e.name === currentEkskul ||
+                      e.ekskulName === currentEkskul ||
+                      normalizeEkskulKey(e.name || e.ekskulName) === normalizeEkskulKey(currentEkskul)
+                  );
+                  if (!hasCurrentEkskul) return <div />;
+                  return (
+                    <button
+                      type="button"
+                      disabled={ekskulSaveLoading}
+                      onClick={() => handleDeleteStudentEkskul(currentEkskul)}
+                      className="px-4 py-2.5 bg-rose-700 hover:bg-rose-800 text-white rounded-xl text-xs font-black flex items-center gap-1.5 shadow-sm border border-rose-500 transition disabled:opacity-50 cursor-pointer"
+                      title={`Hapus / Unceklist ekskul ${currentEkskul} dari rapor ${selectedStudent.name}`}
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-200" />
+                      <span>Hapus / Unceklist {currentEkskul} dari Siswa Ini</span>
+                    </button>
+                  );
+                })()}
                 <button
                   type="submit"
                   disabled={ekskulSaveLoading}

@@ -625,6 +625,47 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
   const [ekskulLoading, setEkskulLoading] = useState(false);
 
   const [quickAssigningId, setQuickAssigningId] = useState<string | null>(null);
+  const [inlineRenameId, setInlineRenameId] = useState<string | null>(null);
+  const [inlineRenameValue, setInlineRenameValue] = useState<string>("");
+  const [inlineRenameSaving, setInlineRenameSaving] = useState<boolean>(false);
+
+  const handleInlineRenameEkskul = async (ekskulId: string) => {
+    const trimmedName = inlineRenameValue.trim();
+    if (!trimmedName) return;
+    const currentItem = ekskuls.find((e) => e.id === ekskulId);
+    if (currentItem && currentItem.name.trim() === trimmedName) {
+      setInlineRenameId(null);
+      setInlineRenameValue("");
+      return;
+    }
+    setError("");
+    setInlineRenameSaving(true);
+    try {
+      const res = await fetch(`/api/ekskul/${ekskulId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: trimmedName,
+          onlyRename: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal mengubah nama ekskul.");
+      setInlineRenameId(null);
+      setInlineRenameValue("");
+      if (editingEkskul && editingEkskul.id === ekskulId) {
+        setEditingEkskul(null);
+        setNewEkskulName("");
+      }
+      await fetchAllData();
+      onRefreshTrigger();
+      showSuccess(`Nama ekstrakurikuler berhasil diubah menjadi "${trimmedName}" tanpa merubah data yang sudah terisi!`);
+    } catch (err: any) {
+      setError(err.message || "Gagal mengubah nama ekskul.");
+    } finally {
+      setInlineRenameSaving(false);
+    }
+  };
 
   const handleSaveEkskul = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -638,11 +679,18 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmedName,
-          type: newEkskulType,
-          teacherId: newEkskulTeacherId,
-        }),
+        body: JSON.stringify(
+          editingEkskul
+            ? {
+                name: trimmedName,
+                onlyRename: true,
+              }
+            : {
+                name: trimmedName,
+                type: newEkskulType,
+                teacherId: newEkskulTeacherId,
+              }
+        ),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan ekskul.");
@@ -652,7 +700,11 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
       setEditingEkskul(null);
       await fetchAllData();
       onRefreshTrigger();
-      showSuccess(editingEkskul ? "Ekstrakurikuler & Pembina berhasil diperbarui!" : "Ekstrakurikuler berhasil disimpan!");
+      showSuccess(
+        editingEkskul
+          ? `Nama ekstrakurikuler berhasil diubah menjadi "${trimmedName}" tanpa merubah data yang sudah terisi!`
+          : "Ekstrakurikuler berhasil disimpan!"
+      );
     } catch (err: any) {
       setError(err.message || "Gagal menyimpan.");
     } finally {
@@ -661,19 +713,24 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
   };
 
   const startEditEkskul = (item: EkskulItem) => {
+    setInlineRenameId(item.id);
+    setInlineRenameValue(item.name);
     setEditingEkskul(item);
     setNewEkskulName(item.name);
     setNewEkskulType(item.type);
     const assignedTeacher = teachers.find(
       (t) =>
         (item.teacherId && t.id === item.teacherId) ||
-        (t.isEkskulTeacher && t.ekskulName && t.ekskulName.toLowerCase().trim() === item.name.toLowerCase().trim())
+        (t.isEkskulTeacher &&
+          ((Array.isArray(t.ekskulNames) && t.ekskulNames.some((n) => n.toLowerCase().trim() === item.name.toLowerCase().trim())) ||
+            (t.ekskulName && t.ekskulName.split(",").some((n) => n.toLowerCase().trim() === item.name.toLowerCase().trim()))))
     );
     setNewEkskulTeacherId(assignedTeacher ? assignedTeacher.id : (item.teacherId || ""));
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const cancelEditEkskul = () => {
+    setInlineRenameId(null);
+    setInlineRenameValue("");
     setEditingEkskul(null);
     setNewEkskulName("");
     setNewEkskulType("Pilihan");
@@ -2758,33 +2815,38 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <Award className="w-5 h-5 text-purple-400" />
-                  <span>{editingEkskul ? "Edit Kegiatan Ekskul" : "Tambah Ekskul Baru"}</span>
+                  <span>{editingEkskul ? "Edit Nama Ekskul" : "Tambah Ekskul Baru"}</span>
                 </h2>
                 <p className="text-xs text-slate-400 mt-1 font-medium">
                   {editingEkskul
-                    ? "Ubah nama atau kategori kegiatan ekstrakurikuler."
+                    ? "Hanya mengubah nama ekskul. Data nilai, deskripsi, TP & guru pembina yang sudah terisi tetap aman."
                     : "Tambahkan nama kegiatan dan tentukan kategori wajib atau pilihan untuk penilaian rapor."}
                 </p>
               </div>
             </div>
 
             {editingEkskul && (
-              <div className="p-3 bg-purple-950/40 border border-purple-500/40 rounded-xl flex items-center justify-between text-xs text-purple-200">
-                <span className="font-semibold">Sedang Mengedit: <b>{editingEkskul.name}</b></span>
-                <button
-                  type="button"
-                  onClick={cancelEditEkskul}
-                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] font-bold cursor-pointer transition"
-                >
-                  Batal Edit
-                </button>
+              <div className="p-3 bg-purple-950/40 border border-purple-500/40 rounded-xl space-y-1.5 text-xs text-purple-200">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Edit Nama: <b>{editingEkskul.name}</b></span>
+                  <button
+                    type="button"
+                    onClick={cancelEditEkskul}
+                    className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] font-bold cursor-pointer transition"
+                  >
+                    Batal Edit
+                  </button>
+                </div>
+                <p className="text-[10px] text-emerald-300 font-medium">
+                  ✓ Data nilai siswa, deskripsi, TP & pembina pada ekskul ini tidak akan berubah.
+                </p>
               </div>
             )}
 
             <form onSubmit={handleSaveEkskul} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5 font-mono">
-                  Nama Kegiatan Ekstrakurikuler
+                  {editingEkskul ? "Nama Baru Ekstrakurikuler" : "Nama Kegiatan Ekstrakurikuler"}
                 </label>
                 <input
                   type="text"
@@ -2796,44 +2858,48 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5 font-mono">
-                  Tipe Ekstrakurikuler
-                </label>
-                <select
-                  value={newEkskulType}
-                  onChange={(e) =>
-                    setNewEkskulType(e.target.value as "Wajib" | "Pilihan")
-                  }
-                  className="w-full px-3.5 py-2.5 bg-[#070d18] border border-[#1e2e4a] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-purple-500 transition font-medium cursor-pointer"
-                >
-                  <option value="Wajib">Wajib (Compulsory - Seperti Pramuka)</option>
-                  <option value="Pilihan">Pilihan (Elective - Bakat Minat)</option>
-                </select>
-              </div>
+              {!editingEkskul && (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5 font-mono">
+                      Tipe Ekstrakurikuler
+                    </label>
+                    <select
+                      value={newEkskulType}
+                      onChange={(e) =>
+                        setNewEkskulType(e.target.value as "Wajib" | "Pilihan")
+                      }
+                      className="w-full px-3.5 py-2.5 bg-[#070d18] border border-[#1e2e4a] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-purple-500 transition font-medium cursor-pointer"
+                    >
+                      <option value="Wajib">Wajib (Compulsory - Seperti Pramuka)</option>
+                      <option value="Pilihan">Pilihan (Elective - Bakat Minat)</option>
+                    </select>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5 font-mono">
-                  Guru Pembina / Pelatih
-                </label>
-                <select
-                  value={newEkskulTeacherId}
-                  onChange={(e) => setNewEkskulTeacherId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-[#070d18] border border-[#1e2e4a] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-purple-500 transition font-medium cursor-pointer"
-                >
-                  <option value="">-- Belum Ada Pembina (Pilih Guru) --</option>
-                  {teachers
-                    .filter((t) => t.subject !== "Admin")
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} ({t.subject})
-                      </option>
-                    ))}
-                </select>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  * Guru yang dipilih otomatis ditugaskan sebagai pembina ekskul ini dan dapat menginput nilai rapornya.
-                </p>
-              </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5 font-mono">
+                      Guru Pembina / Pelatih
+                    </label>
+                    <select
+                      value={newEkskulTeacherId}
+                      onChange={(e) => setNewEkskulTeacherId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 bg-[#070d18] border border-[#1e2e4a] text-white rounded-xl text-xs md:text-sm focus:outline-none focus:border-purple-500 transition font-medium cursor-pointer"
+                    >
+                      <option value="">-- Belum Ada Pembina (Pilih Guru) --</option>
+                      {teachers
+                        .filter((t) => t.subject !== "Admin")
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.subject})
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      * Guru yang dipilih otomatis ditugaskan sebagai pembina ekskul ini dan dapat menginput nilai rapornya.
+                    </p>
+                  </div>
+                </>
+              )}
 
               <div className="flex gap-2">
                 {editingEkskul && (
@@ -2853,7 +2919,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   {editingEkskul ? (
                     <>
                       <Save className="w-4 h-4" />
-                      <span>{ekskulLoading ? "Menyimpan..." : "Simpan Perubahan"}</span>
+                      <span>{ekskulLoading ? "Menyimpan..." : "Simpan Nama Ekskul"}</span>
                     </>
                   ) : (
                     <>
@@ -2874,7 +2940,7 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                   Daftar Kegiatan Ekstrakurikuler
                 </h2>
                 <p className="text-xs text-slate-400 font-medium">
-                  Kegiatan aktif yang dapat dinilai oleh Guru Pembina / Pelatih Ekskul pada rapor peserta didik.
+                  Klik tombol <b>Edit Nama</b> pada kegiatan untuk mengubah nama ekskul tanpa merubah data nilai & pembina yang sudah terisi.
                 </p>
               </div>
               <span className="px-2.5 py-0.5 rounded-full bg-purple-950/80 text-purple-300 border border-purple-700/60 text-[10px] font-extrabold font-mono">
@@ -2908,10 +2974,13 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                       const assignedTeacher = teachers.find(
                         (t) =>
                           (e.teacherId && t.id === e.teacherId) ||
-                          (t.isEkskulTeacher && t.ekskulName && t.ekskulName.toLowerCase().trim() === e.name.toLowerCase().trim())
+                          (t.isEkskulTeacher &&
+                            ((Array.isArray(t.ekskulNames) && t.ekskulNames.some((n) => n.toLowerCase().trim() === e.name.toLowerCase().trim())) ||
+                              (t.ekskulName && t.ekskulName.split(",").some((n) => n.toLowerCase().trim() === e.name.toLowerCase().trim()))))
                       );
                       const currentTeacherId = assignedTeacher ? assignedTeacher.id : (e.teacherId || "");
                       const currentTeacherName = assignedTeacher ? assignedTeacher.name : (e.teacherName || "");
+                      const isInlineEditing = inlineRenameId === e.id;
 
                       return (
                         <tr
@@ -2922,7 +2991,63 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                             {idx + 1}
                           </td>
                           <td className="py-3 px-3.5 font-bold text-white text-sm">
-                            {e.name}
+                            {isInlineEditing ? (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={inlineRenameValue}
+                                  onChange={(ev) => setInlineRenameValue(ev.target.value)}
+                                  onKeyDown={(ev) => {
+                                    if (ev.key === "Enter") {
+                                      ev.preventDefault();
+                                      handleInlineRenameEkskul(e.id);
+                                    } else if (ev.key === "Escape") {
+                                      setInlineRenameId(null);
+                                      setInlineRenameValue("");
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 bg-[#070d18] border border-purple-500 text-white rounded-lg text-xs md:text-sm focus:outline-none font-bold min-w-[180px]"
+                                  placeholder="Nama ekskul..."
+                                />
+                                <button
+                                  type="button"
+                                  disabled={inlineRenameSaving || !inlineRenameValue.trim()}
+                                  onClick={() => handleInlineRenameEkskul(e.id)}
+                                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                >
+                                  <Save className="w-3.5 h-3.5" />
+                                  <span>{inlineRenameSaving ? "Menyimpan..." : "Simpan"}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={inlineRenameSaving}
+                                  onClick={() => {
+                                    setInlineRenameId(null);
+                                    setInlineRenameValue("");
+                                  }}
+                                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-bold transition cursor-pointer"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <span>{e.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setInlineRenameId(e.id);
+                                    setInlineRenameValue(e.name);
+                                  }}
+                                  className="px-2 py-0.5 bg-sky-950/60 hover:bg-sky-900/80 text-sky-300 border border-sky-700/50 rounded-md text-[10px] font-bold transition cursor-pointer inline-flex items-center gap-1"
+                                  title="Edit Nama Ekskul Saja"
+                                >
+                                  <Edit className="w-3 h-3" />
+                                  <span>Edit Nama</span>
+                                </button>
+                              </div>
+                            )}
                           </td>
                           <td className="py-3 px-3.5">
                             <span
@@ -2972,10 +3097,11 @@ export default function AdminPanel({ onRefreshTrigger, refreshTrigger }: AdminPa
                             <div className="inline-flex gap-1.5 justify-end">
                               <button
                                 onClick={() => startEditEkskul(e)}
-                                className="p-1.5 hover:bg-sky-950/60 text-sky-400 hover:text-white rounded-lg transition cursor-pointer"
-                                title="Edit Ekstrakurikuler & Pembina"
+                                className="px-2.5 py-1.5 bg-sky-950/60 hover:bg-sky-900 text-sky-300 hover:text-white border border-sky-800/60 rounded-lg transition cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold"
+                                title="Edit Nama Ekstrakurikuler"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="w-3.5 h-3.5" />
+                                <span>Edit Nama</span>
                               </button>
                               <button
                                 onClick={() => handleDeleteEkskul(e.id)}

@@ -73,6 +73,8 @@ export interface WaliKelasNote {
   sosialProses?: string;
   sosialCapaian?: string;
   sosialDeskripsi?: string;
+  ekskul?: any[];
+  deletedEkskuls?: string[];
 }
 
 export interface WaliKelasNotesMap {
@@ -505,4 +507,95 @@ export function extractTeacherSubjects(t: any): string[] {
   return Array.from(new Set(list.filter(Boolean)));
 }
 
+/**
+ * Normalizes an extracurricular name into a canonical key so variants like
+ * "Pramuka" vs "Pramuka Siaga & Penggalang" or "Klub Sains" vs "Klub Sains & Matematika"
+ * never create duplicate ekskul entries for a student.
+ */
+export function normalizeEkskulKey(name?: string): string {
+  if (!name) return "";
+  const clean = String(name).toLowerCase().trim().replace(/\s+/g, " ");
+  if (!clean) return "";
+  if (clean.includes("pramuka")) return "pramuka";
+  if (clean.includes("sains") || clean.includes("klub sains")) return "sains";
+  if (clean.includes("panahan") || clean.includes("archery")) return "panahan";
+  if (clean.includes("futsal") || clean.includes("sepak bola") || clean.includes("minisoccer")) return "futsal";
+  if (clean.includes("bulu tangkis") || clean.includes("bulutangkis") || clean.includes("badminton")) return "bulutangkis";
+  if (clean.includes("tahfizh") || clean.includes("tahfidz") || clean.includes("tahfiz")) return "tahfizh";
+  if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
+  if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
+  if (clean.includes("wirausaha") || clean.includes("entrepreneur") || clean.includes("market day")) return "entrepreneur";
+  if (clean.includes("musik") || clean.includes("hadroh") || clean.includes("marawis")) return "hadroh";
+  if (clean.includes("mentoring") || clean.includes("bina pribadi")) return "mentoring";
+  if (clean.includes("robotik") || clean.includes("robotic")) return "robotik";
+  if (clean.includes("renang") || clean.includes("swimming")) return "renang";
+  if (clean.includes("karate") || clean.includes("silat") || clean.includes("taekwondo") || clean.includes("bela diri")) return "beladiri";
+  return clean;
+}
 
+/**
+ * Deduplicates a student's ekskul array by canonical ekskul key and filters out any
+ * unchecked/deleted ekskuls so duplicate names never appear in UI or printed Raport.
+ */
+export function deduplicateStudentEkskuls(
+  ekskulList: any[] | undefined | null,
+  deletedEkskuls?: string[] | null,
+  masterEkskuls?: { name: string; type?: string }[] | null
+): any[] {
+  if (!Array.isArray(ekskulList)) return [];
+  const deletedSet = new Set(
+    (Array.isArray(deletedEkskuls) ? deletedEkskuls : [])
+      .flatMap((d) => [String(d || "").toLowerCase().trim(), normalizeEkskulKey(d)])
+      .filter(Boolean)
+  );
+
+  const map = new Map<string, any>();
+  for (const item of ekskulList) {
+    if (!item) continue;
+    if (item.selected === false || item.deleted === true || item.hidden === true) continue;
+    const rawName = String(item.name || item.ekskulName || "").trim();
+    if (!rawName) continue;
+    const normKey = normalizeEkskulKey(rawName);
+    if (deletedSet.has(rawName.toLowerCase()) || (normKey && deletedSet.has(normKey))) {
+      continue;
+    }
+
+    const key = normKey || rawName.toLowerCase();
+    const existing = map.get(key);
+    if (!existing) {
+      // Check if masterEkskuls has a canonical display name for this key
+      const masterMatch = Array.isArray(masterEkskuls)
+        ? masterEkskuls.find((m) => m && normalizeEkskulKey(m.name) === key)
+        : undefined;
+      map.set(key, {
+        ...item,
+        name: masterMatch ? masterMatch.name : rawName,
+        type: item.type || (masterMatch?.type as any) || (key === "pramuka" || key === "mentoring" ? "Wajib" : "Pilihan"),
+      });
+    } else {
+      const existingDesc = String(existing.description || existing.deskripsi || "").trim();
+      const newDesc = String(item.description || item.deskripsi || "").trim();
+      const masterMatch = Array.isArray(masterEkskuls)
+        ? masterEkskuls.find((m) => m && normalizeEkskulKey(m.name) === key)
+        : undefined;
+      const preferredName = masterMatch
+        ? masterMatch.name
+        : rawName.length >= String(existing.name || "").length
+        ? rawName
+        : existing.name;
+
+      map.set(key, {
+        ...existing,
+        ...item,
+        name: preferredName,
+        description: newDesc || existingDesc,
+        deskripsi: newDesc || existingDesc,
+        usaha: item.usaha || existing.usaha || "B",
+        proses: item.proses || existing.proses || "B",
+        capaian: item.capaian || item.predicate || existing.capaian || existing.predicate || "B",
+        predicate: item.predicate || item.capaian || existing.predicate || existing.capaian || "B",
+      });
+    }
+  }
+  return Array.from(map.values());
+}

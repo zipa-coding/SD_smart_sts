@@ -1,6 +1,6 @@
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { Student, Grade, WaliKelasNote, Teacher } from "../types";
+import { Student, Grade, WaliKelasNote, Teacher, deduplicateStudentEkskuls } from "../types";
 
 export interface GeneratePdfOptions {
   student: Student;
@@ -365,6 +365,19 @@ export async function generateStudentPdfDoc(options: GeneratePdfOptions): Promis
   const formattedStudentName = formatTitleCase(student?.name || "");
   const numericKelas = getNumericKelas(student?.kelas);
 
+  const studentEkskulList = deduplicateStudentEkskuls(
+    (waliKelasNote as any)?.ekskul,
+    (waliKelasNote as any)?.deletedEkskuls
+  );
+  const safeSpiritualDeskripsi =
+    waliKelasNote?.spiritualDeskripsi && String(waliKelasNote.spiritualDeskripsi).trim() !== ""
+      ? waliKelasNote.spiritualDeskripsi
+      : `Alhamdulillah ananda ${formattedStudentName} menunjukkan perkembangan spiritual yang baik. Ia telah memahami tata cara beribadah harian dengan rajin serta menjaga adab ketertiban.`;
+  const safeSosialDeskripsi =
+    waliKelasNote?.sosialDeskripsi && String(waliKelasNote.sosialDeskripsi).trim() !== ""
+      ? waliKelasNote.sosialDeskripsi
+      : `Alhamdulillah ananda ${formattedStudentName} mudah bergaul, memiliki rasa empati tinggi, serta sopan santun dalam berkata kata kepada guru maupun sesama kawan.`;
+
   const baseUmum = numericKelas <= 2
     ? ["PAI", "PPKN", "Bahasa Indonesia", "Matematika", "PJOK"]
     : ["PAI", "PPKN", "Bahasa Indonesia", "Matematika", "PJOK", "IPAS"];
@@ -577,7 +590,7 @@ export async function generateStudentPdfDoc(options: GeneratePdfOptions): Promis
         </tr>
         <tr>
           <td colspan="4" style="padding: ${isA4 ? "1.5px 3.5px 2px 3.5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.25pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.22" : "1.45"};">
-            <strong>Deskripsi:</strong> ${waliKelasNote.spiritualDeskripsi || ""}
+            <strong>Deskripsi:</strong> ${safeSpiritualDeskripsi}
           </td>
         </tr>
       </table>
@@ -611,7 +624,7 @@ export async function generateStudentPdfDoc(options: GeneratePdfOptions): Promis
         </tr>
         <tr>
           <td colspan="4" style="padding: ${isA4 ? "1.5px 3.5px 2px 3.5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.25pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.22" : "1.45"};">
-            <strong>Deskripsi:</strong> ${waliKelasNote.sosialDeskripsi || ""}
+            <strong>Deskripsi:</strong> ${safeSosialDeskripsi}
           </td>
         </tr>
       </table>
@@ -756,7 +769,7 @@ export async function generateStudentPdfDoc(options: GeneratePdfOptions): Promis
 
       <h4 class="pdf-heading">E. Ekstrakurikuler dan Keterampilan</h4>
       ${
-        ((waliKelasNote as any).ekskul || []).length === 0
+        studentEkskulList.length === 0
           ? `
         <table class="pdf-box-table" style="page-break-inside: avoid;">
           <tr>
@@ -766,7 +779,7 @@ export async function generateStudentPdfDoc(options: GeneratePdfOptions): Promis
           </tr>
         </table>
       `
-          : ((waliKelasNote as any).ekskul || [])
+          : studentEkskulList
               .map((e: any, idx: number) => {
                 const eGrades = getEkskulGrades(e);
                 return `

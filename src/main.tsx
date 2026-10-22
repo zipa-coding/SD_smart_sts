@@ -4,7 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import dbData from './data/db.json';
 import { isFirebaseConfigured, firebaseApi, isDummyTeacher } from './lib/firebase';
-import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject } from './types';
+import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls } from './types';
 import { registerSW } from 'virtual:pwa-register';
 
 // Automatically register and update PWA service worker in production
@@ -571,23 +571,27 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         }
 
         if (path === '/api/ekskul' && method === 'POST') {
+          originalFetch(input, init).catch(() => {});
           const e = await firebaseApi.postEkskul(body);
           return new Response(JSON.stringify(e), { status: 201, headers: { 'Content-Type': 'application/json' } });
         }
 
         if (path.startsWith('/api/ekskul/') && path.endsWith('/assign-teacher') && method === 'POST') {
+          originalFetch(input, init).catch(() => {});
           const id = path.replace('/api/ekskul/', '').replace('/assign-teacher', '');
           const res = await firebaseApi.assignTeacherEkskul(id, body?.teacherId);
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
         if (path.startsWith('/api/ekskul/') && method === 'PUT') {
+          originalFetch(input, init).catch(() => {});
           const id = path.split('/').pop() || "";
           const res = await firebaseApi.putEkskul(id, body);
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
         if (path.startsWith('/api/ekskul/') && method === 'DELETE') {
+          originalFetch(input, init).catch(() => {});
           const id = path.split('/').pop() || "";
           const res = await firebaseApi.deleteEkskul(id);
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -600,7 +604,17 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         }
 
         if (path === '/api/ekskul/grades' && method === 'POST') {
+          originalFetch(input, init).catch(() => {});
           const res = await firebaseApi.postEkskulGrade(body);
+          return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
+        }
+
+        if (
+          (path === '/api/ekskul/grades/delete' && method === 'POST') ||
+          (path === '/api/ekskul/grades' && method === 'DELETE')
+        ) {
+          originalFetch(input, init).catch(() => {});
+          const res = await firebaseApi.deleteEkskulGrade(body);
           return new Response(JSON.stringify(res), { status: 200, headers: { 'Content-Type': 'application/json' } });
         }
 
@@ -1046,12 +1060,39 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // 5. GET /api/walikelas/notes
     if (path === '/api/walikelas/notes' && method === 'GET') {
       const db = getDB();
-      return new Response(JSON.stringify(db.walikelas_notes || {}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const rawNotes = db.walikelas_notes || {};
+      const cleanedNotes: Record<string, any> = {};
+      for (const [sId, noteObj] of Object.entries(rawNotes)) {
+        const note = noteObj as any;
+        if (!note || typeof note !== "object") continue;
+        cleanedNotes[sId] = {
+          ...note,
+          ekskul: deduplicateStudentEkskuls(note.ekskul, note.deletedEkskuls, db.ekskul),
+        };
+      }
+      return new Response(JSON.stringify(cleanedNotes), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // POST /api/walikelas/notes
     if (path === '/api/walikelas/notes' && method === 'POST') {
-      const { studentId, sakit, izin, alpa, catatan, spiritualUsaha, spiritualProses, spiritualCapaian, spiritualDeskripsi, sosialUsaha, sosialProses, sosialCapaian, sosialDeskripsi, ekskul } = body || {};
+      const {
+        studentId,
+        sakit,
+        izin,
+        alpa,
+        catatan,
+        spiritualUsaha,
+        spiritualProses,
+        spiritualCapaian,
+        spiritualDeskripsi,
+        sosialUsaha,
+        sosialProses,
+        sosialCapaian,
+        sosialDeskripsi,
+        ekskul,
+        replaceEkskul,
+        deletedEkskuls,
+      } = body || {};
       const db = getDB();
       if (!db.walikelas_notes) db.walikelas_notes = {};
 
@@ -1059,49 +1100,35 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
       const existingEkskuls = Array.isArray(existingNote.ekskul) ? existingNote.ekskul : [];
       const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
 
-      const normalizeEkskulKey = (name: string): string => {
-        if (!name) return "";
-        const clean = String(name).toLowerCase().trim();
-        if (clean.includes("panahan")) return "panahan";
-        if (clean.includes("pramuka")) return "pramuka";
-        if (clean.includes("futsal")) return "futsal";
-        if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-        if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-        if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-        if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-        if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-        if (clean.includes("mentoring")) return "mentoring";
-        return clean;
-      };
+      const mergedDeleted = Array.from(
+        new Set([
+          ...(Array.isArray(existingNote.deletedEkskuls) ? existingNote.deletedEkskuls : []),
+          ...(Array.isArray(deletedEkskuls) ? deletedEkskuls : []),
+        ])
+      );
 
-      const mergedEkskulMap = new Map();
-      existingEkskuls.forEach((e: any) => {
-        const key = normalizeEkskulKey(e.name || e.ekskulName || "");
-        if (key) mergedEkskulMap.set(key, e);
-      });
-      incomingEkskuls.forEach((e: any) => {
-        const key = normalizeEkskulKey(e.name || e.ekskulName || "");
-        if (key) {
-          const prev = mergedEkskulMap.get(key) || {};
-          mergedEkskulMap.set(key, { ...prev, ...e });
-        }
-      });
-      const finalEkskul = Array.from(mergedEkskulMap.values());
+      const rawEkskulList = replaceEkskul
+        ? incomingEkskuls
+        : [...existingEkskuls, ...incomingEkskuls];
+      const finalEkskul = deduplicateStudentEkskuls(rawEkskulList, mergedDeleted, db.ekskul);
 
-      const spiritualDeskFinal =
-        spiritualDeskripsi !== undefined && spiritualDeskripsi !== null
-          ? String(spiritualDeskripsi)
-          : (existingNote.spiritualDeskripsi || "");
-      const sosialDeskFinal =
-        sosialDeskripsi !== undefined && sosialDeskripsi !== null
-          ? String(sosialDeskripsi)
-          : (existingNote.sosialDeskripsi || "");
+      const incomingSpDesc = spiritualDeskripsi !== undefined && spiritualDeskripsi !== null ? String(spiritualDeskripsi).trim() : "";
+      const existingSpDesc = String(existingNote.spiritualDeskripsi || "").trim();
+      const spiritualDeskFinal = incomingSpDesc ? String(spiritualDeskripsi) : existingSpDesc;
+
+      const incomingSoDesc = sosialDeskripsi !== undefined && sosialDeskripsi !== null ? String(sosialDeskripsi).trim() : "";
+      const existingSoDesc = String(existingNote.sosialDeskripsi || "").trim();
+      const sosialDeskFinal = incomingSoDesc ? String(sosialDeskripsi) : existingSoDesc;
+
+      const incomingCatatan = catatan !== undefined && catatan !== null ? String(catatan).trim() : "";
+      const existingCatatan = String(existingNote.catatan || "").trim();
+      const catatanFinal = incomingCatatan ? String(catatan) : existingCatatan;
 
       db.walikelas_notes[studentId] = {
         sakit: sakit !== undefined && sakit !== null ? Number(sakit) : Number(existingNote.sakit || 0),
         izin: izin !== undefined && izin !== null ? Number(izin) : Number(existingNote.izin || 0),
         alpa: alpa !== undefined && alpa !== null ? Number(alpa) : Number(existingNote.alpa || 0),
-        catatan: catatan !== undefined && catatan !== null ? String(catatan) : (existingNote.catatan || ""),
+        catatan: catatanFinal,
 
         spiritualUsaha: spiritualUsaha || existingNote.spiritualUsaha || "B",
         spiritualProses: spiritualProses || existingNote.spiritualProses || "B",
@@ -1113,7 +1140,8 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         sosialCapaian: sosialCapaian || existingNote.sosialCapaian || "B",
         sosialDeskripsi: sosialDeskFinal,
 
-        ekskul: finalEkskul
+        ekskul: finalEkskul,
+        deletedEkskuls: mergedDeleted,
       };
       saveDB(db);
       return new Response(JSON.stringify({ studentId, ...db.walikelas_notes[studentId] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -1513,7 +1541,7 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // PUT /api/ekskul/:id
     if (path.startsWith('/api/ekskul/') && method === 'PUT') {
       const id = path.split('/').pop() || "";
-      const { name, type, teacherId } = body || {};
+      const { name, type, teacherId, onlyRename } = body || {};
       const trimmedName = String(name || "").trim();
       const db = getDB();
       if (!Array.isArray(db.ekskul)) db.ekskul = [];
@@ -1521,12 +1549,14 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
 
       const idx = db.ekskul.findIndex((e: any) => String(e.id) === String(id));
       let target = idx !== -1 ? db.ekskul[idx] : null;
-      const oldTeacherId = target ? target.teacherId : "";
-      const oldName = target ? target.name : "";
+      const oldTeacherId = target ? (target.teacherId || "") : "";
+      const oldName = target ? String(target.name || "").trim() : "";
+      const effectiveType = (onlyRename || !type) ? (target?.type || "Pilihan") : (type === "Wajib" ? "Wajib" : "Pilihan");
+      const effectiveTeacherId = (onlyRename || teacherId === undefined) ? oldTeacherId : (teacherId || "");
 
-      let assignedTeacherName = "";
-      if (teacherId) {
-        const t = db.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+      let assignedTeacherName = target ? (target.teacherName || "") : "";
+      if (effectiveTeacherId) {
+        const t = db.teachers.find((tc: any) => String(tc.id) === String(effectiveTeacherId));
         if (t) {
           assignedTeacherName = t.name;
           t.isEkskulTeacher = true;
@@ -1536,16 +1566,20 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
               : [];
           }
           if (oldName && oldName !== trimmedName) {
-            t.ekskulNames = t.ekskulNames.map((n: string) => n === oldName ? trimmedName : n);
+            t.ekskulNames = t.ekskulNames.map((n: string) =>
+              n.trim().toLowerCase() === oldName.toLowerCase() ? trimmedName : n
+            );
           }
-          if (!t.ekskulNames.includes(trimmedName)) {
+          if (!t.ekskulNames.some((n: string) => n.trim().toLowerCase() === trimmedName.toLowerCase())) {
             t.ekskulNames.push(trimmedName);
           }
           t.ekskulName = t.ekskulNames.join(", ");
         }
+      } else if (!onlyRename && teacherId !== undefined) {
+        assignedTeacherName = "";
       }
 
-      if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+      if (!onlyRename && teacherId !== undefined && oldTeacherId && String(oldTeacherId) !== String(effectiveTeacherId)) {
         const prevT = db.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
         if (prevT) {
           const remainingEkskuls = db.ekskul.filter(
@@ -1563,17 +1597,73 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         }
       }
 
+      if (oldName && trimmedName && oldName !== trimmedName) {
+        const lowerOld = oldName.toLowerCase();
+        db.teachers.forEach((t: any) => {
+          if (Array.isArray(t.ekskulNames)) {
+            if (t.ekskulNames.some((n: string) => String(n || "").trim().toLowerCase() === lowerOld)) {
+              t.ekskulNames = Array.from(
+                new Set(
+                  t.ekskulNames.map((n: string) =>
+                    String(n || "").trim().toLowerCase() === lowerOld ? trimmedName : String(n || "").trim()
+                  ).filter(Boolean)
+                )
+              );
+              t.ekskulName = t.ekskulNames.join(", ");
+            }
+          } else if (t.ekskulName && String(t.ekskulName).toLowerCase().includes(lowerOld)) {
+            const parts = String(t.ekskulName)
+              .split(",")
+              .map((s: string) => s.trim())
+              .filter(Boolean)
+              .map((s: string) => (s.toLowerCase() === lowerOld ? trimmedName : s));
+            t.ekskulNames = Array.from(new Set(parts));
+            t.ekskulName = t.ekskulNames.join(", ");
+          }
+        });
+
+        if (db.walikelas_notes && typeof db.walikelas_notes === "object") {
+          Object.values(db.walikelas_notes).forEach((noteObj: any) => {
+            if (noteObj && Array.isArray(noteObj.ekskul)) {
+              noteObj.ekskul = noteObj.ekskul.map((eks: any) => {
+                if (eks && String(eks.name || "").trim().toLowerCase() === lowerOld) {
+                  return { ...eks, name: trimmedName };
+                }
+                return eks;
+              });
+            }
+          });
+        }
+
+        if (db.tps_templates && typeof db.tps_templates === "object") {
+          Object.keys(db.tps_templates).forEach((k) => {
+            const kLower = k.trim().toLowerCase();
+            if (kLower === lowerOld || kLower === `ekskul ${lowerOld}`) {
+              const isPrefixed = kLower.startsWith("ekskul ");
+              const newKey = isPrefixed ? `Ekskul ${trimmedName}` : trimmedName;
+              const existingOldList = Array.isArray(db.tps_templates[k]) ? db.tps_templates[k] : [];
+              const existingNewList = Array.isArray(db.tps_templates[newKey]) ? db.tps_templates[newKey] : [];
+              const mergedMap = new Map<string, any>();
+              [...existingNewList, ...existingOldList].forEach((tp: any) => {
+                if (tp && tp.id) mergedMap.set(String(tp.id), tp);
+              });
+              db.tps_templates[newKey] = Array.from(mergedMap.values());
+            }
+          });
+        }
+      }
+
       if (target) {
         target.name = trimmedName || target.name;
-        target.type = type || target.type;
-        target.teacherId = teacherId || "";
+        target.type = effectiveType;
+        target.teacherId = effectiveTeacherId;
         target.teacherName = assignedTeacherName;
       } else {
         target = {
           id,
           name: trimmedName,
-          type: type || "Pilihan",
-          teacherId: teacherId || "",
+          type: effectiveType,
+          teacherId: effectiveTeacherId,
           teacherName: assignedTeacherName
         };
         db.ekskul.push(target);
@@ -1597,7 +1687,17 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // GET & POST /api/ekskul/grades
     if (path === '/api/ekskul/grades' && method === 'GET') {
       const db = getDB();
-      return new Response(JSON.stringify(db.walikelas_notes || {}), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      const rawNotes = db.walikelas_notes || {};
+      const cleanedNotes: Record<string, any> = {};
+      for (const [sId, noteObj] of Object.entries(rawNotes)) {
+        const note = noteObj as any;
+        if (!note || typeof note !== "object") continue;
+        cleanedNotes[sId] = {
+          ...note,
+          ekskul: deduplicateStudentEkskuls(note.ekskul, note.deletedEkskuls, db.ekskul),
+        };
+      }
+      return new Response(JSON.stringify(cleanedNotes), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     if (path === '/api/ekskul/grades' && method === 'POST') {
@@ -1612,46 +1712,29 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           sakit: 0, izin: 0, alpa: 0, catatan: "",
           spiritualUsaha: "B", spiritualProses: "B", spiritualCapaian: "B", spiritualDeskripsi: "",
           sosialUsaha: "B", sosialProses: "B", sosialCapaian: "B", sosialDeskripsi: "",
-          ekskul: []
+          ekskul: [],
+          deletedEkskuls: [],
         };
       }
       if (!Array.isArray(db.walikelas_notes[studentId].ekskul)) {
         db.walikelas_notes[studentId].ekskul = [];
       }
 
-      const normTarget = ((name: string) => {
-        if (!name) return "";
-        const clean = String(name).toLowerCase().trim();
-        if (clean.includes("panahan")) return "panahan";
-        if (clean.includes("pramuka")) return "pramuka";
-        if (clean.includes("futsal")) return "futsal";
-        if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-        if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-        if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-        if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-        if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-        if (clean.includes("mentoring")) return "mentoring";
-        return clean;
-      })(ekskulName);
+      const normTarget = normalizeEkskulKey(ekskulName);
+
+      if (Array.isArray(db.walikelas_notes[studentId].deletedEkskuls)) {
+        db.walikelas_notes[studentId].deletedEkskuls = db.walikelas_notes[studentId].deletedEkskuls.filter(
+          (d: string) =>
+            String(d || "").toLowerCase().trim() !== String(ekskulName).toLowerCase().trim() &&
+            normalizeEkskulKey(d) !== normTarget
+        );
+      }
 
       const existingIdx = db.walikelas_notes[studentId].ekskul.findIndex((e: any) => {
         if (!e) return false;
         const eName = e.name || e.ekskulName || "";
         if (eName === ekskulName) return true;
-        const eNorm = ((name: string) => {
-          if (!name) return "";
-          const clean = String(name).toLowerCase().trim();
-          if (clean.includes("panahan")) return "panahan";
-          if (clean.includes("pramuka")) return "pramuka";
-          if (clean.includes("futsal")) return "futsal";
-          if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-          if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-          if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-          if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-          if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-          if (clean.includes("mentoring")) return "mentoring";
-          return clean;
-        })(eName);
+        const eNorm = normalizeEkskulKey(eName);
         return eNorm && normTarget && eNorm === normTarget;
       });
 
@@ -1673,8 +1756,60 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
         db.walikelas_notes[studentId].ekskul.push(ekskulEntry);
       }
 
+      db.walikelas_notes[studentId].ekskul = deduplicateStudentEkskuls(
+        db.walikelas_notes[studentId].ekskul,
+        db.walikelas_notes[studentId].deletedEkskuls,
+        db.ekskul
+      );
+
       saveDB(db);
       return new Response(JSON.stringify({ success: true, studentId, ekskul: db.walikelas_notes[studentId].ekskul }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    if (
+      (path === '/api/ekskul/grades/delete' && method === 'POST') ||
+      (path === '/api/ekskul/grades' && method === 'DELETE')
+    ) {
+      const { studentId, ekskulName } = body || {};
+      if (!studentId || !ekskulName) {
+        return new Response(JSON.stringify({ error: "ID Siswa dan Nama Ekskul wajib diisi." }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+      }
+      const db = getDB();
+      if (!db.walikelas_notes) db.walikelas_notes = {};
+      if (!db.walikelas_notes[studentId]) {
+        return new Response(JSON.stringify({ success: true, studentId, ekskul: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      const normTarget = normalizeEkskulKey(ekskulName);
+      const rawTarget = String(ekskulName).toLowerCase().trim();
+      const currentDeleted = Array.isArray(db.walikelas_notes[studentId].deletedEkskuls)
+        ? db.walikelas_notes[studentId].deletedEkskuls
+        : [];
+      const updatedDeleted = Array.from(new Set([...currentDeleted, rawTarget, ...(normTarget ? [normTarget] : [])]));
+
+      const currentEkskuls = Array.isArray(db.walikelas_notes[studentId].ekskul)
+        ? db.walikelas_notes[studentId].ekskul
+        : [];
+      const filteredEkskuls = currentEkskuls.filter((e: any) => {
+        if (!e) return false;
+        const eName = String(e.name || e.ekskulName || "").toLowerCase().trim();
+        const eNorm = normalizeEkskulKey(eName);
+        if (eName === rawTarget) return false;
+        if (normTarget && eNorm === normTarget) return false;
+        return true;
+      });
+
+      db.walikelas_notes[studentId].deletedEkskuls = updatedDeleted;
+      db.walikelas_notes[studentId].ekskul = deduplicateStudentEkskuls(filteredEkskuls, updatedDeleted, db.ekskul);
+      saveDB(db);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          studentId,
+          ekskul: db.walikelas_notes[studentId].ekskul,
+          deletedEkskuls: updatedDeleted,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     const DEFAULT_MAIN_SUBJECTS = [

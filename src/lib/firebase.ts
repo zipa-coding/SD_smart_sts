@@ -19,7 +19,7 @@ import dbData from "../data/db.json";
 try {
   setLogLevel("error");
 } catch (e) {}
-import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects, isEkskulSubject } from "../types";
+import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -1162,87 +1162,139 @@ export const firebaseApi = {
 
   // 5. GET & POST /api/walikelas/notes
   getWaliKelasNotes: async () => {
-    const fallback = getLocalFallbackData().walikelas_notes || {};
-    if (!db) return fallback;
+    const fallbackDb = getLocalFallbackData();
+    const fallback = fallbackDb.walikelas_notes || {};
+    const masterEkskuls = Array.isArray(fallbackDb.ekskul) ? fallbackDb.ekskul : [];
+
+    const cleanNoteMap = (rawMap: any) => {
+      const res: any = {};
+      for (const [sId, noteObj] of Object.entries(rawMap || {})) {
+        const n = noteObj as any;
+        if (!n || typeof n !== "object") continue;
+        res[sId] = {
+          ...n,
+          ekskul: deduplicateStudentEkskuls(n.ekskul, n.deletedEkskuls, masterEkskuls),
+        };
+      }
+      return res;
+    };
+
+    if (!db) return cleanNoteMap(fallback);
     try {
       const snap = await withTimeout(getDocs(collection(db, "walikelas_notes")), 3500);
       if (snap && !snap.empty) {
         const mergedNotes: any = { ...fallback };
         snap.docs.forEach((docSnap) => {
-          const cloudData = docSnap.data();
+          const cloudData = docSnap.data() || {};
           const localData = mergedNotes[docSnap.id] || {};
-          const eksMap = new Map();
-          (Array.isArray(localData.ekskul) ? localData.ekskul : []).forEach((e: any) => {
-            if (e && (e.name || e.ekskulName)) eksMap.set(String(e.name || e.ekskulName).toLowerCase().trim(), e);
-          });
-          (Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []).forEach((e: any) => {
-            if (e && (e.name || e.ekskulName)) {
-              const k = String(e.name || e.ekskulName).toLowerCase().trim();
-              eksMap.set(k, { ...(eksMap.get(k) || {}), ...e });
-            }
-          });
+
+          const combinedDeleted = Array.from(
+            new Set([
+              ...(Array.isArray(localData.deletedEkskuls) ? localData.deletedEkskuls : []),
+              ...(Array.isArray(cloudData.deletedEkskuls) ? cloudData.deletedEkskuls : []),
+            ])
+          );
+
+          const combinedEkskuls = [
+            ...(Array.isArray(localData.ekskul) ? localData.ekskul : []),
+            ...(Array.isArray(cloudData.ekskul) ? cloudData.ekskul : []),
+          ];
+          const dedupedEkskul = deduplicateStudentEkskuls(combinedEkskuls, combinedDeleted, masterEkskuls);
+
+          // Never let an empty string from an ekskul-only save overwrite a teacher's spiritual/sosial description
+          const cloudSpDesc = String(cloudData.spiritualDeskripsi || "").trim();
+          const localSpDesc = String(localData.spiritualDeskripsi || "").trim();
+          const cloudSoDesc = String(cloudData.sosialDeskripsi || "").trim();
+          const localSoDesc = String(localData.sosialDeskripsi || "").trim();
+          const cloudCat = String(cloudData.catatan || "").trim();
+          const localCat = String(localData.catatan || "").trim();
+
           mergedNotes[docSnap.id] = {
             ...localData,
             ...cloudData,
-            ekskul: Array.from(eksMap.values()),
+            spiritualUsaha: cloudData.spiritualUsaha || localData.spiritualUsaha || "B",
+            spiritualProses: cloudData.spiritualProses || localData.spiritualProses || "B",
+            spiritualCapaian: cloudData.spiritualCapaian || localData.spiritualCapaian || "B",
+            spiritualDeskripsi: cloudSpDesc || localSpDesc || "",
+            sosialUsaha: cloudData.sosialUsaha || localData.sosialUsaha || "B",
+            sosialProses: cloudData.sosialProses || localData.sosialProses || "B",
+            sosialCapaian: cloudData.sosialCapaian || localData.sosialCapaian || "B",
+            sosialDeskripsi: cloudSoDesc || localSoDesc || "",
+            catatan: cloudCat || localCat || "",
+            ekskul: dedupedEkskul,
+            deletedEkskuls: combinedDeleted,
           };
         });
-        return mergedNotes;
+
+        const finalCleaned = cleanNoteMap(mergedNotes);
+        try {
+          if (typeof window !== "undefined") {
+            const raw = localStorage.getItem("smart_sts_db");
+            const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+            dbObj.walikelas_notes = finalCleaned;
+            localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+          }
+        } catch (e) {}
+
+        return finalCleaned;
       }
     } catch (err) {}
-    return fallback;
+    return cleanNoteMap(fallback);
   },
   postWaliKelasNotes: async (body: any) => {
     const fallback = getLocalFallbackData();
     if (!fallback.walikelas_notes) fallback.walikelas_notes = {};
-    const { studentId, sakit, izin, alpa, catatan, spiritualUsaha, spiritualProses, spiritualCapaian, spiritualDeskripsi, sosialUsaha, sosialProses, sosialCapaian, sosialDeskripsi, ekskul } = body;
+    const {
+      studentId,
+      sakit,
+      izin,
+      alpa,
+      catatan,
+      spiritualUsaha,
+      spiritualProses,
+      spiritualCapaian,
+      spiritualDeskripsi,
+      sosialUsaha,
+      sosialProses,
+      sosialCapaian,
+      sosialDeskripsi,
+      ekskul,
+      replaceEkskul,
+      deletedEkskuls,
+    } = body;
     const existing = fallback.walikelas_notes[studentId] || {};
     const existingEkskuls = Array.isArray(existing.ekskul) ? existing.ekskul : [];
     const incomingEkskuls = Array.isArray(ekskul) ? ekskul : [];
 
-    const normalizeEkskulKey = (name: string): string => {
-      if (!name) return "";
-      const clean = String(name).toLowerCase().trim();
-      if (clean.includes("panahan")) return "panahan";
-      if (clean.includes("pramuka")) return "pramuka";
-      if (clean.includes("futsal")) return "futsal";
-      if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-      if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-      if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-      if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-      if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-      if (clean.includes("mentoring")) return "mentoring";
-      return clean;
-    };
+    const mergedDeleted = Array.from(
+      new Set([
+        ...(Array.isArray(existing.deletedEkskuls) ? existing.deletedEkskuls : []),
+        ...(Array.isArray(deletedEkskuls) ? deletedEkskuls : []),
+      ])
+    );
 
-    const mergedEkskulMap = new Map();
-    existingEkskuls.forEach((e: any) => {
-      const key = normalizeEkskulKey(e.name || e.ekskulName || "");
-      if (key) mergedEkskulMap.set(key, e);
-    });
-    incomingEkskuls.forEach((e: any) => {
-      const key = normalizeEkskulKey(e.name || e.ekskulName || "");
-      if (key) {
-        const prev = mergedEkskulMap.get(key) || {};
-        mergedEkskulMap.set(key, { ...prev, ...e });
-      }
-    });
-    const finalEkskul = Array.from(mergedEkskulMap.values());
+    const rawEkskulList = replaceEkskul
+      ? incomingEkskuls
+      : [...existingEkskuls, ...incomingEkskuls];
+    const finalEkskul = deduplicateStudentEkskuls(rawEkskulList, mergedDeleted, fallback.ekskul);
 
-    const spiritualDeskFinal =
-      spiritualDeskripsi !== undefined && spiritualDeskripsi !== null
-        ? String(spiritualDeskripsi)
-        : (existing.spiritualDeskripsi || "");
-    const sosialDeskFinal =
-      sosialDeskripsi !== undefined && sosialDeskripsi !== null
-        ? String(sosialDeskripsi)
-        : (existing.sosialDeskripsi || "");
+    const incomingSpDesc = spiritualDeskripsi !== undefined && spiritualDeskripsi !== null ? String(spiritualDeskripsi).trim() : "";
+    const existingSpDesc = String(existing.spiritualDeskripsi || "").trim();
+    const spiritualDeskFinal = incomingSpDesc ? String(spiritualDeskripsi) : existingSpDesc;
+
+    const incomingSoDesc = sosialDeskripsi !== undefined && sosialDeskripsi !== null ? String(sosialDeskripsi).trim() : "";
+    const existingSoDesc = String(existing.sosialDeskripsi || "").trim();
+    const sosialDeskFinal = incomingSoDesc ? String(sosialDeskripsi) : existingSoDesc;
+
+    const incomingCatatan = catatan !== undefined && catatan !== null ? String(catatan).trim() : "";
+    const existingCatatan = String(existing.catatan || "").trim();
+    const catatanFinal = incomingCatatan ? String(catatan) : existingCatatan;
 
     const note = {
       sakit: sakit !== undefined && sakit !== null ? Number(sakit) : Number(existing.sakit || 0),
       izin: izin !== undefined && izin !== null ? Number(izin) : Number(existing.izin || 0),
       alpa: alpa !== undefined && alpa !== null ? Number(alpa) : Number(existing.alpa || 0),
-      catatan: catatan !== undefined && catatan !== null ? String(catatan) : (existing.catatan || ""),
+      catatan: catatanFinal,
 
       spiritualUsaha: spiritualUsaha || existing.spiritualUsaha || "B",
       spiritualProses: spiritualProses || existing.spiritualProses || "B",
@@ -1254,7 +1306,8 @@ export const firebaseApi = {
       sosialCapaian: sosialCapaian || existing.sosialCapaian || "B",
       sosialDeskripsi: sosialDeskFinal,
 
-      ekskul: finalEkskul
+      ekskul: finalEkskul,
+      deletedEkskuls: mergedDeleted,
     };
 
     // Update local
@@ -1270,7 +1323,7 @@ export const firebaseApi = {
 
     if (db) {
       try {
-        await withTimeout(setDoc(doc(db, "walikelas_notes", studentId), note), 4000);
+        await withTimeout(setDoc(doc(db, "walikelas_notes", String(studentId)), note, { merge: true }), 4000);
       } catch (err) {
         console.warn("Firestore postWaliKelasNotes error:", err);
       }
@@ -1934,46 +1987,51 @@ export const firebaseApi = {
         sakit: 0, izin: 0, alpa: 0, catatan: "",
         spiritualUsaha: "B", spiritualProses: "B", spiritualCapaian: "B", spiritualDeskripsi: "",
         sosialUsaha: "B", sosialProses: "B", sosialCapaian: "B", sosialDeskripsi: "",
-        ekskul: []
+        ekskul: [],
+        deletedEkskuls: [],
       };
     }
     if (!Array.isArray(fallback.walikelas_notes[studentId].ekskul)) {
       fallback.walikelas_notes[studentId].ekskul = [];
     }
 
-    const normTarget = ((name: string) => {
-      if (!name) return "";
-      const clean = String(name).toLowerCase().trim();
-      if (clean.includes("panahan")) return "panahan";
-      if (clean.includes("pramuka")) return "pramuka";
-      if (clean.includes("futsal")) return "futsal";
-      if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-      if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-      if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-      if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-      if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-      if (clean.includes("mentoring")) return "mentoring";
-      return clean;
-    })(ekskulName);
+    // Also pull latest cloud ekskul for this student if available so we never lose other coaches' ekskuls
+    if (db) {
+      try {
+        const cloudSnap = await withTimeout(getDoc(doc(db, "walikelas_notes", String(studentId))), 2000);
+        if (cloudSnap && cloudSnap.exists()) {
+          const cData = cloudSnap.data() || {};
+          if (Array.isArray(cData.ekskul)) {
+            fallback.walikelas_notes[studentId].ekskul = [
+              ...fallback.walikelas_notes[studentId].ekskul,
+              ...cData.ekskul,
+            ];
+          }
+          if (cData.spiritualDeskripsi && !fallback.walikelas_notes[studentId].spiritualDeskripsi) {
+            fallback.walikelas_notes[studentId].spiritualDeskripsi = cData.spiritualDeskripsi;
+          }
+          if (cData.sosialDeskripsi && !fallback.walikelas_notes[studentId].sosialDeskripsi) {
+            fallback.walikelas_notes[studentId].sosialDeskripsi = cData.sosialDeskripsi;
+          }
+        }
+      } catch (e) {}
+    }
+
+    const normTarget = normalizeEkskulKey(ekskulName);
+
+    if (Array.isArray(fallback.walikelas_notes[studentId].deletedEkskuls)) {
+      fallback.walikelas_notes[studentId].deletedEkskuls = fallback.walikelas_notes[studentId].deletedEkskuls.filter(
+        (d: string) =>
+          String(d || "").toLowerCase().trim() !== String(ekskulName).toLowerCase().trim() &&
+          normalizeEkskulKey(d) !== normTarget
+      );
+    }
 
     const existingIdx = fallback.walikelas_notes[studentId].ekskul.findIndex((e: any) => {
       if (!e) return false;
       const eName = e.name || e.ekskulName || "";
       if (eName === ekskulName) return true;
-      const eNorm = ((name: string) => {
-        if (!name) return "";
-        const clean = String(name).toLowerCase().trim();
-        if (clean.includes("panahan")) return "panahan";
-        if (clean.includes("pramuka")) return "pramuka";
-        if (clean.includes("futsal")) return "futsal";
-        if (clean.includes("tahfizh") || clean.includes("tahfiz")) return "tahfizh";
-        if (clean.includes("tilawah") || clean.includes("seni baca")) return "tilawah";
-        if (clean.includes("dokter") || clean.includes("pmr")) return "pmr";
-        if (clean.includes("wirausaha") || clean.includes("entrepreneur")) return "entrepreneur";
-        if (clean.includes("musik") || clean.includes("hadroh")) return "hadroh";
-        if (clean.includes("mentoring")) return "mentoring";
-        return clean;
-      })(eName);
+      const eNorm = normalizeEkskulKey(eName);
       return eNorm && normTarget && eNorm === normTarget;
     });
 
@@ -1995,12 +2053,103 @@ export const firebaseApi = {
       fallback.walikelas_notes[studentId].ekskul.push(ekskulEntry);
     }
 
+    fallback.walikelas_notes[studentId].ekskul = deduplicateStudentEkskuls(
+      fallback.walikelas_notes[studentId].ekskul,
+      fallback.walikelas_notes[studentId].deletedEkskuls,
+      fallback.ekskul
+    );
+
     try {
       if (typeof window !== 'undefined') {
         const raw = localStorage.getItem("smart_sts_db");
         const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
         if (!dbObj.walikelas_notes) dbObj.walikelas_notes = {};
-        dbObj.walikelas_notes[studentId] = fallback.walikelas_notes[studentId];
+        const prevLocal = dbObj.walikelas_notes[studentId] || {};
+        dbObj.walikelas_notes[studentId] = {
+          ...prevLocal,
+          ...fallback.walikelas_notes[studentId],
+          spiritualDeskripsi: fallback.walikelas_notes[studentId].spiritualDeskripsi || prevLocal.spiritualDeskripsi || "",
+          sosialDeskripsi: fallback.walikelas_notes[studentId].sosialDeskripsi || prevLocal.sosialDeskripsi || "",
+          ekskul: fallback.walikelas_notes[studentId].ekskul,
+          deletedEkskuls: fallback.walikelas_notes[studentId].deletedEkskuls || [],
+        };
+        localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+      }
+    } catch (e) {}
+
+    // CRITICAL: Only write ekskul & deletedEkskuls to Firestore with { merge: true } so spiritualDeskripsi & sosialDeskripsi are NEVER overwritten!
+    if (db) {
+      try {
+        const ref = doc(db, "walikelas_notes", String(studentId));
+        await withTimeout(
+          setDoc(
+            ref,
+            {
+              ekskul: fallback.walikelas_notes[studentId].ekskul,
+              deletedEkskuls: fallback.walikelas_notes[studentId].deletedEkskuls || [],
+            },
+            { merge: true }
+          ),
+          2500
+        );
+      } catch (err) {
+        console.warn("Firestore postEkskulGrade error:", err);
+      }
+    }
+
+    return { success: true, studentId, ekskul: fallback.walikelas_notes[studentId].ekskul };
+  },
+
+  deleteEkskulGrade: async (body: { studentId: string; ekskulName: string }) => {
+    const { studentId, ekskulName } = body || {};
+    if (!studentId || !ekskulName) return { success: false };
+    const fallback = getLocalFallbackData();
+    if (!fallback.walikelas_notes) fallback.walikelas_notes = {};
+    if (!fallback.walikelas_notes[studentId]) {
+      fallback.walikelas_notes[studentId] = {
+        sakit: 0, izin: 0, alpa: 0, catatan: "",
+        spiritualUsaha: "B", spiritualProses: "B", spiritualCapaian: "B", spiritualDeskripsi: "",
+        sosialUsaha: "B", sosialProses: "B", sosialCapaian: "B", sosialDeskripsi: "",
+        ekskul: [],
+        deletedEkskuls: [],
+      };
+    }
+
+    const normTarget = normalizeEkskulKey(ekskulName);
+    const rawTarget = String(ekskulName).toLowerCase().trim();
+
+    const currentDeleted = Array.isArray(fallback.walikelas_notes[studentId].deletedEkskuls)
+      ? fallback.walikelas_notes[studentId].deletedEkskuls
+      : [];
+    const updatedDeleted = Array.from(new Set([...currentDeleted, rawTarget, ...(normTarget ? [normTarget] : [])]));
+
+    const currentEkskuls = Array.isArray(fallback.walikelas_notes[studentId].ekskul)
+      ? fallback.walikelas_notes[studentId].ekskul
+      : [];
+    const filteredEkskuls = currentEkskuls.filter((e: any) => {
+      if (!e) return false;
+      const eName = String(e.name || e.ekskulName || "").toLowerCase().trim();
+      const eNorm = normalizeEkskulKey(eName);
+      if (eName === rawTarget) return false;
+      if (normTarget && eNorm === normTarget) return false;
+      return true;
+    });
+
+    fallback.walikelas_notes[studentId].deletedEkskuls = updatedDeleted;
+    fallback.walikelas_notes[studentId].ekskul = deduplicateStudentEkskuls(
+      filteredEkskuls,
+      updatedDeleted,
+      fallback.ekskul
+    );
+
+    try {
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem("smart_sts_db");
+        const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+        if (!dbObj.walikelas_notes) dbObj.walikelas_notes = {};
+        if (!dbObj.walikelas_notes[studentId]) dbObj.walikelas_notes[studentId] = {};
+        dbObj.walikelas_notes[studentId].ekskul = fallback.walikelas_notes[studentId].ekskul;
+        dbObj.walikelas_notes[studentId].deletedEkskuls = updatedDeleted;
         localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
       }
     } catch (e) {}
@@ -2008,13 +2157,28 @@ export const firebaseApi = {
     if (db) {
       try {
         const ref = doc(db, "walikelas_notes", String(studentId));
-        await withTimeout(setDoc(ref, fallback.walikelas_notes[studentId]), 2500);
+        await withTimeout(
+          setDoc(
+            ref,
+            {
+              ekskul: fallback.walikelas_notes[studentId].ekskul,
+              deletedEkskuls: updatedDeleted,
+            },
+            { merge: true }
+          ),
+          2500
+        );
       } catch (err) {
-        console.warn("Firestore postEkskulGrade error:", err);
+        console.warn("Firestore deleteEkskulGrade error:", err);
       }
     }
 
-    return { success: true, studentId, ekskul: fallback.walikelas_notes[studentId].ekskul };
+    return {
+      success: true,
+      studentId,
+      ekskul: fallback.walikelas_notes[studentId].ekskul,
+      deletedEkskuls: updatedDeleted,
+    };
   },
 
   // 10. GET, POST, PUT, DELETE /api/ekskul
@@ -2140,7 +2304,7 @@ export const firebaseApi = {
     return target;
   },
   putEkskul: async (id: string, body: any) => {
-    const { name, type, teacherId } = body;
+    const { name, type, teacherId, onlyRename } = body || {};
     const trimmedName = String(name || "").trim();
     const fallback = getLocalFallbackData();
     if (!Array.isArray(fallback.ekskul)) fallback.ekskul = [];
@@ -2148,12 +2312,14 @@ export const firebaseApi = {
 
     const idx = fallback.ekskul.findIndex((e: any) => String(e.id) === String(id));
     let target = idx !== -1 ? fallback.ekskul[idx] : null;
-    const oldTeacherId = target ? target.teacherId : "";
-    const oldName = target ? target.name : "";
+    const oldTeacherId = target ? (target.teacherId || "") : "";
+    const oldName = target ? String(target.name || "").trim() : "";
+    const effectiveType = (onlyRename || !type) ? (target?.type || "Pilihan") : (type === "Wajib" ? "Wajib" : "Pilihan");
+    const effectiveTeacherId = (onlyRename || teacherId === undefined) ? oldTeacherId : (teacherId || "");
 
-    let assignedTeacherName = "";
-    if (teacherId) {
-      const t = fallback.teachers.find((tc: any) => String(tc.id) === String(teacherId));
+    let assignedTeacherName = target ? (target.teacherName || "") : "";
+    if (effectiveTeacherId) {
+      const t = fallback.teachers.find((tc: any) => String(tc.id) === String(effectiveTeacherId));
       if (t) {
         assignedTeacherName = t.name;
         t.isEkskulTeacher = true;
@@ -2163,9 +2329,11 @@ export const firebaseApi = {
             : [];
         }
         if (oldName && oldName !== trimmedName) {
-          t.ekskulNames = t.ekskulNames.map((n: string) => n === oldName ? trimmedName : n);
+          t.ekskulNames = t.ekskulNames.map((n: string) =>
+            n.trim().toLowerCase() === oldName.toLowerCase() ? trimmedName : n
+          );
         }
-        if (!t.ekskulNames.includes(trimmedName)) {
+        if (!t.ekskulNames.some((n: string) => n.trim().toLowerCase() === trimmedName.toLowerCase())) {
           t.ekskulNames.push(trimmedName);
         }
         t.ekskulName = t.ekskulNames.join(", ");
@@ -2173,9 +2341,11 @@ export const firebaseApi = {
           withTimeout(setDoc(doc(db, "teachers", String(t.id)), t, { merge: true }), 2500).catch(() => {});
         }
       }
+    } else if (!onlyRename && teacherId !== undefined) {
+      assignedTeacherName = "";
     }
 
-    if (oldTeacherId && String(oldTeacherId) !== String(teacherId)) {
+    if (!onlyRename && teacherId !== undefined && oldTeacherId && String(oldTeacherId) !== String(effectiveTeacherId)) {
       const prevT = fallback.teachers.find((tc: any) => String(tc.id) === String(oldTeacherId));
       if (prevT) {
         const remainingEkskuls = fallback.ekskul.filter(
@@ -2196,17 +2366,93 @@ export const firebaseApi = {
       }
     }
 
+    // Preserve and migrate all existing data (teachers, student ekskul grades, TP templates) when name changes
+    if (oldName && trimmedName && oldName !== trimmedName) {
+      const lowerOld = oldName.toLowerCase();
+
+      // 1. Update teachers in fallback & Firestore
+      fallback.teachers.forEach((t: any) => {
+        let modified = false;
+        if (Array.isArray(t.ekskulNames)) {
+          if (t.ekskulNames.some((n: string) => String(n || "").trim().toLowerCase() === lowerOld)) {
+            t.ekskulNames = Array.from(
+              new Set(
+                t.ekskulNames.map((n: string) =>
+                  String(n || "").trim().toLowerCase() === lowerOld ? trimmedName : String(n || "").trim()
+                ).filter(Boolean)
+              )
+            );
+            t.ekskulName = t.ekskulNames.join(", ");
+            modified = true;
+          }
+        } else if (t.ekskulName && String(t.ekskulName).toLowerCase().includes(lowerOld)) {
+          const parts = String(t.ekskulName)
+            .split(",")
+            .map((s: string) => s.trim())
+            .filter(Boolean)
+            .map((s: string) => (s.toLowerCase() === lowerOld ? trimmedName : s));
+          t.ekskulNames = Array.from(new Set(parts));
+          t.ekskulName = t.ekskulNames.join(", ");
+          modified = true;
+        }
+        if (modified && db) {
+          withTimeout(setDoc(doc(db, "teachers", String(t.id)), t, { merge: true }), 2500).catch(() => {});
+        }
+      });
+
+      // 2. Update student ekskul grades & descriptions in walikelas_notes
+      if (fallback.walikelas_notes && typeof fallback.walikelas_notes === "object") {
+        Object.entries(fallback.walikelas_notes).forEach(([sId, noteObj]) => {
+          const note = noteObj as any;
+          if (note && Array.isArray(note.ekskul)) {
+            let noteModified = false;
+            note.ekskul = note.ekskul.map((eks: any) => {
+              if (eks && String(eks.name || "").trim().toLowerCase() === lowerOld) {
+                noteModified = true;
+                return { ...eks, name: trimmedName };
+              }
+              return eks;
+            });
+            if (noteModified && db) {
+              withTimeout(setDoc(doc(db, "walikelas_notes", String(sId)), note, { merge: true }), 2500).catch(() => {});
+            }
+          }
+        });
+      }
+
+      // 3. Update ekskul TP templates in tps_templates
+      if (fallback.tps_templates && typeof fallback.tps_templates === "object") {
+        Object.keys(fallback.tps_templates).forEach((k) => {
+          const kLower = k.trim().toLowerCase();
+          if (kLower === lowerOld || kLower === `ekskul ${lowerOld}`) {
+            const isPrefixed = kLower.startsWith("ekskul ");
+            const newKey = isPrefixed ? `Ekskul ${trimmedName}` : trimmedName;
+            const existingOldList = Array.isArray(fallback.tps_templates[k]) ? fallback.tps_templates[k] : [];
+            const existingNewList = Array.isArray(fallback.tps_templates[newKey]) ? fallback.tps_templates[newKey] : [];
+            const mergedMap = new Map<string, any>();
+            [...existingNewList, ...existingOldList].forEach((tp: any) => {
+              if (tp && tp.id) mergedMap.set(String(tp.id), tp);
+            });
+            fallback.tps_templates[newKey] = Array.from(mergedMap.values());
+            if (db) {
+              withTimeout(setDoc(doc(db, "tps_templates", newKey), { subject: newKey, tps: fallback.tps_templates[newKey] }, { merge: true }), 2500).catch(() => {});
+            }
+          }
+        });
+      }
+    }
+
     if (target) {
       target.name = trimmedName || target.name;
-      target.type = type || target.type;
-      target.teacherId = teacherId || "";
+      target.type = effectiveType;
+      target.teacherId = effectiveTeacherId;
       target.teacherName = assignedTeacherName;
     } else {
       target = {
         id,
         name: trimmedName,
-        type: type || "Pilihan",
-        teacherId: teacherId || "",
+        type: effectiveType,
+        teacherId: effectiveTeacherId,
         teacherName: assignedTeacherName
       };
       fallback.ekskul.push(target);
@@ -2218,7 +2464,7 @@ export const firebaseApi = {
 
     if (db) {
       try {
-        await withTimeout(setDoc(doc(db, "ekskul", id), target), 2500);
+        await withTimeout(setDoc(doc(db, "ekskul", id), target, { merge: true }), 2500);
       } catch (err) {
         console.warn("Firestore putEkskul error:", err);
       }

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Student, Grade, WaliKelasNote, Teacher, WaliKelasNotesMap } from "../types";
+import { Student, Grade, WaliKelasNote, Teacher, WaliKelasNotesMap, deduplicateStudentEkskuls } from "../types";
 import {
   Printer,
   FileDown,
@@ -332,6 +332,23 @@ export default function PrintRaportView({
   };
 
   const formattedStudentName = formatTitleCase(student?.name || "");
+
+  const studentEkskulList = React.useMemo(() => {
+    return deduplicateStudentEkskuls(
+      (waliKelasNote as any)?.ekskul,
+      (waliKelasNote as any)?.deletedEkskuls
+    );
+  }, [waliKelasNote]);
+
+  const safeSpiritualDeskripsi =
+    waliKelasNote?.spiritualDeskripsi && String(waliKelasNote.spiritualDeskripsi).trim() !== ""
+      ? waliKelasNote.spiritualDeskripsi
+      : `Alhamdulillah ananda ${formattedStudentName} menunjukkan perkembangan spiritual yang baik. Ia telah memahami tata cara beribadah harian dengan rajin serta menjaga adab ketertiban.`;
+
+  const safeSosialDeskripsi =
+    waliKelasNote?.sosialDeskripsi && String(waliKelasNote.sosialDeskripsi).trim() !== ""
+      ? waliKelasNote.sosialDeskripsi
+      : `Alhamdulillah ananda ${formattedStudentName} mudah bergaul, memiliki rasa empati tinggi, serta sopan santun dalam berkata kata kepada guru maupun sesama kawan.`;
 
   const normalizeSub = (str: string) => {
     return (str || "")
@@ -967,7 +984,7 @@ export default function PrintRaportView({
             </tr>
             <tr>
               <td colspan="4" style="padding: ${isA4 ? "1.5px 3.5px 2px 3.5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.25pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.22" : "1.45"};">
-                <strong>Deskripsi:</strong> ${waliKelasNote.spiritualDeskripsi || ""}
+                <strong>Deskripsi:</strong> ${safeSpiritualDeskripsi}
               </td>
             </tr>
           </table>
@@ -1001,7 +1018,7 @@ export default function PrintRaportView({
             </tr>
             <tr>
               <td colspan="4" style="padding: ${isA4 ? "1.5px 3.5px 2px 3.5px" : "4px 6px 10px 6px"}; font-size: ${isA4 ? "8.25pt" : "9.5pt"}; text-align: justify; line-height: ${isA4 ? "1.22" : "1.45"};">
-                <strong>Deskripsi:</strong> ${waliKelasNote.sosialDeskripsi || ""}
+                <strong>Deskripsi:</strong> ${safeSosialDeskripsi}
               </td>
             </tr>
           </table>
@@ -1146,7 +1163,7 @@ export default function PrintRaportView({
 
           <h4 class="pdf-heading">E. Ekstrakurikuler dan Keterampilan</h4>
           ${
-            ((waliKelasNote as any).ekskul || []).length === 0
+            studentEkskulList.length === 0
               ? `
             <table class="pdf-box-table" style="page-break-inside: avoid;">
               <tr>
@@ -1156,7 +1173,7 @@ export default function PrintRaportView({
               </tr>
             </table>
           `
-              : ((waliKelasNote as any).ekskul || [])
+              : studentEkskulList
                   .map((e: any, idx: number) => {
                     const grades = getEkskulGrades(e);
                     return `
@@ -1684,7 +1701,7 @@ export default function PrintRaportView({
         </tr>
         <tr>
           <td colspan="4" style="border: 1px solid #000000; padding: 4px 6px 10px 6px; font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; text-align: justify; line-height: 1.45; color: #000000;">
-            <strong>Deskripsi:</strong> ${waliKelasNote.spiritualDeskripsi || ""}
+            <strong>Deskripsi:</strong> ${safeSpiritualDeskripsi}
           </td>
         </tr>
       </table>
@@ -1718,7 +1735,7 @@ export default function PrintRaportView({
         </tr>
         <tr>
           <td colspan="4" style="border: 1px solid #000000; padding: 4px 6px 10px 6px; font-family: 'Times New Roman', Times, serif; font-size: 9.5pt; text-align: justify; line-height: 1.45; color: #000000;">
-            <strong>Deskripsi:</strong> ${waliKelasNote.sosialDeskripsi || ""}
+            <strong>Deskripsi:</strong> ${safeSosialDeskripsi}
           </td>
         </tr>
       </table>
@@ -1867,7 +1884,7 @@ export default function PrintRaportView({
 
       <h4 style="margin: 15px 0 10px 0; text-transform: uppercase; font-size: 9.5pt; font-family: 'Times New Roman', Times, serif; font-weight: bold; color: #000000;">E. Ekstrakurikuler dan Keterampilan</h4>
       ${
-        ((waliKelasNote as any).ekskul || []).length === 0
+        studentEkskulList.length === 0
           ? `
         <table border="1" cellspacing="0" cellpadding="4" style="width: 100%; border-collapse: collapse; margin-bottom: 8px; border: 1.2px solid #000000; background-color: #ffffff; margin-left: auto; margin-right: auto; page-break-inside: avoid;">
           <tr>
@@ -1877,7 +1894,7 @@ export default function PrintRaportView({
           </tr>
         </table>
       `
-          : ((waliKelasNote as any).ekskul || [])
+          : studentEkskulList
               .map((e: any, idx: number) => {
                 const grades = getEkskulGrades(e);
                 return `
@@ -2541,7 +2558,7 @@ export default function PrintRaportView({
                         Deskripsi:
                       </strong>
                       <span className="text-gray-800">
-                        {waliKelasNote.spiritualDeskripsi || ""}
+                        {safeSpiritualDeskripsi}
                       </span>
                     </td>
                   </tr>
@@ -2592,7 +2609,7 @@ export default function PrintRaportView({
                         Deskripsi:
                       </strong>
                       <span className="text-gray-800">
-                        {waliKelasNote.sosialDeskripsi || ""}
+                        {safeSosialDeskripsi}
                       </span>
                     </td>
                   </tr>
@@ -2810,12 +2827,12 @@ export default function PrintRaportView({
             <h4 className={`${format.paperSize === "F4" ? "text-xs md:text-sm font-bold mb-2.5" : "text-xs font-bold mb-1.5"} uppercase tracking-wide text-black`}>
               E. Ekstrakurikuler dan Keterampilan
             </h4>
-            {((waliKelasNote as any).ekskul || []).length === 0 ? (
+            {studentEkskulList.length === 0 ? (
               <div className="page-break-avoid border p-2 text-center text-slate-500 italic text-xs border-black bg-transparent">
                 Tidak mengikuti kegiatan ekstrakurikuler.
               </div>
             ) : (
-              ((waliKelasNote as any).ekskul || []).map(
+              studentEkskulList.map(
                 (e: any, idx: number) => {
                   const grades = getEkskulGrades(e);
                   return (

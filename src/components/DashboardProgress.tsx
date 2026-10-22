@@ -231,7 +231,7 @@ export default function DashboardProgress({
         <div className="space-y-1">
           <h4 className="text-sm font-bold text-white tracking-wide">Sinkronisasi Data Telemetri Rapor...</h4>
           <p className="text-xs text-emerald-400/70 font-mono">
-            Menganalisis matriks progres 15 mata pelajaran & kelas...
+            Menganalisis matriks progres mata pelajaran & kelas dari database...
           </p>
         </div>
       </div>
@@ -266,7 +266,7 @@ export default function DashboardProgress({
               Dashboard Pemantauan Raport STS SD
             </h1>
             <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-              Pangkalpinang - Visualisasi real-time sebaran nilai 15 mata pelajaran, rasio ketuntasan TP, dan kesiapan cetak raport seluruh kelas.
+              Pangkalpinang - Visualisasi real-time sebaran nilai {summary.subjectProgress.length} mata pelajaran, rasio ketuntasan TP, dan kesiapan cetak raport seluruh kelas.
             </p>
           </div>
 
@@ -486,7 +486,7 @@ export default function DashboardProgress({
               </h2>
             </div>
             <p className="text-xs text-slate-400">
-              Pemantauan sebaran ketuntasan 15 mata pelajaran, rasio ketercapaian TP, serta intensitas penginputan nilai secara real-time.
+              Pemantauan sebaran ketuntasan {summary.subjectProgress.length} mata pelajaran, rasio ketercapaian TP, serta intensitas penginputan nilai secara real-time.
             </p>
           </div>
 
@@ -550,7 +550,7 @@ export default function DashboardProgress({
                     <Layers className="w-4 h-4" />
                   </div>
                   <h3 className="text-xs font-bold uppercase tracking-wider text-white">
-                    Daftar Progres 15 Mata Pelajaran
+                    Daftar Progres {summary.subjectProgress.length} Mata Pelajaran
                   </h3>
                 </div>
                 <p className="text-[10px] text-slate-400 mt-0.5">
