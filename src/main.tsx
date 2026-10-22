@@ -4,7 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import dbData from './data/db.json';
 import { isFirebaseConfigured, firebaseApi, isDummyTeacher } from './lib/firebase';
-import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls } from './types';
+import { normalizeSubjectKey, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls, pickNewerGrade, deduplicateGradesList } from './types';
 import { registerSW } from 'virtual:pwa-register';
 
 // Automatically register and update PWA service worker in production
@@ -135,18 +135,24 @@ function initializeLocalStorage() {
           }
         }
 
-        // Sync and sanitize grades TPs
+        // Sync, sanitize, and deduplicate grades
         if (Array.isArray(clientDbCache.grades)) {
-          clientDbCache.grades = clientDbCache.grades.map((g: any) => {
-            if (Array.isArray(g.tps) && g.tps.length > 0) {
-              const cleaned = cleanTpList(g.tps);
-              if (cleaned.length !== g.tps.length) {
-                changed = true;
-                return { ...g, tps: cleaned };
+          const prevGradesLen = clientDbCache.grades.length;
+          clientDbCache.grades = deduplicateGradesList(
+            clientDbCache.grades.map((g: any) => {
+              if (Array.isArray(g.tps) && g.tps.length > 0) {
+                const cleaned = cleanTpList(g.tps);
+                if (cleaned.length !== g.tps.length) {
+                  changed = true;
+                  return { ...g, tps: cleaned };
+                }
               }
-            }
-            return g;
-          });
+              return g;
+            })
+          );
+          if (clientDbCache.grades.length !== prevGradesLen) {
+            changed = true;
+          }
         }
 
         if (changed) {
@@ -348,9 +354,23 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
           try {
             const db = getDB();
             if (Array.isArray(db.grades)) {
-              const idx = db.grades.findIndex((x: any) => x.id === g.id || (x.studentId === g.studentId && x.subject === g.subject));
-              if (idx !== -1) db.grades[idx] = g;
-              else db.grades.push(g);
+              const normSub = normalizeSubjectKey(g.subject);
+              let existingMatched: any = null;
+              const remaining: any[] = [];
+              for (const x of db.grades) {
+                if (!x) continue;
+                if (
+                  x.id === g.id ||
+                  (x.studentId === g.studentId &&
+                    (x.subject === g.subject || normalizeSubjectKey(x.subject) === normSub))
+                ) {
+                  existingMatched = existingMatched ? pickNewerGrade(existingMatched, x) : x;
+                } else {
+                  remaining.push(x);
+                }
+              }
+              remaining.push(existingMatched ? pickNewerGrade(existingMatched, g) : g);
+              db.grades = deduplicateGradesList(remaining);
             }
             if (!isEkskulSubject(g.subject) && Array.isArray(g.tps) && g.tps.length > 0) {
               if (!db.tujuan_pembelajaran_templates) db.tujuan_pembelajaran_templates = {};
@@ -1028,31 +1048,52 @@ const localFetchInterception = async (input: RequestInfo | URL, init?: RequestIn
     // 4. GET /api/grades
     if (path === '/api/grades' && method === 'GET') {
       const db = getDB();
-      return new Response(JSON.stringify(db.grades), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(deduplicateGradesList(db.grades)), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
     // POST /api/grades
     if (path === '/api/grades' && method === 'POST') {
       const { studentId, subject, score, tps, teacherName, usaha, proses, capaian, deskripsi } = body || {};
       const db = getDB();
-      const index = db.grades.findIndex((g: any) => g.studentId === studentId && g.subject === subject);
+      if (!Array.isArray(db.grades)) db.grades = [];
+      const normSub = normalizeSubjectKey(subject) || subject;
+      const cleanSub = normSub.replace(/[^a-zA-Z0-9]/g, "_");
+      const docId = `${studentId}_${cleanSub}`;
+
+      let existingMatched: any = null;
+      const remaining: any[] = [];
+      for (const x of db.grades) {
+        if (!x) continue;
+        if (
+          x.studentId === studentId &&
+          (x.subject === subject || normalizeSubjectKey(x.subject) === normSub)
+        ) {
+          existingMatched = existingMatched ? pickNewerGrade(existingMatched, x) : x;
+        } else {
+          remaining.push(x);
+        }
+      }
+
       const updatedGrade = {
+        id: docId,
         studentId,
         subject,
         score: Number(score),
-        tps,
-        usaha: usaha || "B",
-        proses: proses || "B",
-        capaian: capaian || "B",
-        deskripsi: deskripsi || "",
+        tps: Array.isArray(tps) ? cleanTpList(tps) : [],
+        usaha: usaha || (existingMatched ? existingMatched.usaha : "B") || "B",
+        proses: proses || (existingMatched ? existingMatched.proses : "B") || "B",
+        capaian: capaian || (existingMatched ? existingMatched.capaian : "B") || "B",
+        deskripsi:
+          deskripsi !== undefined && String(deskripsi).trim() !== ""
+            ? deskripsi
+            : existingMatched && String(existingMatched.deskripsi || "").trim() !== ""
+            ? existingMatched.deskripsi
+            : deskripsi || "",
         lastUpdatedBy: teacherName || "Guru Mata Pelajaran",
         lastUpdatedAt: new Date().toISOString()
       };
-      if (index !== -1) {
-        db.grades[index] = updatedGrade;
-      } else {
-        db.grades.push(updatedGrade);
-      }
+      remaining.push(updatedGrade);
+      db.grades = deduplicateGradesList(remaining);
       saveDB(db);
       return new Response(JSON.stringify(updatedGrade), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }

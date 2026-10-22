@@ -52,7 +52,7 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
-          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
           runtimeCaching: [
             {
@@ -97,7 +97,7 @@ export default defineConfig(() => {
       },
     },
     build: {
-      chunkSizeWarningLimit: 1500,
+      chunkSizeWarningLimit: 5000,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -108,14 +108,18 @@ export default defineConfig(() => {
               if (
                 id.includes("html2pdf.js") ||
                 id.includes("jspdf") ||
-                id.includes("html2canvas")
+                id.includes("html2canvas") ||
+                id.includes("jszip")
               ) {
                 return "vendor-pdf";
               }
-              if (id.includes("react") || id.includes("react-dom")) {
+              if (
+                id.includes("/node_modules/react/") ||
+                id.includes("/node_modules/react-dom/") ||
+                id.includes("/node_modules/scheduler/")
+              ) {
                 return "vendor-react";
               }
-              return "vendor-others";
             }
           },
         },

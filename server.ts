@@ -14,7 +14,7 @@ import {
   deleteDoc,
   setLogLevel
 } from "firebase/firestore";
-import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls } from "./src/types";
+import { normalizeSubjectKey, matchTpClass, getSubjectTps, isSampleTp, cleanTpList, isKeislamanSubject, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls, pickNewerGrade, deduplicateGradesList } from "./src/types";
 
 try {
   setLogLevel("error");
@@ -181,7 +181,8 @@ async function syncDatabaseWithFirestore() {
           db.grades.forEach((g: any) => {
             if (g && g.studentId && g.subject) {
               const key = `${g.studentId}_${normalizeSubjectKey(g.subject)}`;
-              fsGradesMap.set(key, g);
+              const prev = fsGradesMap.get(key);
+              fsGradesMap.set(key, prev ? pickNewerGrade(prev, g) : g);
             }
           });
         }
@@ -192,7 +193,8 @@ async function syncDatabaseWithFirestore() {
               data.tps = cleanTpList(data.tps);
             }
             const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
-            fsGradesMap.set(key, { ...(fsGradesMap.get(key) || {}), ...data });
+            const prev = fsGradesMap.get(key);
+            fsGradesMap.set(key, prev ? pickNewerGrade(prev, data) : data);
           }
         });
         db.grades = Array.from(fsGradesMap.values());
@@ -1061,7 +1063,7 @@ app.delete("/api/students/:id", async (req, res) => {
 // 4. Grades & Objectives Management
 app.get("/api/grades", async (req, res) => {
   const db = await readDB();
-  res.json(db.grades);
+  res.json(deduplicateGradesList(db.grades));
 });
 
 app.post("/api/grades", async (req, res) => {
@@ -1081,33 +1083,49 @@ app.post("/api/grades", async (req, res) => {
   }
 
   const db = await readDB();
+  if (!Array.isArray(db.grades)) db.grades = [];
 
-  const normSub = normalizeSubjectKey(subject);
-  // Find if grade already exists for this student and subject (canonical match)
-  const index = db.grades.findIndex(
-    (g: any) =>
+  const normSub = normalizeSubjectKey(subject) || subject;
+  const cleanSub = normSub.replace(/[^a-zA-Z0-9]/g, "_");
+  const docId = `${studentId}_${cleanSub}`;
+  const rawCleanSub = String(subject || "").trim().replace(/[^a-zA-Z0-9]/g, "_");
+  const rawDocId = `${studentId}_${rawCleanSub}`;
+
+  let existingMatched: any = null;
+  const remainingGrades: any[] = [];
+  for (const g of db.grades) {
+    if (!g) continue;
+    if (
       g.studentId === studentId &&
-      (g.subject === subject || normalizeSubjectKey(g.subject) === normSub),
-  );
+      (g.subject === subject || normalizeSubjectKey(g.subject) === normSub)
+    ) {
+      existingMatched = existingMatched ? pickNewerGrade(existingMatched, g) : g;
+    } else {
+      remainingGrades.push(g);
+    }
+  }
 
   const updatedGrade = {
+    id: docId,
     studentId,
-    subject: index !== -1 ? db.grades[index].subject || subject : subject,
+    subject,
     score: Number(score),
     tps: Array.isArray(tps) ? cleanTpList(tps) : [],
-    usaha: usaha || "B",
-    proses: proses || "B",
-    capaian: capaian || "B",
-    deskripsi: deskripsi !== undefined ? deskripsi : (index !== -1 ? db.grades[index].deskripsi : ""),
+    usaha: usaha || (existingMatched ? existingMatched.usaha : "B") || "B",
+    proses: proses || (existingMatched ? existingMatched.proses : "B") || "B",
+    capaian: capaian || (existingMatched ? existingMatched.capaian : "B") || "B",
+    deskripsi:
+      deskripsi !== undefined && String(deskripsi).trim() !== ""
+        ? deskripsi
+        : existingMatched && String(existingMatched.deskripsi || "").trim() !== ""
+        ? existingMatched.deskripsi
+        : deskripsi || "",
     lastUpdatedBy: teacherName || "Guru Mata Pelajaran",
     lastUpdatedAt: new Date().toISOString(),
   };
 
-  if (index !== -1) {
-    db.grades[index] = updatedGrade;
-  } else {
-    db.grades.push(updatedGrade);
-  }
+  remainingGrades.push(updatedGrade);
+  db.grades = deduplicateGradesList(remainingGrades);
 
   // Auto-persist grade TPs to master templates list
   if (Array.isArray(updatedGrade.tps) && updatedGrade.tps.length > 0) {
@@ -1149,8 +1167,26 @@ app.post("/api/grades", async (req, res) => {
 
   if (firestoreDb) {
     try {
-      const docId = `${studentId}_${normalizeSubjectKey(subject).replace(/[^a-zA-Z0-9]/g, "_")}`;
       await setDoc(doc(firestoreDb, "grades", docId), updatedGrade, { merge: true });
+      const legacySuffixes: Record<string, string[]> = {
+        Sirah: ["Siroh", "Sirah_Nabawiyah"],
+        Life_Skill: ["Life_skill", "Life_skills", "Life_Skills"],
+        TIK: ["Informatika"],
+        Tahfizh_Al_Qur_an: ["Tahfidz_Al_Qur_an", "Tahfizh"],
+        Do_a_Harian_dan_Hadits: ["Doa_Harian_dan_Hadits", "Doa_dan_Hadist"],
+      };
+      const extraIdsToClean = new Set<string>();
+      if (rawDocId && rawDocId !== docId) {
+        extraIdsToClean.add(rawDocId);
+      }
+      if (legacySuffixes[cleanSub]) {
+        legacySuffixes[cleanSub].forEach((suf) => extraIdsToClean.add(`${studentId}_${suf}`));
+      }
+      extraIdsToClean.forEach((oldId) => {
+        if (oldId !== docId) {
+          deleteDoc(doc(firestoreDb, "grades", oldId)).catch(() => {});
+        }
+      });
     } catch (e) {
       console.warn("Firestore grade save error:", e);
     }

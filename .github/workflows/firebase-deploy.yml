@@ -17,50 +17,44 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-
-      - name: Verify Firebase Secret
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT belum disetel di GitHub Secrets!"
-            echo "======================================================================================"
-            echo "PETUNJUK PENYELESAIAN:"
-            echo "1. Buka Firebase Console: https://console.firebase.google.com/"
-            echo "2. Pilih project: smart-sd-sts"
-            echo "3. Masuk ke Project Settings (ikon roda gigi) -> Tab 'Service accounts'"
-            echo "4. Klik tombol 'Generate new private key' (akan mendownload file .json)"
-            echo "5. Buka repository ini di GitHub -> Settings -> Secrets and variables -> Actions"
-            echo "6. Klik 'New repository secret'"
-            echo "   - Name: FIREBASE_SERVICE_ACCOUNT"
-            echo "   - Secret: Tempelkan (paste) seluruh isi file .json tersebut"
-            echo "7. Klik 'Add secret', lalu jalankan ulang workflow ini (Re-run jobs)."
-            echo "======================================================================================"
-            exit 1
-          fi
-          echo "✅ Secret FIREBASE_SERVICE_ACCOUNT berhasil ditemukan."
+          node-version: 22
 
       - name: Install Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Web App
         run: npm run build
 
-      - name: Deploy Firestore Rules
+      - name: Verify & Deploy to Firebase
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
-          echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
-          GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json npx -y firebase-tools deploy --only firestore:rules --project smart-sd-sts || echo "Firestore rules deploy skipped or failed"
-          rm -f /tmp/sa.json
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "✅ Menggunakan FIREBASE_SERVICE_ACCOUNT..."
+            echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json
+            npx -y firebase-tools deploy --only firestore:rules --project smart-sd-sts || echo "Firestore rules deploy skipped"
+            npx -y firebase-tools deploy --only hosting --project smart-sd-sts
+            rm -f /tmp/sa.json
+          elif [ -n "$FIREBASE_TOKEN" ]; then
+            echo "✅ Menggunakan FIREBASE_TOKEN..."
+            npx -y firebase-tools deploy --only firestore:rules --project smart-sd-sts --token "$FIREBASE_TOKEN" || echo "Firestore rules deploy skipped"
+            npx -y firebase-tools deploy --only hosting --project smart-sd-sts --token "$FIREBASE_TOKEN"
+          else
+            echo "::error::Secret FIREBASE_SERVICE_ACCOUNT atau FIREBASE_TOKEN belum disetel di GitHub Secrets!"
+            echo "======================================================================================"
+            echo "PETUNJUK PENYELESAIAN:"
+            echo "1. Buka Firebase Console: https://console.firebase.google.com/project/smart-sd-sts/settings/serviceaccounts/adminsdk"
+            echo "2. Klik tombol 'Generate new private key' (akan mendownload file .json)"
+            echo "3. Buka repository ini di GitHub -> Settings -> Secrets and variables -> Actions"
+            echo "4. Klik 'New repository secret'"
+            echo "   - Name: FIREBASE_SERVICE_ACCOUNT"
+            echo "   - Secret: Tempelkan (paste) seluruh isi file .json tersebut"
+            echo "5. Klik 'Add secret', lalu jalankan ulang workflow ini (Re-run jobs)."
+            echo "======================================================================================"
+            exit 1
+          fi
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
-          channelId: live
-          projectId: smart-sd-sts
 
 

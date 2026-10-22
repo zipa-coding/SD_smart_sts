@@ -19,7 +19,7 @@ import dbData from "../data/db.json";
 try {
   setLogLevel("error");
 } catch (e) {}
-import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls } from "../types";
+import { normalizeSubjectKey, getSubjectTps, matchTpClass, isSampleTp, cleanTpList, isKeislamanSubject, extractTeacherSubjects, isEkskulSubject, normalizeEkskulKey, deduplicateStudentEkskuls, pickNewerGrade, deduplicateGradesList } from "../types";
 
 const dbDataAny = dbData as any;
 const metaEnv = (import.meta as any).env || {};
@@ -181,22 +181,33 @@ export function updateLocalFallbackItem(collectionName: 'students' | 'teachers' 
     const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
     if (!dbObj[collectionName]) dbObj[collectionName] = [];
     
-    let idx = -1;
     if (collectionName === 'grades') {
       const normSub = normalizeSubjectKey(item.subject);
-      idx = dbObj.grades.findIndex((x: any) =>
-        x &&
-        x.studentId === item.studentId &&
-        (x.subject === item.subject || normalizeSubjectKey(x.subject) === normSub || String(x[idKey]) === String(item[idKey]))
-      );
+      let existingMatched: any = null;
+      const remaining: any[] = [];
+      for (const x of dbObj.grades) {
+        if (!x) continue;
+        const isMatch =
+          x.studentId === item.studentId &&
+          (x.subject === item.subject ||
+            normalizeSubjectKey(x.subject) === normSub ||
+            String(x[idKey]) === String(item[idKey]));
+        if (isMatch) {
+          existingMatched = existingMatched ? pickNewerGrade(existingMatched, x) : x;
+        } else {
+          remaining.push(x);
+        }
+      }
+      const mergedItem = existingMatched ? pickNewerGrade(existingMatched, item) : item;
+      remaining.push(mergedItem);
+      dbObj.grades = remaining;
     } else {
-      idx = dbObj[collectionName].findIndex((x: any) => String(x[idKey]) === String(item[idKey]));
-    }
-
-    if (idx >= 0) {
-      dbObj[collectionName][idx] = { ...dbObj[collectionName][idx], ...item };
-    } else {
-      dbObj[collectionName].push(item);
+      const idx = dbObj[collectionName].findIndex((x: any) => String(x[idKey]) === String(item[idKey]));
+      if (idx >= 0) {
+        dbObj[collectionName][idx] = { ...dbObj[collectionName][idx], ...item };
+      } else {
+        dbObj[collectionName].push(item);
+      }
     }
     localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
   } catch (e) {
@@ -324,9 +335,11 @@ export async function seedFirestoreIfEmpty() {
     }
 
     // 3. Grades
-    for (const g of (sourceData.grades || [])) {
-      const id = `${g.studentId}_${g.subject.replace(/[^a-zA-Z0-9]/g, "_")}`;
-      batch.set(doc(db, "grades", id), g);
+    const dedupedSeedGrades = deduplicateGradesList(sourceData.grades || []);
+    for (const g of dedupedSeedGrades) {
+      const normSub = normalizeSubjectKey(g.subject) || g.subject;
+      const id = `${g.studentId}_${normSub.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      batch.set(doc(db, "grades", id), { ...g, id });
       countInBatch++;
       await commitBatchIfFull();
     }
@@ -422,10 +435,28 @@ export async function syncAllToFirestore(onProgress?: (msg: string) => void): Pr
       counts.students++;
     }
 
-    onProgress?.(`Menyinkronkan ${sourceData.grades?.length || 0} Nilai...`);
-    for (const g of (sourceData.grades || [])) {
-      const docId = `${g.studentId}_${g.subject.replace(/[^a-zA-Z0-9]/g, "_")}`;
-      await withTimeout(setDoc(doc(db, "grades", docId), g), 6000);
+    const dedupedSyncGrades = deduplicateGradesList(sourceData.grades || []);
+    onProgress?.(`Menyinkronkan ${dedupedSyncGrades.length} Nilai...`);
+    const existingCloudGradesMap = new Map<string, any>();
+    try {
+      const gSnap = await withTimeout(getDocs(collection(db, "grades")), 6000);
+      if (gSnap && !gSnap.empty) {
+        gSnap.docs.forEach((d) => {
+          const cData = d.data();
+          if (cData && cData.studentId && cData.subject) {
+            const k = `${cData.studentId}_${normalizeSubjectKey(cData.subject)}`;
+            existingCloudGradesMap.set(k, pickNewerGrade(existingCloudGradesMap.get(k), cData));
+          }
+        });
+      }
+    } catch (e) {}
+
+    for (const g of dedupedSyncGrades) {
+      const normSub = normalizeSubjectKey(g.subject) || g.subject;
+      const key = `${g.studentId}_${normSub}`;
+      const docId = `${g.studentId}_${normSub.replace(/[^a-zA-Z0-9]/g, "_")}`;
+      const mergedGrade = pickNewerGrade(existingCloudGradesMap.get(key), { ...g, id: docId });
+      await withTimeout(setDoc(doc(db, "grades", docId), mergedGrade, { merge: true }), 6000);
       counts.grades++;
     }
 
@@ -1106,7 +1137,8 @@ export const firebaseApi = {
     rawFallback.forEach((g: any) => {
       if (g && g.studentId && g.subject) {
         const key = `${g.studentId}_${normalizeSubjectKey(g.subject)}`;
-        gradeMap.set(key, sanitizeGrade(g));
+        const prev = gradeMap.get(key);
+        gradeMap.set(key, prev ? pickNewerGrade(prev, sanitizeGrade(g)) : sanitizeGrade(g));
       }
     });
 
@@ -1118,9 +1150,21 @@ export const firebaseApi = {
             const data = docSnap.data();
             if (data && data.studentId && data.subject) {
               const key = `${data.studentId}_${normalizeSubjectKey(data.subject)}`;
-              gradeMap.set(key, sanitizeGrade({ ...(gradeMap.get(key) || {}), ...data }));
+              const prev = gradeMap.get(key);
+              const cleaned = sanitizeGrade(data);
+              gradeMap.set(key, prev ? pickNewerGrade(prev, cleaned) : cleaned);
             }
           });
+
+          // Persist deduplicated最新 grades back to localStorage so local cache is never stale
+          try {
+            if (typeof window !== "undefined") {
+              const raw = localStorage.getItem("smart_sts_db");
+              const dbObj = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(dbDataAny));
+              dbObj.grades = Array.from(gradeMap.values());
+              localStorage.setItem("smart_sts_db", JSON.stringify(dbObj));
+            }
+          } catch (e) {}
         }
       } catch (e) {
         console.warn("Failed to get grades from Firestore:", e);
@@ -1133,6 +1177,8 @@ export const firebaseApi = {
     const normSub = normalizeSubjectKey(subject) || subject;
     const cleanSub = normSub.replace(/[^a-zA-Z0-9]/g, "_");
     const docId = `${studentId}_${cleanSub}`;
+    const rawCleanSub = String(subject || "").trim().replace(/[^a-zA-Z0-9]/g, "_");
+    const rawDocId = `${studentId}_${rawCleanSub}`;
     
     const updatedGrade = {
       id: docId,
@@ -1153,6 +1199,26 @@ export const firebaseApi = {
     if (db) {
       try {
         await withTimeout(setDoc(doc(db, "grades", docId), updatedGrade), 4000);
+        // Clean up any legacy non-canonical document IDs (e.g. _Siroh vs _Sirah, _Life_skill vs _Life_Skill) so old docs never conflict
+        const legacySuffixes: Record<string, string[]> = {
+          Sirah: ["Siroh", "Sirah_Nabawiyah"],
+          Life_Skill: ["Life_skill", "Life_skills", "Life_Skills"],
+          TIK: ["Informatika"],
+          Tahfizh_Al_Qur_an: ["Tahfidz_Al_Qur_an", "Tahfizh"],
+          Do_a_Harian_dan_Hadits: ["Doa_Harian_dan_Hadits", "Doa_dan_Hadist"],
+        };
+        const extraIdsToClean = new Set<string>();
+        if (rawDocId && rawDocId !== docId) {
+          extraIdsToClean.add(rawDocId);
+        }
+        if (legacySuffixes[cleanSub]) {
+          legacySuffixes[cleanSub].forEach((suf) => extraIdsToClean.add(`${studentId}_${suf}`));
+        }
+        extraIdsToClean.forEach((oldId) => {
+          if (oldId !== docId) {
+            deleteDoc(doc(db, "grades", oldId)).catch(() => {});
+          }
+        });
       } catch (err) {
         console.warn("Firestore postGrade error:", err);
       }

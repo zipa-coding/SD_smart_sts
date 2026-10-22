@@ -599,3 +599,73 @@ export function deduplicateStudentEkskuls(
   }
   return Array.from(map.values());
 }
+
+/**
+ * Compares two grade objects for the same (studentId, canonicalSubject) and returns
+ * the most recently updated record so older/seed/alias records never overwrite newer teacher inputs.
+ */
+export function pickNewerGrade(existing: any, incoming: any): any {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const parseTime = (g: any): number => {
+    const raw = g?.lastUpdatedAt || g?.updatedAt;
+    if (!raw) return 0;
+    const t = Date.parse(String(raw));
+    return isNaN(t) ? 0 : t;
+  };
+
+  const tExisting = parseTime(existing);
+  const tIncoming = parseTime(incoming);
+
+  // Determine which record is strictly newer; if equal or both 0, incoming wins
+  const existingIsNewer = tExisting > 0 && (tIncoming === 0 || tExisting > tIncoming);
+  const primary = existingIsNewer ? existing : incoming;
+  const secondary = existingIsNewer ? incoming : existing;
+
+  const primaryDesc = String(primary.deskripsi ?? primary.description ?? "").trim();
+  const secondaryDesc = String(secondary.deskripsi ?? secondary.description ?? "").trim();
+  const finalDesc = primaryDesc || secondaryDesc || "";
+
+  const primaryTps = Array.isArray(primary.tps) ? cleanTpList(primary.tps) : [];
+  const secondaryTps = Array.isArray(secondary.tps) ? cleanTpList(secondary.tps) : [];
+  const finalTps = primaryTps.length > 0 ? primaryTps : secondaryTps;
+
+  const normSub = normalizeSubjectKey(primary.subject || secondary.subject) || primary.subject || secondary.subject;
+
+  return {
+    ...secondary,
+    ...primary,
+    studentId: primary.studentId || secondary.studentId,
+    subject: primary.subject || secondary.subject || normSub,
+    score:
+      primary.score !== undefined && primary.score !== null && primary.score !== ""
+        ? Number(primary.score)
+        : secondary.score !== undefined && secondary.score !== null && secondary.score !== ""
+        ? Number(secondary.score)
+        : 0,
+    usaha: primary.usaha || secondary.usaha || "B",
+    proses: primary.proses || secondary.proses || "B",
+    capaian: primary.capaian || primary.predicate || secondary.capaian || secondary.predicate || "B",
+    deskripsi: finalDesc,
+    tps: finalTps,
+    lastUpdatedBy: primary.lastUpdatedBy || secondary.lastUpdatedBy || "Guru Mata Pelajaran",
+    lastUpdatedAt: primary.lastUpdatedAt || secondary.lastUpdatedAt || "",
+  };
+}
+
+/**
+ * Deduplicates an array of grades by (studentId, canonicalSubject), always keeping the latest grade.
+ */
+export function deduplicateGradesList(gradesList: any[] | undefined | null): Grade[] {
+  if (!Array.isArray(gradesList)) return [];
+  const map = new Map<string, any>();
+  for (const g of gradesList) {
+    if (!g || !g.studentId || !g.subject) continue;
+    const key = `${String(g.studentId).trim()}_${normalizeSubjectKey(g.subject)}`;
+    const prev = map.get(key);
+    map.set(key, prev ? pickNewerGrade(prev, g) : pickNewerGrade(null, g));
+  }
+  return Array.from(map.values());
+}
+

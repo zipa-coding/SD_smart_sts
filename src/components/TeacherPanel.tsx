@@ -13,6 +13,8 @@ import {
   getEkskulTps,
   normalizeEkskulKey,
   deduplicateStudentEkskuls,
+  pickNewerGrade,
+  deduplicateGradesList,
 } from "../types";
 import {
   BookOpen,
@@ -220,6 +222,7 @@ export default function TeacherPanel({
   const [usaha, setUsaha] = useState<string>("B");
   const [proses, setProses] = useState<string>("B");
   const [capaian, setCapaian] = useState<string>("B");
+  const [hasLockedGrades, setHasLockedGrades] = useState<boolean>(false);
   const [tpAchievements, setTpAchievements] = useState<{
     [tpId: string]: boolean;
   }>({});
@@ -268,9 +271,11 @@ export default function TeacherPanel({
     return getEkskulTps(allTpObj, currentEkskul);
   }, [allTpObj, currentEkskul]);
 
-  const fetchData = async () => {
-    setLoading(true);
-    setError("");
+  const fetchData = async (shouldResetForm: boolean = true) => {
+    if (shouldResetForm) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const [resS, resG, resTp, resN, resEks] = await Promise.all([
         fetch("/api/students"),
@@ -287,7 +292,7 @@ export default function TeacherPanel({
       const eksData = await resEks.json();
 
       const sArr = Array.isArray(sData) ? sData : [];
-      const gArr = Array.isArray(gData) ? gData : [];
+      const gArr = deduplicateGradesList(Array.isArray(gData) ? gData : []);
       const tpObj = tpData && typeof tpData === "object" ? tpData : {};
       const nObj = nData && typeof nData === "object" ? nData : {};
       const eksArr = Array.isArray(eksData) ? eksData : [];
@@ -297,6 +302,10 @@ export default function TeacherPanel({
       setAllTpObj(tpObj);
       setAllNotes(nObj);
       setEkskulList(eksArr);
+
+      if (!shouldResetForm && selectedStudent) {
+        return;
+      }
 
       // Filter TP templates for activeSubject & selectedClass
       const allSubjectTps = getSubjectTps(tpObj, activeSubject);
@@ -320,19 +329,30 @@ export default function TeacherPanel({
         setUsaha("B");
         setProses("B");
         setCapaian("B");
+        setHasLockedGrades(false);
         setCustomDescription("");
         setIsCustomDescActive(false);
       }
     } catch (err) {
-      setError("Gagal memuat sinkronisasi data dari server.");
+      if (shouldResetForm) {
+        setError("Gagal memuat sinkronisasi data dari server.");
+      }
     } finally {
-      setLoading(false);
+      if (shouldResetForm) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [user.id, selectedClass, activeSubject, selectedEkskulName, refreshTrigger]);
+    fetchData(true);
+  }, [user.id, selectedClass, activeSubject, selectedEkskulName]);
+
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      fetchData(false);
+    }
+  }, [refreshTrigger]);
 
   // Helper function to generate narrative description based on Kurikulum Merdeka standards
   const generateNarrativeDescription = (
@@ -446,10 +466,10 @@ export default function TeacherPanel({
       const safeGrades = Array.isArray(allGrades) ? allGrades : [];
       const safeTemplates = Array.isArray(templates) ? templates : [];
 
-      // Look up if this student already has a grade for this activeSubject
+      // Look up if this student already has a grade for this activeSubject (always picking the newest record if multiple exist)
       const lowerSubj = subj.trim().toLowerCase();
       const normSubj = normalizeSubjectKey(subj);
-      const existingGrade = safeGrades.find(
+      const matchingGrades = safeGrades.filter(
         (g) =>
           g &&
           g.studentId === student?.id &&
@@ -457,6 +477,20 @@ export default function TeacherPanel({
           (g.subject.trim().toLowerCase() === lowerSubj ||
             normalizeSubjectKey(g.subject) === normSubj),
       );
+      const existingGrade =
+        matchingGrades.length > 0
+          ? matchingGrades.reduce((acc, curr) => pickNewerGrade(acc, curr), matchingGrades[0])
+          : undefined;
+
+      const normalizeSubjGrade = (val: any, fallback = "B") => {
+        if (!val) return fallback;
+        const s = String(val).trim().toUpperCase();
+        if (s === "A" || s === "SANGAT BAIK" || s.startsWith("A ")) return "A";
+        if (s === "B" || s === "BAIK" || s.startsWith("B ")) return "B";
+        if (s === "C" || s === "CUKUP" || s.startsWith("C ")) return "C";
+        if (s === "D" || s === "KURANG" || s.startsWith("D ")) return "D";
+        return fallback;
+      };
 
       if (existingGrade) {
         setScore(
@@ -466,9 +500,11 @@ export default function TeacherPanel({
               : "",
           ),
         );
-        setUsaha(existingGrade.usaha || "B");
-        setProses(existingGrade.proses || "B");
-        setCapaian(existingGrade.capaian || "B");
+        const savedCap = normalizeSubjGrade(existingGrade.capaian || (existingGrade as any).predicate, "B");
+        setUsaha(normalizeSubjGrade(existingGrade.usaha, savedCap));
+        setProses(normalizeSubjGrade(existingGrade.proses, savedCap));
+        setCapaian(savedCap);
+        setHasLockedGrades(true);
 
         // Build active checked states
         const achievedMap: { [tpId: string]: boolean } = {};
@@ -507,6 +543,7 @@ export default function TeacherPanel({
         setUsaha("B");
         setProses("B");
         setCapaian("B");
+        setHasLockedGrades(false);
 
         const defaultMap: { [tpId: string]: boolean } = {};
         safeTemplates.forEach((t) => {
@@ -627,11 +664,11 @@ export default function TeacherPanel({
 
   const handleSwitchKeislamanSub = handleSwitchSubject;
 
-  // Helper with numeric-to-predicate mapping for default selections
+  // Helper with numeric-to-predicate mapping for default selections ONLY when grades are not yet locked/customized
   const handleScoreChange = (val: string) => {
     setScore(val);
     const num = Number(val);
-    if (!isNaN(num) && val.trim() !== "") {
+    if (!hasLockedGrades && !isNaN(num) && val.trim() !== "") {
       let defaultGrade = "C";
       if (num >= 89) defaultGrade = "A";
       else if (num >= 80) defaultGrade = "B";
@@ -751,15 +788,19 @@ export default function TeacherPanel({
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Gagal menyimpan nilai.");
 
+      setHasLockedGrades(true);
+      setGrades((prev) => deduplicateGradesList([...(Array.isArray(prev) ? prev : []), data]));
       setSuccess(
         `Nilai ${activeSubject} untuk ${selectedStudent.name} berhasil disimpan!`,
       );
       onRefreshTrigger();
 
-      // Refresh grades silently
+      // Refresh grades silently without resetting the active student form
       const getGrades = await fetch("/api/grades");
       const updatedGrades = await getGrades.json();
-      setGrades(updatedGrades);
+      if (Array.isArray(updatedGrades)) {
+        setGrades(deduplicateGradesList([...updatedGrades, data]));
+      }
     } catch (err: any) {
       setError(err.message || "Gagal menyimpan.");
     } finally {
@@ -1740,7 +1781,8 @@ export default function TeacherPanel({
                     (g) =>
                       g.studentId === selectedStudent.id &&
                       g.subject &&
-                      g.subject.trim().toLowerCase() === sub.trim().toLowerCase(),
+                      (g.subject.trim().toLowerCase() === sub.trim().toLowerCase() ||
+                        normalizeSubjectKey(g.subject) === normalizeSubjectKey(sub)),
                   );
                 const keislamanItem = KEISLAMAN_SUB_SUBJECTS.find((k) => k.id === sub);
                 const shortLabel = keislamanItem ? keislamanItem.short : sub;
@@ -1903,7 +1945,10 @@ export default function TeacherPanel({
                     </label>
                     <select
                       value={usaha}
-                      onChange={(e) => setUsaha(e.target.value)}
+                      onChange={(e) => {
+                        setUsaha(e.target.value);
+                        setHasLockedGrades(true);
+                      }}
                       className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:outline-none"
                     >
                       <option value="A">A (Sangat Baik)</option>
@@ -1918,7 +1963,10 @@ export default function TeacherPanel({
                     </label>
                     <select
                       value={proses}
-                      onChange={(e) => setProses(e.target.value)}
+                      onChange={(e) => {
+                        setProses(e.target.value);
+                        setHasLockedGrades(true);
+                      }}
                       className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:outline-none"
                     >
                       <option value="A">A (Sangat Baik)</option>
@@ -1933,7 +1981,10 @@ export default function TeacherPanel({
                     </label>
                     <select
                       value={capaian}
-                      onChange={(e) => setCapaian(e.target.value)}
+                      onChange={(e) => {
+                        setCapaian(e.target.value);
+                        setHasLockedGrades(true);
+                      }}
                       className="w-full p-1.5 bg-white border border-slate-200 rounded text-xs focus:outline-none"
                     >
                       <option value="A">A (Sangat Baik)</option>

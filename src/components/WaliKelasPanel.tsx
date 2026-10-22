@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Teacher, Student, Grade, WaliKelasNotesMap, normalizeSubjectKey, deduplicateStudentEkskuls } from "../types";
+import { Teacher, Student, Grade, WaliKelasNotesMap, normalizeSubjectKey, deduplicateStudentEkskuls, pickNewerGrade, deduplicateGradesList } from "../types";
 import {
   Printer,
   ChevronRight,
@@ -172,8 +172,10 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     }
   };
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (autoSelectFirst = true) => {
+    if (autoSelectFirst) {
+      setLoading(true);
+    }
     setError("");
     try {
       const [resS, resG, resN, resE, resSub] = await Promise.all([
@@ -191,7 +193,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
       const subData = await resSub.json();
 
       const studentsArray = Array.isArray(sData) ? sData : [];
-      const gradesArray = Array.isArray(gData) ? gData : [];
+      const gradesArray = deduplicateGradesList(Array.isArray(gData) ? gData : []);
       const notesObj = nData && typeof nData === "object" && !Array.isArray(nData) ? nData : {};
       const ekskulArray = Array.isArray(eData) ? eData : [];
 
@@ -205,7 +207,7 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
 
       // Auto-select first student in this class, or sync notes if student already selected
       const classStudents = studentsArray.filter((s: Student) => s.kelas === selectedClass);
-      if (classStudents.length > 0 && !selectedStudent) {
+      if (autoSelectFirst && classStudents.length > 0 && !selectedStudent) {
         handleStudentSelect(classStudents[0], notesObj, ekskulArray);
       } else if (selectedStudent && notesObj[selectedStudent.id]) {
         const latestNote = notesObj[selectedStudent.id];
@@ -228,13 +230,21 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
       console.error("Error loading data:", err);
       setError("Gagal memuat sinkronisasi data wali kelas.");
     } finally {
-      setLoading(false);
+      if (autoSelectFirst) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, [selectedClass, refreshTrigger]);
+    fetchData(true);
+  }, [selectedClass]);
+
+  useEffect(() => {
+    if (refreshTrigger !== undefined && refreshTrigger > 0) {
+      fetchData(false);
+    }
+  }, [refreshTrigger]);
 
   const handleStudentSelect = (student: Student, notesMap = allClassNotes, eksList = activeEkskulList) => {
     setSelectedStudent(student);
@@ -402,24 +412,12 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     setRaportPrintTarget(selectedStudent);
   };
 
-  // Robust grade finder that handles exact names, normalized keys, aliases, and punctuation variations
+  // Robust grade finder that handles exact names, normalized keys, aliases, and punctuation variations, always picking the newest grade
   const findGradeForSub = (subName: string, gList: Grade[] = studentGrades): Grade | undefined => {
     if (!Array.isArray(gList) || !subName) return undefined;
-    const direct = gList.find((g) => g && g.subject === subName);
-    if (direct) return direct;
     const normTarget = normalizeSubjectKey(subName);
     const cleanTarget = subName.replace(/[’'`]/g, "'").toLowerCase().trim();
-    
-    // Normalized or cleaned match
-    const normMatch = gList.find((g) => {
-      if (!g || !g.subject) return false;
-      if (normalizeSubjectKey(g.subject) === normTarget) return true;
-      if (g.subject.replace(/[’'`]/g, "'").toLowerCase().trim() === cleanTarget) return true;
-      return false;
-    });
-    if (normMatch) return normMatch;
 
-    // Multi-alias matching
     const aliases: Record<string, string[]> = {
       PAI: ["pai", "pendidikan agama islam", "agama islam", "agama"],
       PPKN: ["ppkn", "pkn", "pendidikan pancasila", "pendidikan pancasila dan kewarganegaraan"],
@@ -447,15 +445,21 @@ export default function WaliKelasPanel({ user, onRefreshTrigger, refreshTrigger 
     };
 
     const targetAliases = aliases[subName] || aliases[normTarget] || [];
-    if (targetAliases.length > 0) {
-      return gList.find((g) => {
-        if (!g || !g.subject) return false;
-        const gClean = g.subject.replace(/[’'`]/g, "'").toLowerCase().trim();
-        return targetAliases.some((alias) => gClean === alias || gClean.includes(alias));
-      });
-    }
 
-    return undefined;
+    const matchingGrades = gList.filter((g) => {
+      if (!g || !g.subject) return false;
+      if (g.subject === subName) return true;
+      if (normalizeSubjectKey(g.subject) === normTarget) return true;
+      const gClean = g.subject.replace(/[’'`]/g, "'").toLowerCase().trim();
+      if (gClean === cleanTarget) return true;
+      if (targetAliases.length > 0 && targetAliases.some((alias) => gClean === alias || gClean.includes(alias))) {
+        return true;
+      }
+      return false;
+    });
+
+    if (matchingGrades.length === 0) return undefined;
+    return matchingGrades.reduce((acc, curr) => pickNewerGrade(acc, curr));
   };
 
   // Helper getters

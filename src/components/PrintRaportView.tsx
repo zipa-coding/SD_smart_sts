@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Student, Grade, WaliKelasNote, Teacher, WaliKelasNotesMap, deduplicateStudentEkskuls } from "../types";
+import { Student, Grade, WaliKelasNote, Teacher, WaliKelasNotesMap, deduplicateStudentEkskuls, pickNewerGrade, normalizeSubjectKey } from "../types";
 import {
   Printer,
   FileDown,
@@ -398,18 +398,10 @@ export default function PrintRaportView({
   const findGradeForSubject = (gradesList: Grade[], targetSub: string): Grade | undefined => {
     if (!Array.isArray(gradesList) || !targetSub) return undefined;
 
-    // 1. Direct match
-    const direct = gradesList.find((g) => g && g.subject === targetSub);
-    if (direct) return direct;
-
-    // 2. Normalized match (ignoring apostrophe variants and case)
     const normTarget = normalizeSub(targetSub);
-    const normMatch = gradesList.find(
-      (g) => g && normalizeSub(g.subject) === normTarget
-    );
-    if (normMatch) return normMatch;
+    const normTargetKey = normalizeSubjectKey(targetSub);
 
-    // 3. Known aliases map
+    // Known aliases map
     const aliases: Record<string, string[]> = {
       PAI: ["pai", "pendidikan agama islam", "agama islam", "agama"],
       PPKN: [
@@ -516,25 +508,36 @@ export default function PrintRaportView({
       ],
     };
 
-    for (const [key, aliasList] of Object.entries(aliases)) {
-      const normKey = normalizeSub(key);
-      if (normTarget === normKey || aliasList.includes(normTarget)) {
-        const found = gradesList.find((g) => {
-          const normG = normalizeSub(g.subject);
-          return normG === normKey || aliasList.includes(normG);
-        });
-        if (found) return found;
+    const matched: Grade[] = [];
+    for (const g of gradesList) {
+      if (!g || !g.subject) continue;
+      if (g.subject === targetSub || normalizeSubjectKey(g.subject) === normTargetKey) {
+        matched.push(g);
+        continue;
+      }
+      const normG = normalizeSub(g.subject);
+      if (normG === normTarget) {
+        matched.push(g);
+        continue;
+      }
+      let aliasMatched = false;
+      for (const [key, aliasList] of Object.entries(aliases)) {
+        const normKey = normalizeSub(key);
+        if (normTarget === normKey || aliasList.includes(normTarget)) {
+          if (normG === normKey || aliasList.includes(normG)) {
+            matched.push(g);
+            aliasMatched = true;
+            break;
+          }
+        }
+      }
+      if (!aliasMatched && normG.length >= 4 && (normG.includes(normTarget) || normTarget.includes(normG))) {
+        matched.push(g);
       }
     }
 
-    // 4. Substring fallback
-    return gradesList.find((g) => {
-      const normG = normalizeSub(g.subject);
-      return (
-        normG.length >= 4 &&
-        (normG.includes(normTarget) || normTarget.includes(normG))
-      );
-    });
+    if (matched.length === 0) return undefined;
+    return matched.reduce((acc, curr) => pickNewerGrade(acc, curr));
   };
 
   const getNumericKelas = (kelasStr?: string): number => {
