@@ -7,6 +7,13 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: read
+  checks: write
+  deployments: write
+  pull-requests: write
+  statuses: write
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
@@ -17,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -25,55 +32,124 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Prepare Firebase Credentials
-        id: firebase_prep
+      - name: Deploy to Firebase Hosting
         env:
-          RAW_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 || secrets.GCP_SA_KEY || secrets.GOOGLE_CREDENTIALS }}
-          RAW_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          SA_1: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS }}
+          SA_2: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SA_3: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 }}
+          SA_4: ${{ secrets.GCP_SA_KEY }}
+          SA_5: ${{ secrets.GOOGLE_CREDENTIALS }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
         run: |
           node -e '
             const fs = require("fs");
-            const saRaw = process.env.RAW_SA || "";
-            const tokenRaw = process.env.RAW_TOKEN || "";
-            let hasSa = false;
-            let projectId = "smart-sd-sts";
+            const { spawnSync } = require("child_process");
 
-            if (saRaw.trim().startsWith("{")) {
+            const rawCandidates = [
+              { name: "FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS", val: process.env.SA_1 },
+              { name: "FIREBASE_SERVICE_ACCOUNT", val: process.env.SA_2 },
+              { name: "FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15", val: process.env.SA_3 },
+              { name: "GCP_SA_KEY", val: process.env.SA_4 },
+              { name: "GOOGLE_CREDENTIALS", val: process.env.SA_5 },
+            ];
+
+            const validSas = [];
+            for (const item of rawCandidates) {
+              const raw = (item.val || "").trim();
+              if (!raw.startsWith("{")) continue;
               try {
-                const parsed = JSON.parse(saRaw.trim());
-                if (parsed.project_id) {
-                  projectId = parsed.project_id;
+                const parsed = JSON.parse(raw);
+                if (parsed.client_email && parsed.private_key) {
+                  validSas.push({
+                    secretName: item.name,
+                    raw,
+                    projectId: parsed.project_id || "smart-sd-sts",
+                    clientEmail: parsed.client_email,
+                    isGithubActionSa: String(parsed.client_email).includes("github-action"),
+                  });
                 }
-                hasSa = true;
-                fs.writeFileSync(".firebaserc", JSON.stringify({ projects: { default: projectId } }, null, 2));
-                console.log("Detected Service Account for project:", projectId);
               } catch (e) {
-                console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT JSON:", e.message);
+                console.warn(`Secret ${item.name} bukan JSON valid:`, e.message);
               }
             }
 
-            const hasToken = !hasSa && tokenRaw.trim().length > 0;
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_sa=${hasSa}\n`);
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `has_token=${hasToken}\n`);
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, `project_id=${projectId}\n`);
+            // Prioritaskan service account github-action-* (yang otomatis punya role Hosting Admin)
+            validSas.sort((a, b) => (b.isGithubActionSa ? 1 : 0) - (a.isGithubActionSa ? 1 : 0));
 
-            if (!hasSa && !hasToken) {
-              console.warn("PERINGATAN: Belum ada secret FIREBASE_SERVICE_ACCOUNT atau FIREBASE_TOKEN di GitHub Secrets.");
+            let deployed = false;
+            let lastError = "";
+            let lastClientEmail = "";
+            let lastProjectId = "smart-sd-sts";
+
+            for (const sa of validSas) {
+              console.log(`\n========================================`);
+              console.log(`Mencoba deploy menggunakan secret: ${sa.secretName}`);
+              console.log(`Service Account: ${sa.clientEmail}`);
+              console.log(`Target Project : ${sa.projectId}`);
+              console.log(`========================================\n`);
+
+              lastClientEmail = sa.clientEmail;
+              lastProjectId = sa.projectId;
+
+              fs.writeFileSync("/tmp/sa.json", sa.raw);
+              fs.writeFileSync(".firebaserc", JSON.stringify({ projects: { default: sa.projectId } }, null, 2));
+
+              const res = spawnSync(
+                "npx",
+                ["-y", "firebase-tools@13", "deploy", "--only", "hosting", "--project", sa.projectId, "--non-interactive"],
+                {
+                  env: { ...process.env, GOOGLE_APPLICATION_CREDENTIALS: "/tmp/sa.json" },
+                   encoding: "utf8",
+                }
+              );
+
+              console.log(res.stdout || "");
+              if (res.stderr) console.error(res.stderr);
+
+              if (res.status === 0) {
+                console.log(`✅ Deploy berhasil ke https://${sa.projectId}.web.app`);
+                deployed = true;
+                break;
+              } else {
+                lastError = (res.stdout || "") + "\n" + (res.stderr || "");
+                console.warn(`⚠️ Gagal deploy dengan ${sa.secretName}, mencoba kandidat berikutnya...`);
+              }
+            }
+
+            try { fs.unlinkSync("/tmp/sa.json"); } catch (e) {}
+
+            if (!deployed && (process.env.FIREBASE_TOKEN || "").trim()) {
+              console.log("Mencoba deploy menggunakan FIREBASE_TOKEN...");
+              const res = spawnSync(
+                "npx",
+                ["-y", "firebase-tools@13", "deploy", "--only", "hosting", "--project", "smart-sd-sts", "--token", process.env.FIREBASE_TOKEN.trim(), "--non-interactive"],
+                { encoding: "utf8" }
+              );
+              console.log(res.stdout || "");
+              if (res.stderr) console.error(res.stderr);
+              if (res.status === 0) {
+                deployed = true;
+              } else {
+                lastError = (res.stdout || "") + "\n" + (res.stderr || "");
+              }
+            }
+
+            if (!deployed) {
+              console.error("\n❌ DEPLOY KE FIREBASE HOSTING GAGAL.");
+              if (lastClientEmail) {
+                console.error("------------------------------------------------------------------------");
+                console.error(`Penyebab umum (403 Permission Denied):`);
+                console.error(`Service Account "${lastClientEmail}" belum memiliki role "Firebase Hosting Admin".`);
+                console.error(`Cara mengaktifkan (hanya 1 menit, TIDAK perlu ganti Secret di GitHub):`);
+                console.error(`1. Buka: https://console.cloud.google.com/iam-admin/iam?project=${lastProjectId}`);
+                console.error(`2. Cari baris email: ${lastClientEmail}`);
+                console.error(`3. Klik ikon Pensil (Edit principal) di sebelah kanan baris tersebut.`);
+                console.error(`4. Klik "+ ADD ANOTHER ROLE" -> ketik dan pilih "Firebase Hosting Admin" & "Service Usage Consumer".`);
+                console.error(`5. Klik Save, lalu klik "Re-run jobs" di GitHub Actions.`);
+                console.error("------------------------------------------------------------------------");
+              } else {
+                console.error("Belum ada Secret FIREBASE_SERVICE_ACCOUNT yang valid di GitHub Secrets.");
+              }
+              process.exit(1);
             }
           '
-
-      - name: Deploy to Firebase Hosting (Service Account)
-        if: steps.firebase_prep.outputs.has_sa == 'true'
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_SMART_SD_STS || secrets.FIREBASE_SERVICE_ACCOUNT_SMARTSTS_12F15 || secrets.GCP_SA_KEY || secrets.GOOGLE_CREDENTIALS }}
-          channelId: live
-          projectId: ${{ steps.firebase_prep.outputs.project_id }}
-
-      - name: Deploy to Firebase Hosting (Token)
-        if: steps.firebase_prep.outputs.has_token == 'true'
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: |
-          npx -y firebase-tools deploy --only hosting --project "${{ steps.firebase_prep.outputs.project_id }}" --token "$FIREBASE_TOKEN"
